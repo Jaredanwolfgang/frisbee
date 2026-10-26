@@ -27,8 +27,14 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast}){
   finally{clearTimeout(timer);generation=null;$('#ai-generate-btn').disabled=false;}
  };
  $('#ai-open-draft').onclick=()=>{if(!generated)return;const draft=generated;$('#ai-tactic-dialog').close();onDraft(draft);};
- $('#ai-rules-btn').onclick=()=>{$('#ai-chat-dialog').showModal();$('#ai-question').focus();};
- $('#ai-chat-close').onclick=()=>$('#ai-chat-dialog').close();$('#ai-chat-dialog').addEventListener('close',()=>chatRequest?.abort());
+ const sheet=$('#ai-chat-dialog'),sheetToggle=$('#ai-rules-btn');let sheetOpen=false,sheetHideTimer=0;
+ function fitSheet(){const viewport=window.visualViewport,mobile=window.matchMedia('(max-width:600px)').matches;sheet.style.setProperty('--ai-visual-height',(viewport?.height||window.innerHeight)+'px');sheet.style.setProperty('--ai-keyboard-offset',(mobile&&viewport?Math.max(0,window.innerHeight-viewport.height-viewport.offsetTop):0)+'px');}
+ function closeSheet(returnFocus=true){if(!sheetOpen)return;sheetOpen=false;sheet.classList.remove('is-open');sheet.inert=true;sheet.setAttribute('aria-hidden','true');sheetToggle.setAttribute('aria-expanded','false');if(returnFocus&&!$('#rules-header-actions').hidden)sheetToggle.focus({preventScroll:true});clearTimeout(sheetHideTimer);sheetHideTimer=setTimeout(()=>{if(!sheetOpen)sheet.hidden=true;},230);}
+ function openSheet(){clearTimeout(sheetHideTimer);sheetOpen=true;sheet.hidden=false;sheet.inert=false;sheet.setAttribute('aria-hidden','false');sheetToggle.setAttribute('aria-expanded','true');fitSheet();requestAnimationFrame(()=>{if(!sheetOpen)return;void sheet.offsetHeight;sheet.classList.add('is-open');scrollChat();if(window.matchMedia('(min-width:701px)').matches)$('#ai-question').focus({preventScroll:true});else $('#ai-chat-title').focus({preventScroll:true});});}
+ sheetToggle.onclick=()=>sheetOpen?closeSheet():openSheet();$('#ai-chat-close').onclick=()=>closeSheet();
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&sheetOpen&&!document.querySelector('dialog[open]')){event.preventDefault();closeSheet();}});
+ new MutationObserver(()=>{if($('#rules-header-actions').hidden)closeSheet(false);}).observe($('#rules-header-actions'),{attributes:true,attributeFilter:['hidden']});
+ window.addEventListener('resize',fitSheet);window.visualViewport?.addEventListener('resize',fitSheet);window.visualViewport?.addEventListener('scroll',fitSheet);
  $('#ai-chat-stop').onclick=()=>chatRequest?.abort();
  $('#ai-chat-clear').onclick=()=>{if(chatRequest)return;history=[];turns.clear();$('#ai-messages').innerHTML='';$('#ai-chat-intro').hidden=false;};
  function scrollChat(){const box=$('#ai-chat-scroll');box.scrollTop=box.scrollHeight;}
@@ -84,5 +90,5 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast}){
  });
  $('#ai-source-close').onclick=()=>$('#ai-source-dialog').close();
  fetch(endpoint('status'),{credentials:'same-origin'}).then(r=>r.json()).then(data=>{$$AIButtons(data.enabled);}).catch(()=>$$AIButtons(false));
- function $$AIButtons(enabled){for(const id of ['ai-new-btn','ai-create-btn','ai-rules-btn']){$('#'+id).disabled=!enabled;$('#'+id).title=enabled?'DeepSeek':'AI 暂未配置或连接不可用';}}
+ function $$AIButtons(enabled){for(const id of ['ai-new-btn','ai-create-btn','ai-rules-btn']){$('#'+id).disabled=!enabled;$('#'+id).title=enabled?(id==='ai-rules-btn'?'AI 问规则 · DeepSeek':'DeepSeek'):'AI 暂未配置或连接不可用';}}
 }
