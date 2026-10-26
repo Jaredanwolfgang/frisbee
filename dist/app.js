@@ -1,0 +1,191 @@
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const clone=o=>JSON.parse(JSON.stringify(o));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>crypto.randomUUID?.()||`play-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const KEY='frisbee-disc-playbook-v1';
+const categories=['全部','进攻战术','防守战术','端区战术','基础训练'];
+const points=(mode='vertical')=>{
+ const shapes={vertical:[[245,335],[210,150],[420,265],[495,265],[570,265],[645,265],[720,265]],horizontal:[[270,280],[175,140],[175,420],[525,100],[525,220],[525,340],[525,460]],endzone:[[620,280],[500,155],[500,405],[800,160],[800,240],[800,320],[800,400]],defense:[[255,280],[380,165],[380,280],[380,395],[565,170],[565,390],[740,280]],reset:[[480,220],[310,335],[200,165],[680,125],[680,235],[680,345],[680,450]]};
+ return shapes[mode].map(([x,y],i)=>({id:i+1,x,y,team:'offense'}));
+};
+const route=(id,kind,x,y,p)=>({id:uid(),player:id,kind,points:p||[],end:{x,y}});
+function advance(f){const n=clone(f);n.routes.forEach(r=>{if(r.kind==='run'){const p=n.players.find(p=>p.id===r.player);if(p)Object.assign(p,r.end);}else n.disc={...r.end};});n.routes=[];return n;}
+function example(id,name,english,cat,level,tags,summary,mode,routes,notes,nextNotes){const first={name:'起始配合',players:points(mode),disc:{x:points(mode)[0].x+22,y:points(mode)[0].y},routes,notes};const next=advance(first);next.name='衔接与重置';next.notes=nextNotes;return {id,name,english,category:cat,level,tags,summary,frames:[first,next],example:true,updated:1700000000000};}
+const legacySamples=[
+ example('sample-vertical','纵向列阵 · 开放侧切入','VERTICAL STACK','进攻战术','基础',['Vertical Stack','切入配合'],'拉开纵深空间，让切入与清空形成有序轮转。','vertical',[route(7,'run',380,380,[{x:620,y:410}]),route(6,'run',760,300,[{x:640,y:280}]),route(1,'pass',380,380)],'7 号先向外拉开，再向持盘人切入；6 号拉长纵深。示意路线可按本队习惯调整。','接盘后重新建立传接角度；未接盘的切入者清空通道，为后续切入留出空间。'),
+ example('sample-horizontal','横向列阵 · 双人配合','HORIZONTAL STACK','进攻战术','进阶',['Horizontal Stack','空间拉扯'],'用相邻两人的反向跑动，打开中路接盘窗口。','horizontal',[route(5,'run',385,205),route(6,'run',740,350),route(1,'pass',385,205)],'5 号回切接应，6 号同时向深处跑动；两侧球员保持宽度，避免进入同一接盘窗口。','接盘人抬头观察纵深；没有机会时，保持耐心，回传并重新组织。'),
+ example('sample-endzone','端区进攻 · 切入得分','END ZONE PLAY','端区战术','进阶',['端区','短传窗口'],'在有限的空间里，用一次假切创造接盘机会。','endzone',[route(4,'run',890,215,[{x:755,y:125}]),route(7,'run',715,435),route(1,'pass',890,215)],'4 号先向外侧假切，再进入端区；7 号拉开远侧空间。持盘人根据实际防守选择传盘。','若首个窗口关闭，立即清空端区近侧，重新建立支援传盘角度。'),
+ example('sample-zone','区域防守 · 空间覆盖','ZONE DEFENSE','防守战术','进阶',['Zone','区域协作'],'用区域分工和横向移动，练习队友之间的补位。','defense',[route(2,'run',440,150),route(3,'run',440,255),route(4,'run',440,365)],'本图用 1–7 标出防守队员的职责位置，橙色球员示意对手。前线随盘移动，后线关注空当并沟通。','整体随盘侧移时，保持前后层次。这里是沟通练习示例，可调整成球队实际使用的站位。'),
+ example('sample-reset','回传重置 · 重新组织','DUMP & SWING','进攻战术','基础',['Reset','回传转移'],'主动寻找回传角度，把进攻重新带回开阔区域。','reset',[route(2,'run',355,300),route(1,'pass',355,300)],'2 号横向移动，为持盘人建立安全回传角度；其他球员给回传区域留出空间。','回传完成后观察另一侧，再选择横向转移或向前推进。避免几名队员同时挤向飞盘。'),
+ example('sample-drill','三角传接 · 跑传衔接','TRIANGLE FLOW','基础训练','基础',['传接训练','时机'],'从简单的三角配合开始，练习传盘后的持续跑动。','horizontal',[route(1,'pass',525,220),route(1,'run',390,110),route(5,'run',570,170)],'1 号向 5 号传盘后移动到新的支援位置。其余球员可作为下一组等待队员；训练时按实际人数调整。','接盘后先稳住轴心脚，再观察移动中的队友。按组循环，逐步提高跑传节奏。')
+];
+const coreSamples=buildCoreCatalog({route,advance});
+const samples=[...coreSamples,...legacySamples.filter(t=>!['sample-vertical','sample-horizontal','sample-zone'].includes(t.id))];
+// Restore only validated records. A malformed backup never replaces existing data.
+function validTactic(t){try{return t&&(!t.formation||(typeof t.formation==='string'&&t.formation.length<300))&&(!t.roles||(typeof t.roles==='object'&&!Array.isArray(t.roles)&&Object.keys(t.roles).length<=14&&Object.entries(t.roles).every(([k,v])=>/^(?:[1-9]|1[0-4])$/.test(k)&&typeof v==='string'&&v.length<160)))&&typeof t.id==='string'&&t.id.length<150&&typeof t.name==='string'&&t.name.trim()&&t.name.length<=100&&categories.slice(1).includes(t.category)&&['基础','进阶','挑战'].includes(t.level)&&typeof t.summary==='string'&&t.summary.length<=500&&Array.isArray(t.tags)&&t.tags.length<=12&&t.tags.every(v=>typeof v==='string'&&v.length<100)&&Array.isArray(t.frames)&&t.frames.length>0&&t.frames.length<=24&&t.frames.every(f=>typeof f.name==='string'&&f.name.length<=100&&typeof f.notes==='string'&&f.notes.length<=3000&&Array.isArray(f.players)&&f.players.length>0&&f.players.length<=14&&new Set(f.players.map(p=>p.id)).size===f.players.length&&f.players.every(p=>Number.isInteger(p.id)&&p.id>=1&&p.id<=14&&['offense','defense'].includes(p.team)&&validPoint(p))&&validPoint(f.disc)&&Array.isArray(f.routes)&&f.routes.length<=40&&f.routes.every(r=>r&&typeof r.id==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(r.id)&&['run','pass'].includes(r.kind)&&f.players.some(p=>p.id===r.player)&&validPoint(r.end)&&Array.isArray(r.points)&&r.points.length<=12&&r.points.every(validPoint)));}catch{return false;}}
+function validPoint(p){return p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=20&&p.x<=980&&p.y>=20&&p.y<=540;}
+const PREFS_KEY='frisbee-preferences-v1', MIGRATION_KEY='frisbee-server-migration-v1';
+let favorites=[],localBackup=[],migrated={};
+try{favorites=JSON.parse(localStorage.getItem(PREFS_KEY))?.favorites||[];}catch{}
+try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.tactics)&&saved.tactics.every(validTactic))localBackup=saved.tactics.filter(t=>!t.example||t.updated>1700000000000);}catch{}
+try{migrated=JSON.parse(localStorage.getItem(MIGRATION_KEY))||{};}catch{}
+let state={tactics:[],favorites:Array.isArray(favorites)?favorites.filter(v=>typeof v==='string'):[],catalogRevision:3};
+let canEdit=false,loaded=false,connected=false,saving=false,serverRevision=-1,openedSharedLink=false,pendingAuthAction=null;
+const API_BASE=new URL('api/',location.href.split('#')[0]);
+async function api(path='',options={}){
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
+ try{const response=await fetch(new URL(path,API_BASE),{credentials:'same-origin',cache:'no-store',...options,headers:{'Content-Type':'application/json',...(options.headers||{})},signal:controller.signal});
+  let data;try{data=await response.json();}catch{throw new Error('服务器响应无效，请稍后重试。');}
+  if(!response.ok){const error=new Error(data.error||'服务器暂时无法处理请求。');error.status=response.status;throw error;}return data;
+ }catch(error){if(error.name==='AbortError')throw new Error('连接服务器超时，草稿仍然保留。');if(error instanceof TypeError)throw new Error('暂时无法连接服务器，草稿仍然保留。');throw error;}finally{clearTimeout(timeout);}
+}
+function migrationCandidates(){return localBackup.filter(t=>migrated[t.id]!==String(t.updated||0));}
+function syncStatus(){
+ $('#sync-label').textContent=connected?'服务器已同步':loaded?'连接中断':'正在连接服务器';
+ $('.local-status').classList.toggle('offline',!connected);
+ const pending=migrationCandidates();$('#server-banner').hidden=connected&&!pending.length;
+ $('#server-message').textContent=!connected?(loaded?'暂时无法连接服务器，当前内容仍可查看；未保存的草稿会保留在编辑器。':'正在连接球队战术库…'):('检测到 '+pending.length+' 套尚未上传的浏览器战术。上传后队友也能看到，原备份会保留。');
+ $('#migrate-local').hidden=!connected||!pending.length;$('#retry-sync').hidden=connected;
+}
+function fillDraftForm(){if(!draft)return;$('#edit-name').value=draft.name;$('#edit-category').value=draft.category;$('#edit-level').value=draft.level;$('#edit-summary').value=draft.summary;$('#edit-tags').value=draft.tags.join(', ');}
+function permissions(){
+ document.body.classList.toggle('read-only',!canEdit);$('#access-btn').textContent=canEdit?'退出编辑':'解锁编辑';
+ $('#editor-unlock-btn').hidden=canEdit;$('#save-btn').hidden=!canEdit;$('#save-btn').disabled=saving;$('#save-btn').textContent=saving?'正在保存…':'保存到服务器';
+ $('#delete-tactic').hidden=!canEdit||!draft||!state.tactics.some(t=>t.id===draft.id);
+ $('#close-editor').disabled=saving;
+ $$('#editor input,#editor select,#editor textarea').forEach(el=>el.disabled=!canEdit||saving);
+ $$('[data-tool],#defense-btn,#clear-routes').forEach(el=>el.disabled=!canEdit||saving);
+ $('#undo-btn').disabled=!canEdit||saving||!history.length;$('#add-frame').disabled=!canEdit||saving||!!draft&&draft.frames.length>=24;$('#delete-frame').disabled=!canEdit||saving||!draft||draft.frames.length===1;
+ $('#tool-hint').textContent=!canEdit?'只读查看 · 可播放、切换步骤和全屏展示':tool==='move'?'拖动球员调整站位 · 选中球员后可用方向键微调':tool==='run'?'从球员拖向跑动终点':'从球员拖向预计接盘点';
+ $('#edit-status').textContent=!canEdit?'服务器战术 · 只读查看':dirty?'有未保存的修改':draft?._version?'已保存到服务器':'修改后保存到服务器';
+}
+async function loadLibrary({quiet=false}={}){
+ try{const data=await api('tactics');if(!Array.isArray(data.tactics)||!data.tactics.every(validTactic))throw new Error('服务器中的战术格式无效。');
+  const changed=serverRevision!==data.revision;state.tactics=data.tactics;serverRevision=data.revision;canEdit=!!data.canEdit;loaded=true;connected=true;
+  render();if(changed){if(draft&&!dirty&&!saving){const remote=state.tactics.find(t=>t.id===draft.id);if(remote&&remote._version!==draft._version){stop();draft=clone(remote);frameIndex=Math.min(frameIndex,draft.frames.length-1);fillDraftForm();renderBoard();}}}
+  permissions();syncStatus();
+  if(!openedSharedLink){openedSharedLink=true;const id=new URLSearchParams(location.hash.slice(1)).get('tactic');if(id){if(state.tactics.some(t=>t.id===id))openTactic(id);else toast('分享的战术已不存在，或已被删除。');}}
+ }catch(error){connected=false;syncStatus();if(!quiet)toast(error.message);}
+}
+function requestEdit(action){if(canEdit){action?.();return;}pendingAuthAction=action||null;$('#auth-error').textContent='';$('#edit-password').value='';$('#auth-dialog').showModal();$('#edit-password').focus();}
+let view='all',category='全部',search='',sort='recent';
+let boardFull=false,nativeFullscreen=false,orientationLocked=false;
+let draft=null,frameIndex=0,tool='move',history=[],dirty=false,playing=false,raf=0,drag=null,selectedPlayer=null;
+function toast(msg){$('#toast').textContent=msg;$('#toast').classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').classList.remove('visible'),3200);}
+function persist(next){state=next;try{localStorage.setItem(PREFS_KEY,JSON.stringify({favorites:state.favorites}));}catch{toast('收藏在当前会话有效，浏览器未允许保留收藏。');}return true;}
+function svgField(frame,{mini=false,hero=false,interactive=false}={}){
+ const dark=!mini||hero,base=dark?'#2b6047':'#dae5cf',line=dark?'#86aa80':'#9fb393',end=dark?'#24543e':'#cddcbe',run=dark?'#d7ee9f':'#688f4f',pass=dark?'#d1e7ee':'#6e98a3',id=uid().replaceAll('-','');
+ const playerLabel=p=>(p.team==='defense'?'D':'O')+(p.team==='defense'&&p.id>7?p.id-7:p.id);
+ const player=p=>`<g class="player" ${interactive?'data-player="'+p.id+'"':''} transform="translate(${p.x},${p.y})" ${interactive?'tabindex="0" role="button" aria-label="'+playerLabel(p)+' '+(p.team==='defense'?'防守':'进攻')+'球员，用方向键调整位置"':''}><circle r="${mini?17:18}" fill="${p.team==='defense'?(dark?'#df9e76':'#c39773'):(dark?'#e4efb4':'#638951')}" stroke="${dark?'#234a36':'#f4f7ed'}" stroke-width="${mini?2:3}"/><text text-anchor="middle" dy="5" fill="${p.team==='defense'?'#503d2f':dark?'#335034':'#fff'}" font-family="sans-serif" font-size="12" font-weight="600" pointer-events="none">${playerLabel(p)}</text></g>`;
+ return `<svg viewBox="0 0 1000 560" aria-label="飞盘场地跑位示意图" ${interactive?'id="tactic-svg" role="group"':'role="img"'}><defs><marker id="run-${id}" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="${run}" stroke-width="1.3"/></marker><marker id="defrun-${id}" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#df9e76" stroke-width="1.3"/></marker><marker id="pass-${id}" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="${pass}" stroke-width="1.3"/></marker></defs><rect x="0" y="0" width="1000" height="560" rx="10" fill="${base}"/>${[0,1,2,3,4,5,6,7,8,9].map(i=>`<rect x="${20+i*96}" y="25" width="48" height="510" fill="${dark?'#ffffff03':'#ffffff12'}"/>`).join('')}<rect x="25" y="25" width="150" height="510" fill="${end}"/><rect x="825" y="25" width="150" height="510" fill="${end}"/><rect x="25" y="25" width="950" height="510" rx="1" fill="none" stroke="${line}" stroke-width="2"/><path d="M175 25V535 M825 25V535" stroke="${line}" stroke-width="2"/>${[175,825].flatMap(x=>[25,535].map(y=>`<circle cx="${x}" cy="${y}" r="4" fill="${dark?'#d1b282':'#aab693'}"/>`)).join('')}<text x="100" y="280" fill="${line}" text-anchor="middle" font-size="12" letter-spacing="6" transform="rotate(-90 100 280)">END ZONE</text><text x="900" y="280" fill="${line}" text-anchor="middle" font-size="12" letter-spacing="6" transform="rotate(90 900 280)">END ZONE</text><g ${interactive?'id="routes-layer"':''}>${frame.routes.map(r=>{const p=frame.players.find(p=>p.id===r.player);if(!p)return'';return `<path ${interactive?'data-route="'+esc(r.id)+'"':''} d="${pathD(p,r)}" fill="none" stroke="${r.kind==='run'?(p.team==='defense'?'#df9e76':run):pass}" stroke-width="${mini?3:3}" ${r.kind==='pass'?'stroke-dasharray="9 7"':''} marker-end="url(#${r.kind==='run'&&p.team==='defense'?'defrun':r.kind}-${id})" opacity=".85"/>`;}).join('')}</g><g ${interactive?'id="players-layer"':''}>${frame.players.map(player).join('')}</g><g ${interactive?'id="disc"':''} transform="translate(${frame.disc.x},${frame.disc.y})"><ellipse rx="10" ry="5" fill="#fff" stroke="${dark?'#b6c69e':'#8caa70'}" stroke-width="2" transform="rotate(-25)"/></g>${!mini?'<text x="500" y="518" text-anchor="middle" font-size="10" letter-spacing="3" fill="#abc39a" opacity=".65">ATTACK →</text>':''}</svg>`;
+}
+function pathD(p,r){return 'M'+p.x+' '+p.y+[...r.points,r.end].map(q=>' L'+q.x+' '+q.y).join('');}
+function render(){
+ $('#nav-total').textContent=state.tactics.length;$('#nav-favs').textContent=state.favorites.filter(id=>state.tactics.some(t=>t.id===id)).length;$('#nav-custom').textContent=state.tactics.filter(t=>!t.example).length;
+ $$('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
+ $('#side-categories').innerHTML=categories.slice(1).map(c=>`<button class="side-cat" data-cat="${c}"><i></i>${c}</button>`).join('');
+ $('#category-tabs').innerHTML=categories.map(c=>`<button data-cat="${c}" class="${category===c?'active':''}">${c==='全部'?'全部战术':c+(c==='防守战术'?' '+state.tactics.filter(t=>t.category===c).length:'')}</button>`).join('');
+ const names={all:category==='全部'?'全部战术':category,favorites:'我的收藏',custom:'自建战术'};$('#list-title').innerHTML=names[view]+' <span id="list-count"></span>';$('#page-title').textContent=view==='all'?'战术库':names[view];
+ $('#list-description').textContent=view==='favorites'?'把常用的配合留在手边，上场前快速回顾。':view==='custom'?'属于你们的战术，由每一次训练慢慢积累。':'从基础阵型到关键一分，找到适合当下的配合。';
+ let data=state.tactics.filter(t=>(view==='all'||(view==='favorites'?state.favorites.includes(t.id):!t.example))&&(category==='全部'||t.category===category)&&[t.name,t.summary,t.english,...t.tags].join(' ').toLowerCase().includes(search.toLowerCase()));
+ data.sort(sort==='name'?(a,b)=>a.name.localeCompare(b.name,'zh-CN'):(a,b)=>(b.updated||0)-(a.updated||0)||((samples.findIndex(t=>t.id===a.id)+1||999)-(samples.findIndex(t=>t.id===b.id)+1||999)));
+ $('#list-count').textContent=String(data.length).padStart(2,'0');$('#footer-count').textContent=`${data.length} 套战术`;
+ $('#cards').innerHTML=data.map((t,i)=>`<article class="card"><button class="fav-btn ${state.favorites.includes(t.id)?'is-fav':''}" data-fav="${esc(t.id)}" aria-label="${state.favorites.includes(t.id)?'取消收藏':'收藏'}${esc(t.name)}" aria-pressed="${state.favorites.includes(t.id)}">${state.favorites.includes(t.id)?'★':'☆'}</button><button class="card-open" data-open="${esc(t.id)}"><div class="card-preview">${svgField(t.frames[0],{mini:true})}<span class="preview-badge">${t.example?'示例战术':'球队战术'} / ${String(i+1).padStart(2,'0')}</span></div><div class="card-body"><div class="card-meta"><span class="category-chip">${esc(t.category)}</span><span>${esc(t.level)} · ${t.frames[0].players.filter(p=>p.team==='offense').length} 攻 / ${t.frames[0].players.filter(p=>p.team==='defense').length} 防</span></div><h3>${esc(t.name)}</h3><p class="card-desc">${esc(t.summary)||'记录站位与配合，让每次跑动更清晰。'}</p><div class="tags">${t.tags.map(s=>`<span>${esc(s)}</span>`).join('')}</div><div class="card-foot"><span>▧ ${t.frames.length} 个步骤</span><span>${canEdit?'可编辑':'只读查看'} <b>↗</b></span></div></div></button></article>`).join('');
+ $('#empty').hidden=!!data.length||!loaded;permissions();
+}
+$('#hero-board').innerHTML=svgField(samples[0].frames[0],{hero:true});
+document.addEventListener('click',e=>{const cat=e.target.closest('[data-cat]');if(cat){category=cat.dataset.cat;view='all';render();}const v=e.target.closest('[data-view]');if(v){view=v.dataset.view;category='全部';render();}const fav=e.target.closest('[data-fav]');if(fav){const next=clone(state),id=fav.dataset.fav;next.favorites=next.favorites.includes(id)?next.favorites.filter(x=>x!==id):[...next.favorites,id];if(persist(next))render();}const open=e.target.closest('[data-open]');if(open)openTactic(open.dataset.open);});
+$('#search').addEventListener('input',e=>{search=e.target.value;render();});$('#sort').addEventListener('change',e=>{sort=e.target.value;render();});
+function current(){return draft.frames[frameIndex];}
+function holdsDisc(f,p){const closest=f.players.reduce((best,q)=>Math.hypot(q.x-f.disc.x,q.y-f.disc.y)<Math.hypot(best.x-f.disc.x,best.y-f.disc.y)?q:best);return closest.id===p.id&&Math.hypot(p.x-f.disc.x,p.y-f.disc.y)<40;}
+function stop(){playing=false;cancelAnimationFrame(raf);$('#play-btn').textContent='▶';$('#frame-hint').textContent='逐步看清每一次配合';}
+function checkpoint(){history.push({draft:clone(draft),frameIndex});if(history.length>40)history.shift();dirty=true;$('#undo-btn').disabled=!canEdit||saving;$('#edit-status').textContent='有未保存的修改';}
+function newTactic(){if(!canEdit){requestEdit(newTactic);return;}const defense=category==='防守战术',base=coreSamples.find(t=>t.id===(defense?'defense-person':'basic-vertical'));draft={id:uid(),name:'',category:defense?'防守战术':'进攻战术',level:'基础',tags:[],summary:'',english:'',example:false,updated:Date.now(),frames:[{name:'起始站位',players:clone(base.frames[0].players),disc:clone(base.frames[0].disc),routes:[],notes:''}]};openDraft();$('#edit-name').focus();}
+function openTactic(id){const found=state.tactics.find(t=>t.id===id);if(!found){toast('这套战术已不存在，请刷新团队库。');return;}draft=clone(found);openDraft();window.history.replaceState(null,'','#tactic='+encodeURIComponent(id));}
+function openDraft(){stop();frameIndex=0;tool='move';history=[];dirty=false;selectedPlayer=null;$('#edit-name').value=draft.name;$('#edit-category').value=draft.category;$('#edit-level').value=draft.level;$('#edit-summary').value=draft.summary;$('#edit-tags').value=draft.tags.join(', ');$('#editor-title').textContent=draft.name||'新建战术';$('#edit-status').textContent=canEdit?'修改后保存到服务器':'服务器战术 · 只读查看';$('#delete-tactic').hidden=!state.tactics.some(t=>t.id===draft.id);setTool('move');renderBoard();$('#editor').showModal();}
+function setTool(t){stop();tool=t;$$('[data-tool]').forEach(b=>b.classList.toggle('selected',b.dataset.tool===t));$('#tool-hint').textContent=t==='move'?'拖动球员调整站位 · 选中球员后可用方向键微调':t==='run'?'从球员身上拖向跑动终点 · 每名球员每步可绘制一条跑线':'从球员身上拖向接盘位置 · 每步一条传盘路线';}
+function renderBoard(){
+ const f=current();
+ $('#tactic-overview').hidden=!draft.formation;$('#tactic-overview').textContent=draft.formation||'';
+ const defenders=f.players.filter(p=>p.team==='defense');
+ $('#defense-brief').hidden=draft.category!=='防守战术'||!defenders.length;
+ $('#defense-brief').innerHTML='<div class="brief-heading">起始防守分工 <small>换防与持盘变化请看当前步骤</small></div><div class="assignment-grid">'+defenders.map(p=>'<span><b>D'+(p.id>7?p.id-7:p.id)+'</b>'+esc(draft.roles?.[p.id]||'对位与补位任务请在执行要点中记录')+'</span>').join('')+'</div>';
+ $('#board-mount').innerHTML=svgField(f,{interactive:true});$('#editor-title').textContent=draft.name||'新建战术';$('#frame-title').textContent=`第 ${frameIndex+1} 步 · ${f.name||'未命名步骤'}`;$('#frame-counter').textContent=`${frameIndex+1} / ${draft.frames.length}`;$('#step-label').textContent=`STEP ${String(frameIndex+1).padStart(2,'0')}`;
+ $('#edit-step-name').value=f.name;$('#edit-notes').value=f.notes;$('#frames').innerHTML=draft.frames.map((f,i)=>`<button data-frame="${i}" class="${i===frameIndex?'active':''}">${String(i+1).padStart(2,'0')} ${esc(f.name||'未命名步骤')}</button>`).join('');
+ $('#prev-frame').disabled=frameIndex===0;$('#next-frame').disabled=frameIndex===draft.frames.length-1;$('#delete-frame').disabled=draft.frames.length===1;$('#add-frame').disabled=draft.frames.length>=24;$('#undo-btn').disabled=history.length===0;$('#defense-btn').textContent=f.players.some(p=>p.team==='defense')?'− 防守':'＋ 防守';
+ permissions();const svg=$('#tactic-svg');svg.addEventListener('pointerdown',onDown);svg.addEventListener('pointermove',onMove);svg.addEventListener('pointerup',onUp);svg.addEventListener('pointercancel',onCancel);svg.addEventListener('keydown',onPlayerKey);
+}
+function position(e){const svg=$('#tactic-svg'),p=new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse());return {x:Math.round(Math.min(956,Math.max(44,p.x))),y:Math.round(Math.min(515,Math.max(45,p.y)))};}
+function onDown(e){if(!canEdit||saving)return;const target=e.target.closest('[data-player]');if(!target)return;e.preventDefault();if(playing){stop();renderBoard();return;}const id=+target.dataset.player;selectedPlayer=id;const p=current().players.find(p=>p.id===id);drag={id,start:{x:p.x,y:p.y},at:position(e),before:clone(draft),pointer:e.pointerId,moved:false,discFollows:holdsDisc(current(),p)};$('#tactic-svg').setPointerCapture(e.pointerId);}
+function onMove(e){if(!drag)return;const pos=position(e);if(Math.hypot(pos.x-drag.at.x,pos.y-drag.at.y)>4)drag.moved=true;if(!drag.moved)return;const f=current(),p=f.players.find(p=>p.id===drag.id);if(tool==='move'){p.x=pos.x;p.y=pos.y;const node=$(`[data-player="${p.id}"]`);node.setAttribute('transform',`translate(${p.x},${p.y})`);if(drag.discFollows){f.disc={x:Math.min(975,p.x+22),y:p.y};$('#disc').setAttribute('transform',`translate(${f.disc.x},${f.disc.y})`);}f.routes.filter(r=>r.player===p.id).forEach(r=>{const n=$(`[data-route="${r.id}"]`);if(n)n.setAttribute('d',pathD(p,r));});}else{let preview=$('#route-preview');if(!preview){preview=document.createElementNS('http://www.w3.org/2000/svg','path');preview.id='route-preview';preview.setAttribute('fill','none');preview.setAttribute('stroke',tool==='run'?(p.team==='defense'?'#df9e76':'#e4efaf'):'#d1e7ee');preview.setAttribute('stroke-width','4');preview.setAttribute('stroke-dasharray',tool==='run'?'none':'8 6');$('#routes-layer').append(preview);}preview.setAttribute('d',`M${p.x} ${p.y} L${pos.x} ${pos.y}`);drag.end=pos;}}
+function onUp(e){if(!drag)return;const d=drag;drag=null;if(!d.moved){renderBoard();$(`[data-player="${d.id}"]`)?.focus({preventScroll:true});return;}history.push({draft:d.before,frameIndex});if(history.length>40)history.shift();dirty=true;$('#undo-btn').disabled=!canEdit||saving;$('#edit-status').textContent='有未保存的修改';if(tool!=='move'&&d.end){const f=current();if(tool==='pass'){f.routes=f.routes.filter(r=>r.kind!=='pass');f.disc={x:Math.min(975,d.start.x+22),y:d.start.y};}else f.routes=f.routes.filter(r=>!(r.kind==='run'&&r.player===d.id));f.routes.push(route(d.id,tool,d.end.x,d.end.y));}renderBoard();}
+function onCancel(){if(drag){draft=drag.before;drag=null;renderBoard();}}
+function onPlayerKey(e){if(!canEdit||saving)return;if(tool!=='move'||playing||!e.target.closest('[data-player]'))return;const delta={ArrowUp:[0,-5],ArrowDown:[0,5],ArrowLeft:[-5,0],ArrowRight:[5,0]}[e.key];if(!delta)return;e.preventDefault();const id=+e.target.closest('[data-player]').dataset.player;checkpoint();const p=current().players.find(p=>p.id===id),carry=holdsDisc(current(),p);p.x=Math.min(956,Math.max(44,p.x+delta[0]));p.y=Math.min(515,Math.max(45,p.y+delta[1]));if(carry)current().disc={x:Math.min(975,p.x+22),y:p.y};renderBoard();$(`[data-player="${id}"]`)?.focus({preventScroll:true});}
+$$('[data-tool]').forEach(b=>b.addEventListener('click',()=>{setTool(b.dataset.tool);renderBoard();}));
+function updateField(id,callback){$(id).addEventListener('input',e=>{if(!canEdit||saving)return;stop();checkpoint();callback(e.target.value);$('#editor-title').textContent=draft.name||'新建战术';});}
+updateField('#edit-name',v=>draft.name=v);updateField('#edit-category',v=>{draft.category=v;renderBoard();});updateField('#edit-level',v=>draft.level=v);updateField('#edit-summary',v=>draft.summary=v);updateField('#edit-tags',v=>draft.tags=v.split(/[,，]/).map(s=>s.trim().slice(0,99)).filter(Boolean).slice(0,12));updateField('#edit-step-name',v=>{current().name=v;$('#frame-title').textContent=`第 ${frameIndex+1} 步 · ${v||'未命名步骤'}`;const b=$(`[data-frame="${frameIndex}"]`);if(b)b.textContent=`${String(frameIndex+1).padStart(2,'0')} ${v||'未命名步骤'}`;});updateField('#edit-notes',v=>current().notes=v);
+function goFrame(i){stop();frameIndex=Math.max(0,Math.min(draft.frames.length-1,i));renderBoard();}
+$('#frames').addEventListener('click',e=>{const b=e.target.closest('[data-frame]');if(b)goFrame(+b.dataset.frame);});$('#prev-frame').onclick=()=>goFrame(frameIndex-1);$('#next-frame').onclick=()=>goFrame(frameIndex+1);$('#reset-play').onclick=()=>goFrame(0);
+$('#add-frame').onclick=()=>{stop();if(draft.frames.length>=24)return;checkpoint();const f=advance(current());f.name=`第 ${draft.frames.length+1} 步`;f.notes='';draft.frames.splice(frameIndex+1,0,f);frameIndex++;renderBoard();toast('已沿用跑动终点和传盘落点，继续绘制下一步。');};
+$('#delete-frame').onclick=()=>{if(draft.frames.length===1)return;stop();checkpoint();draft.frames.splice(frameIndex,1);frameIndex=Math.min(frameIndex,draft.frames.length-1);renderBoard();};
+$('#clear-routes').onclick=()=>{stop();if(!current().routes.length)return;checkpoint();current().routes=[];renderBoard();};
+$('#undo-btn').onclick=()=>{stop();const old=history.pop();if(!old)return;draft=old.draft;frameIndex=old.frameIndex;dirty=true;$('#edit-name').value=draft.name;$('#edit-category').value=draft.category;$('#edit-level').value=draft.level;$('#edit-summary').value=draft.summary;$('#edit-tags').value=draft.tags.join(', ');renderBoard();};
+$('#defense-btn').onclick=()=>{stop();checkpoint();const f=current();if(f.players.some(p=>p.team==='defense')){f.players=f.players.filter(p=>p.team!=='defense');f.routes=f.routes.filter(r=>f.players.some(p=>p.id===r.player));}else{const used=new Set(f.players.map(p=>p.id)),ids=[8,9,10,11,12,13,14,1,2,3,4,5,6,7].filter(id=>!used.has(id));f.players.push(...f.players.filter(p=>p.team==='offense').slice(0,ids.length).map((p,i)=>({id:ids[i],x:Math.min(950,p.x+35),y:Math.min(515,p.y+25),team:'defense'})));}renderBoard();};
+function interpolate(poly,t){const seg=poly.slice(1).map((p,i)=>Math.hypot(p.x-poly[i].x,p.y-poly[i].y)),total=seg.reduce((a,b)=>a+b,0);let dist=t*total;for(let i=0;i<seg.length;i++){if(dist<=seg[i]||i===seg.length-1){const q=seg[i]?Math.min(1,dist/seg[i]):1;return {x:poly[i].x+(poly[i+1].x-poly[i].x)*q,y:poly[i].y+(poly[i+1].y-poly[i].y)*q};}dist-=seg[i];}return poly[0];}
+$('#play-btn').onclick=()=>{if(playing){stop();renderBoard();return;}playing=true;$('#play-btn').textContent='Ⅱ';$('#frame-hint').textContent='正在演示 · 每步内路线同时执行';let start=performance.now();function tick(now){if(!playing)return;const f=current(),t=Math.min(1,(now-start)/2300),ease=t*t*(3-2*t);f.routes.forEach(r=>{const p=f.players.find(p=>p.id===r.player);if(!p)return;const q=interpolate([p,...r.points,r.end],ease);if(r.kind==='run')$(`[data-player="${r.player}"]`)?.setAttribute('transform',`translate(${q.x},${q.y})`);else $('#disc')?.setAttribute('transform',`translate(${q.x},${q.y})`);});if(t>=1&&now-start>=2900){if(frameIndex<draft.frames.length-1){frameIndex++;renderBoard();start=now;}else{stop();$('#frame-hint').textContent='演示结束 · 复位可回到第一步';return;}}raf=requestAnimationFrame(tick);}raf=requestAnimationFrame(tick);};
+async function saveDraft(){
+ if(!canEdit){requestEdit(saveDraft);return;}if(saving||!draft)return;stop();draft.name=draft.name.trim();
+ if(!draft.name){toast('先给战术起个名字。');$('#edit-name').focus();return;}if(!validTactic(draft)){toast('内容格式不正确，请检查战术信息。');return;}
+ const snapshot=clone(draft);saving=true;permissions();
+ try{const result=await api('tactics/'+encodeURIComponent(snapshot.id),{method:'PUT',body:JSON.stringify({tactic:snapshot,baseVersion:snapshot._version||0})});
+  draft=clone(result.tactic);dirty=false;history=[];serverRevision=result.revision;const i=state.tactics.findIndex(t=>t.id===draft.id);if(i>=0)state.tactics[i]=clone(draft);else state.tactics.unshift(clone(draft));
+  window.history.replaceState(null,'','#tactic='+encodeURIComponent(draft.id));connected=true;render();renderBoard();$('#edit-status').textContent='已保存到服务器';toast('已保存到服务器，队友打开链接即可查看。');
+ }catch(error){if(error.status===401){canEdit=false;toast('编辑权限已过期，请解锁后再次保存。');}else if(error.status===409){toast(error.message);if(confirm('这套战术已被队友更新或删除。是否将你的修改另存为新战术，保留双方内容？')){draft.id=uid();delete draft._version;draft.example=false;draft.name=(draft.name+'（副本）').slice(0,100);saving=false;await saveDraft();return;}}else{connected=false;toast(error.message);}}
+ finally{saving=false;permissions();syncStatus();}
+}
+$('#save-btn').onclick=saveDraft;
+function closeEditor(){if(boardFull){exitBoardFullscreen();return;}if(dirty&&!confirm('有未保存的修改，确定关闭吗？'))return;stop();$('#editor').close();draft=null;window.history.replaceState(null,'',location.pathname+location.search);}
+function clearFullscreenStyle(){
+ boardFull=false;nativeFullscreen=false;$('#editor .editor-head').inert=false;$('.inspector').inert=false;
+ $('.board-column').classList.remove('board-fullscreen');document.body.classList.remove('board-is-fullscreen');
+ $('#fullscreen-btn').textContent='⛶ 全屏横屏';$('#fullscreen-btn').setAttribute('aria-pressed','false');
+ if(orientationLocked){try{screen.orientation.unlock();}catch{}orientationLocked=false;}
+}
+async function exitBoardFullscreen(){
+ const wasNative=document.fullscreenElement===$('#fullscreen-host');clearFullscreenStyle();
+ if(wasNative){try{await document.exitFullscreen();}catch{}}
+}
+$('#fullscreen-btn').onclick=async()=>{
+ if(boardFull){await exitBoardFullscreen();return;}
+ stop();renderBoard();boardFull=true;$('#editor .editor-head').inert=true;$('.inspector').inert=true;const board=$('.board-column');board.classList.add('board-fullscreen');document.body.classList.add('board-is-fullscreen');
+ $('#fullscreen-btn').textContent='✕ 退出全屏';$('#fullscreen-btn').setAttribute('aria-pressed','true');
+ try{const host=$('#fullscreen-host');if(host.requestFullscreen){await host.requestFullscreen();nativeFullscreen=document.fullscreenElement===host;}}catch{}
+ if(nativeFullscreen&&screen.orientation?.lock){try{await screen.orientation.lock('landscape');orientationLocked=true;if(!boardFull){screen.orientation.unlock();orientationLocked=false;}}catch{}}
+};
+document.addEventListener('fullscreenchange',()=>{if(boardFull&&nativeFullscreen&&!document.fullscreenElement)clearFullscreenStyle();});
+$('#close-editor').onclick=closeEditor;$('#editor').addEventListener('cancel',e=>{e.preventDefault();closeEditor();});
+$('#delete-tactic').onclick=async()=>{
+ if(!canEdit||saving||!draft)return;if(!confirm('从球队战术库删除「'+draft.name+'」？队友也将不再看到。'))return;
+ saving=true;permissions();try{const result=await api('tactics/'+encodeURIComponent(draft.id),{method:'DELETE',body:JSON.stringify({baseVersion:draft._version})});state.tactics=state.tactics.filter(t=>t.id!==draft.id);state.favorites=state.favorites.filter(id=>id!==draft.id);serverRevision=result.revision;dirty=false;saving=false;closeEditor();render();toast('已从球队战术库移除。');}catch(error){toast(error.message);if(error.status===401)canEdit=false;}finally{saving=false;permissions();}
+};
+['#new-btn','#blank-btn','#empty-new'].forEach(id=>$(id).onclick=newTactic);
+$('#help-btn').onclick=()=>$('#help').showModal();$$('.help-close').forEach(b=>b.onclick=()=>$('#help').close());
+$('#export-btn').onclick=()=>{const blob=new Blob([JSON.stringify({format:'disc-playbook',version:1,...state},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`飞盘战术备份-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('战术备份已导出。');};
+async function importToServer(tactics){
+ const result=await api('import',{method:'POST',body:JSON.stringify({tactics})});await loadLibrary({quiet:true});toast('已上传 '+result.added+' 套；保留冲突副本 '+result.copied+' 套；跳过相同内容 '+result.skipped+' 套。');return result;
+}
+$('#import-btn').onclick=()=>requestEdit(()=>$('#import-file').click());
+$('#import-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>5*1024*1024)throw Error('文件过大，请选择 5MB 以下的备份。');const data=JSON.parse(await f.text());if(data.format!=='disc-playbook'||data.version!==1||!Array.isArray(data.tactics)||data.tactics.length>500||!data.tactics.every(validTactic))throw Error('请选择本站导出的有效 JSON 备份。');if(!confirm('将 '+data.tactics.length+' 套战术合并到球队服务器？相同内容会跳过，发生冲突时另存副本，队友也能查看上传内容。'))return;await importToServer(data.tactics);}catch(error){toast(error instanceof SyntaxError?'无法读取 JSON 备份。':error.message);}finally{e.target.value='';}};
+$('#migrate-local').onclick=()=>requestEdit(async()=>{const pending=migrationCandidates();if(!pending.length)return;$('#migrate-local').disabled=true;try{await importToServer(pending);pending.forEach(t=>migrated[t.id]=String(t.updated||0));try{localStorage.setItem(MIGRATION_KEY,JSON.stringify(migrated));}catch{}syncStatus();}catch(error){toast(error.message);}finally{$('#migrate-local').disabled=false;}});
+$('#retry-sync').onclick=()=>loadLibrary();
+$('#access-btn').onclick=async()=>{if(!canEdit){requestEdit();return;}try{await api('logout',{method:'POST',body:'{}'});canEdit=false;permissions();render();toast('已退出编辑，仍可查看和分享。');}catch(error){toast(error.message);}};
+$('#editor-unlock-btn').onclick=()=>requestEdit();
+$('#auth-form').onsubmit=async e=>{e.preventDefault();$('#auth-submit').disabled=true;$('#auth-error').textContent='';try{await api('login',{method:'POST',body:JSON.stringify({password:$('#edit-password').value})});canEdit=true;$('#auth-dialog').close();$('#edit-password').value='';await loadLibrary({quiet:true});if(draft)renderBoard();const action=pendingAuthAction;pendingAuthAction=null;await action?.();toast('编辑已解锁，保存后会同步给队友。');}catch(error){$('#auth-error').textContent=error.message;}finally{$('#auth-submit').disabled=false;}};
+$('#auth-cancel').onclick=()=>{$('#auth-dialog').close();pendingAuthAction=null;};
+$('#share-btn').onclick=async()=>{if(!draft||!state.tactics.some(t=>t.id===draft.id)){toast('先保存到服务器，再分享给队友。');return;}const url=new URL(location.href);url.hash='tactic='+encodeURIComponent(draft.id);try{await navigator.clipboard.writeText(url.href);toast('已复制链接，队友可直接查看这套战术。');}catch{prompt('复制这个链接分享给队友：',url.href);}};
+$('#mobile-export').onclick=()=>$('#export-btn').click();$('#mobile-import').onclick=()=>$('#import-btn').click();
+window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
+render();syncStatus();loadLibrary();
+setInterval(()=>{if(!document.hidden&&!saving&&!dirty)loadLibrary({quiet:true});},20000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!saving&&!dirty)loadLibrary({quiet:true});});

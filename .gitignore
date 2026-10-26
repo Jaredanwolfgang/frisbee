@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+data/
+backups/
+*.sqlite3*
+*.tar.gz
+*.zip
+__pycache__/
+.DS_Store
+._*
+.openai/

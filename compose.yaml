@@ -1,0 +1,51 @@
+services:
+  frisbee-api:
+    image: python:3.12-alpine
+    container_name: frisbee-api
+    restart: unless-stopped
+    user: "65534:65534"
+    read_only: true
+    working_dir: /app
+    command: ["python", "-u", "app.py"]
+    environment:
+      EDITOR_KEY: ${EDITOR_KEY:?Set EDITOR_KEY in .env}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://jaredan.site}
+      COOKIE_PATH: ${COOKIE_PATH:-/frisbee/}
+      DB_PATH: /data/playbook.sqlite3
+      PYTHONDONTWRITEBYTECODE: "1"
+      APP_VERSION: ${APP_VERSION:-dev}
+    volumes:
+      - ./server:/app:ro
+      - ./data:/data
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health',timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - rmmt-net
+  frisbee-web:
+    image: nginx:1.27-alpine
+    container_name: frisbee-web
+    restart: unless-stopped
+    depends_on:
+      frisbee-api:
+        condition: service_healthy
+    read_only: true
+    volumes:
+      - ./dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    networks:
+      - rmmt-net
+networks:
+  rmmt-net:
+    external: true
