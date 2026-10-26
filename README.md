@@ -78,6 +78,22 @@ bash scripts/deploy.sh Aliyun-RMMT
 
 首次部署需在服务器创建 `.env`（参考 `.env.example`），配置至少 24 字符的随机 `EDITOR_KEY`。反向代理由现有主站的 `/frisbee/` 路径转发到 `frisbee-web`；`install-route.py` 仅用于首次接入，已有路由无需重跑。
 
+## HTTPS 证书与续期
+
+`jaredan.site`、`www.jaredan.site`、`rmmt.jaredan.site`、`admin.jaredan.site` 共用服务器上的同一份 Let’s Encrypt 证书。主代理为 `rmmt-proxy`，宿主机 Certbot 的现有 `certbot.timer` 负责定期续期。证书、私钥和 ACME 账户仅保存在服务器 `/etc/letsencrypt`，禁止提交 Git。
+
+使用 `webroot` 验证，避免旧的 `standalone` 验证与现有代理争用 80 端口：HTTP 的 `/.well-known/acme-challenge/` 只映射 `/etc/letsencrypt/webroot` 下的公开验证文件，其余域名 HTTP 请求继续跳转 HTTPS。现有容器已经只读挂载 `/etc/letsencrypt`，无需增加端口或停止代理。
+
+```bash
+bash scripts/repair-tls.sh Aliyun-RMMT
+```
+
+脚本适用于当前已到续期时间的证书：先在 `/root/frisbee/backups/tls-*` 备份代理配置和续期配置，只修改已识别的域名 HTTP 跳转块，保留文件 inode 和其他应用路由；验证 Nginx 配置并热加载，实测四个域名的 HTTP-01 验证路径后，续签同一份证书。成功续期会保存 Webroot 配置。
+
+服务器的 `/etc/letsencrypt/renewal-hooks/deploy/40-reload-rmmt-proxy` 在续期后先执行 `nginx -t`，再热加载代理。脚本最后通过 `--dry-run --run-deploy-hooks` 测试保存的续期配置与加载钩子；测试证书不会替换正式证书。若证书尚未进入续期窗口而需要首次更改验证方式，应使用 `certbot reconfigure --cert-name jaredan.site --authenticator webroot --webroot-path /etc/letsencrypt/webroot` 并核对结果。
+
+完成后用正常证书验证检查四个域名的线上有效期、主站与 `/frisbee/api/health`；不要使用跳过 TLS 校验的参数掩盖故障。主代理配置位于已有的 RMMT 工作区，修复脚本会保留其未提交改动，不会替该工作区提交或推送。
+
 ## 备份与恢复
 
 每次代码部署前，会把数据库一致性快照保存到服务器 `/root/frisbee/backups/`。页面也支持导出 JSON 战术备份。数据库包含软删除记录，种子初始化不会复活删除的战术。
