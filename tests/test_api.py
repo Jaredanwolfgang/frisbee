@@ -58,7 +58,7 @@ class APITest(unittest.TestCase):
     def test_public_read_private_writes_and_shared_clients(self):
         code, data, _ = self.request('GET', '/api/tactics')
         self.assertEqual(code, 200)
-        self.assertEqual(len(data['tactics']), 12)
+        self.assertEqual(len(data['tactics']), len(SEEDS))
         self.assertFalse(data['canEdit'])
         self.assertEqual(self.request('PUT', '/api/tactics/team-custom', {'tactic': self.custom(), 'baseVersion': 0})[0], 401)
         self.assertEqual(self.request('POST', '/api/import', {'tactics': [self.custom()]})[0], 401)
@@ -68,6 +68,36 @@ class APITest(unittest.TestCase):
         code, viewer, _ = self.request('GET', '/api/tactics/team-custom')
         self.assertEqual(code, 200)
         self.assertEqual(viewer['tactic'], saved['tactic'])
+
+    def test_loop_setting_is_shared_persisted_and_imported_without_duplicates(self):
+        doc = copy.deepcopy(next(t for t in SEEDS if t['id'] == 'drill-pendulum'))
+        doc.update(id='custom-pendulum', example=False)
+        self.assertEqual(self.request('PUT', '/api/tactics/custom-pendulum', {'tactic': doc, 'baseVersion': 0})[0], 401)
+        code, saved, _ = self.request('PUT', '/api/tactics/custom-pendulum', {'tactic': doc, 'baseVersion': 0}, auth=True)
+        self.assertEqual(code, 200)
+        self.assertTrue(self.request('GET', '/api/tactics/custom-pendulum')[1]['tactic']['loop'])
+        reopened = API.Store(self.path, SEEDS)
+        with reopened.transaction() as db:
+            stored = json.loads(db.execute("SELECT document FROM tactics WHERE id='custom-pendulum'").fetchone()[0])
+        self.assertTrue(stored['loop'])
+        self.assertEqual(stored['frames'], saved['tactic']['frames'])
+        self.assertEqual(self.request('POST', '/api/import', {'tactics': [stored]}, auth=True)[1]['skipped'], 1)
+        stored['loop'] = False
+        code, result, _ = self.request('PUT', '/api/tactics/custom-pendulum', {'tactic': stored, 'baseVersion': 1}, auth=True)
+        self.assertEqual(code, 200)
+        self.assertFalse(result['tactic'].get('loop', False))
+        self.assertEqual(API.canonical({**result['tactic'], 'loop': False}), API.canonical(result['tactic']))
+
+    def test_loop_rejects_wrong_types_and_regular_tactics(self):
+        for value in [True, 'true', 1, [], None]:
+            doc = self.custom()
+            doc['loop'] = value
+            self.assertEqual(self.request('PUT', '/api/tactics/team-custom', {'tactic': doc, 'baseVersion': 0}, auth=True)[0], 400)
+        doc.update(kind='drill', category='基础训练', loop='true')
+        for frame in doc['frames']:
+            frame['players'] = frame['players'][:2]
+            frame['routes'] = []
+        self.assertEqual(self.request('PUT', '/api/tactics/team-custom', {'tactic': doc, 'baseVersion': 0}, auth=True)[0], 400)
 
     def test_cookie_login_logout_and_csrf(self):
         self.assertEqual(self.request('POST', '/api/login', {'password': 'wrong'})[0], 401)

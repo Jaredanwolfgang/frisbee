@@ -71,6 +71,12 @@ def tactic(raw):
            'kind': raw.get('kind', 'drill' if raw['category'] == '基础训练' else 'tactic')}
     if out['kind'] not in ['tactic', 'drill']:
         raise APIError(400, '请选择战术或 Drill。')
+    if 'loop' in raw and type(raw['loop']) is not bool:
+        raise APIError(400, '循环模式需为开启或关闭。')
+    if raw.get('loop'):
+        if out['kind'] != 'drill':
+            raise APIError(400, '循环模式仅适用于 Drill。')
+        out['loop'] = True
     markers = raw.get('markers', [])
     if not isinstance(markers, list) or len(markers) > 32:
         raise APIError(400, '每套战术最多 32 个角标。')
@@ -139,6 +145,7 @@ def canonical(doc):
     doc.setdefault('kind', 'drill' if doc.get('category') == '基础训练' else 'tactic')
     for key in ['updated', '_version']:
         doc.pop(key, None)
+    doc.setdefault('loop', False)
     doc.setdefault('markers', [])
     for marker in doc['markers']:
         marker.pop('id', None)

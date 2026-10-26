@@ -2,7 +2,7 @@ const fs = require('node:fs'), path = require('node:path'), vm = require('node:v
 const root=path.resolve(__dirname,'..'), app=fs.readFileSync(path.join(root,'dist/app.js'),'utf8');
 const ctx={crypto:crypto.webcrypto}; vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(root,'dist/roster.js'),'utf8')+'\n'+fs.readFileSync(path.join(root,'dist/catalog.js'),'utf8')+'\n'+app.slice(0,app.indexOf('const MIGRATION_KEY='))+'\nglobalThis.result=JSON.stringify({samples,valid:samples.every(validTactic)});globalThis.roster=Roster;',ctx);
-const {samples,valid}=JSON.parse(ctx.result);assert(valid);assert.equal(samples.length,12);assert.equal(samples.filter(t=>t.category==='防守战术').length,7);
+const {samples,valid}=JSON.parse(ctx.result);assert(valid);assert.equal(samples.length,13);assert.equal(samples.filter(t=>t.category==='防守战术').length,7);
 const v=samples.find(t=>t.id==='basic-vertical').frames[0].players.filter(p=>p.team==='offense'&&p.id>=3);
 assert.equal(new Set(v.map(p=>p.y)).size,1);assert.equal(new Set(v.map(p=>p.x)).size,5);
 const h=samples.find(t=>t.id==='basic-horizontal').frames[0].players.filter(p=>p.team==='offense'&&p.id>=4);
@@ -16,7 +16,7 @@ for(const t of samples.filter(t=>t.catalogRevision===3)){
  }
  if(t.category==='防守战术')assert(t.frames.some(f=>f.routes.some(r=>r.kind==='run'&&r.player>7)));
 }
-console.log('PASS: 12 tactics; correct stack geometry, 7 defensive sequences and consistent receiving points.');
+console.log('PASS: 13 tactics; correct stack geometry, 7 defensive sequences and consistent receiving points.');
 const roster=ctx.roster;
 for(let n=1;n<=7;n++)assert.equal(roster.create(n,0,'drill').length,n);
 assert.throws(()=>roster.create(4,4,'drill'));
@@ -44,3 +44,8 @@ assert.equal(JSON.stringify(roster.remove(markerTactic,1).markers),JSON.stringif
 ctx.markerSample.markers.push({...ctx.markerSample.markers[0]});assert(!vm.runInContext('validTactic(markerSample)',ctx));
 ctx.markerSample.markers=[{id:'corner-1',x:0,y:140,label:'起点'}];assert(!vm.runInContext('validTactic(markerSample)',ctx));
 console.log('PASS: marker validation, unique IDs, field bounds and preservation during roster edits.');
+ctx.loopSample=JSON.parse(JSON.stringify(samples.find(t=>t.id==='drill-pendulum')));
+assert(vm.runInContext('validTactic(loopSample)',ctx));
+ctx.loopSample.loop='true';assert(!vm.runInContext('validTactic(loopSample)',ctx));
+ctx.loopSample.loop=true;ctx.loopSample.kind='tactic';assert(!vm.runInContext('validTactic(loopSample)',ctx));
+console.log('PASS: looping Drill example and loop field validation.');

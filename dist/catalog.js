@@ -69,3 +69,16 @@ function buildCoreCatalog({route,advance}) {
   ])
  ];
 }
+
+// Start immediately after O2 has returned the disc to O1; the four phases close a full cycle.
+function buildPendulumDrill({route,advance}){
+ const left={x:300,y:150},right={x:700,y:150},middle={x:500,y:370};
+ const frame={name:'O2 回中间',notes:'循环从 O2 已回盘给 O1 的状态开始。O1 在右接盘位持盘等候；O2 从左侧跑回中间角标，先回位再切出。',players:[{id:1,number:1,team:'offense',...right},{id:2,number:2,team:'offense',...left}],disc:{x:right.x+22,y:right.y},routes:[route(2,'run',middle.x,middle.y,[{x:350,y:280}])]};
+ const frames=[frame];
+ for(const [name,notes,routes] of [
+  ['O2 切左侧接盘','O2 从中间变向切向左接盘位；O1 留在右侧，把盘传给移动中的 O2。接盘后 O2 站稳持盘，O1 再回中间。',[route(2,'run',left.x,left.y,[{x:420,y:250}]),route(1,'pass',left.x,left.y)]],
+  ['O1 回中间','O2 在左接盘位持盘等候；O1 出盘后跑回中间角标，不带盘跑动。',[route(1,'run',middle.x,middle.y,[{x:650,y:280}])]],
+  ['O1 切右侧接盘','O1 从中间变向切向右接盘位，接 O2 的回盘。此时球员位置和盘权回到第一步：O1 右侧持盘、O2 左侧无盘。O2 下一轮继续回中间，再切左侧。',[route(1,'run',right.x,right.y,[{x:580,y:250}]),route(2,'pass',right.x,right.y)]]
+ ]){const next=advance(frames[frames.length-1]);if(next.players.some(p=>p.x===next.disc.x&&p.y===next.disc.y))next.disc.x+=22;next.name=name;next.notes=notes;next.routes=routes;frames.push(next);}
+ return {id:'drill-pendulum',name:'二人钟摆',english:'TWO-PERSON PENDULUM',kind:'drill',loop:true,category:'基础训练',level:'基础',tags:['双人','钟摆','角标','循环'],summary:'传盘后回中间角标，再切向另一侧接盘；O1、O2 左右交替，4 步首尾衔接连续练习。',formation:'从 O2 回盘给 O1 后开始：O2 回中间 → 切左接 O1 传盘 → O1 回中间 → 切右接 O2 回盘。',markers:[{id:'pendulum-left',...left,label:'左接盘位'},{id:'pendulum-right',...right,label:'右接盘位'},{id:'pendulum-middle',...middle,label:'中间回位'}],frames,example:true,updated:1700000000000};
+}

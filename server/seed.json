@@ -4870,6 +4870,231 @@
     "catalogRevision": 3
   },
   {
+    "id": "drill-pendulum",
+    "name": "二人钟摆",
+    "english": "TWO-PERSON PENDULUM",
+    "kind": "drill",
+    "loop": true,
+    "category": "基础训练",
+    "level": "基础",
+    "tags": [
+      "双人",
+      "钟摆",
+      "角标",
+      "循环"
+    ],
+    "summary": "传盘后回中间角标，再切向另一侧接盘；O1、O2 左右交替，4 步首尾衔接连续练习。",
+    "formation": "从 O2 回盘给 O1 后开始：O2 回中间 → 切左接 O1 传盘 → O1 回中间 → 切右接 O2 回盘。",
+    "markers": [
+      {
+        "id": "pendulum-left",
+        "x": 300,
+        "y": 150,
+        "label": "左接盘位"
+      },
+      {
+        "id": "pendulum-right",
+        "x": 700,
+        "y": 150,
+        "label": "右接盘位"
+      },
+      {
+        "id": "pendulum-middle",
+        "x": 500,
+        "y": 370,
+        "label": "中间回位"
+      }
+    ],
+    "frames": [
+      {
+        "name": "O2 回中间",
+        "notes": "循环从 O2 已回盘给 O1 的状态开始。O1 在右接盘位持盘等候；O2 从左侧跑回中间角标，先回位再切出。",
+        "players": [
+          {
+            "id": 1,
+            "number": 1,
+            "team": "offense",
+            "x": 700,
+            "y": 150
+          },
+          {
+            "id": 2,
+            "number": 2,
+            "team": "offense",
+            "x": 300,
+            "y": 150
+          }
+        ],
+        "disc": {
+          "x": 722,
+          "y": 150
+        },
+        "routes": [
+          {
+            "id": "0146f4a1-0d44-9248-bbff-8f7195f1abfd",
+            "player": 2,
+            "kind": "run",
+            "points": [
+              {
+                "x": 350,
+                "y": 280
+              }
+            ],
+            "end": {
+              "x": 500,
+              "y": 370
+            }
+          }
+        ]
+      },
+      {
+        "name": "O2 切左侧接盘",
+        "notes": "O2 从中间变向切向左接盘位；O1 留在右侧，把盘传给移动中的 O2。接盘后 O2 站稳持盘，O1 再回中间。",
+        "players": [
+          {
+            "id": 1,
+            "number": 1,
+            "team": "offense",
+            "x": 700,
+            "y": 150
+          },
+          {
+            "id": 2,
+            "number": 2,
+            "team": "offense",
+            "x": 500,
+            "y": 370
+          }
+        ],
+        "disc": {
+          "x": 722,
+          "y": 150
+        },
+        "routes": [
+          {
+            "id": "903c5bf9-da36-e242-f77b-77480a59c22f",
+            "player": 2,
+            "kind": "run",
+            "points": [
+              {
+                "x": 420,
+                "y": 250
+              }
+            ],
+            "end": {
+              "x": 300,
+              "y": 150
+            }
+          },
+          {
+            "id": "eb1534de-89ed-cef5-5b28-b9c6f2c94671",
+            "player": 1,
+            "kind": "pass",
+            "points": [],
+            "end": {
+              "x": 300,
+              "y": 150
+            }
+          }
+        ]
+      },
+      {
+        "name": "O1 回中间",
+        "notes": "O2 在左接盘位持盘等候；O1 出盘后跑回中间角标，不带盘跑动。",
+        "players": [
+          {
+            "id": 1,
+            "number": 1,
+            "team": "offense",
+            "x": 700,
+            "y": 150
+          },
+          {
+            "id": 2,
+            "number": 2,
+            "team": "offense",
+            "x": 300,
+            "y": 150
+          }
+        ],
+        "disc": {
+          "x": 322,
+          "y": 150
+        },
+        "routes": [
+          {
+            "id": "c258a2ae-a258-def2-ed8d-58ffdef8beed",
+            "player": 1,
+            "kind": "run",
+            "points": [
+              {
+                "x": 650,
+                "y": 280
+              }
+            ],
+            "end": {
+              "x": 500,
+              "y": 370
+            }
+          }
+        ]
+      },
+      {
+        "name": "O1 切右侧接盘",
+        "notes": "O1 从中间变向切向右接盘位，接 O2 的回盘。此时球员位置和盘权回到第一步：O1 右侧持盘、O2 左侧无盘。O2 下一轮继续回中间，再切左侧。",
+        "players": [
+          {
+            "id": 1,
+            "number": 1,
+            "team": "offense",
+            "x": 500,
+            "y": 370
+          },
+          {
+            "id": 2,
+            "number": 2,
+            "team": "offense",
+            "x": 300,
+            "y": 150
+          }
+        ],
+        "disc": {
+          "x": 322,
+          "y": 150
+        },
+        "routes": [
+          {
+            "id": "3451f6f0-eb66-5dfd-e6e2-932c570328b1",
+            "player": 1,
+            "kind": "run",
+            "points": [
+              {
+                "x": 580,
+                "y": 250
+              }
+            ],
+            "end": {
+              "x": 700,
+              "y": 150
+            }
+          },
+          {
+            "id": "c71ce076-0e0b-0a0d-2390-357c56ed5d64",
+            "player": 2,
+            "kind": "pass",
+            "points": [],
+            "end": {
+              "x": 700,
+              "y": 150
+            }
+          }
+        ]
+      }
+    ],
+    "example": true,
+    "updated": 1700000000000
+  },
+  {
     "id": "sample-endzone",
     "name": "端区进攻 · 切入得分",
     "english": "END ZONE PLAY",
