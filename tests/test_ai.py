@@ -48,6 +48,10 @@ class CompileTest(unittest.TestCase):
         bad=plan();bad['steps'][0]['moves'][0].update(x=600,y=430)
         with self.assertRaises(AI.PlanGeometryError):AI.compile_plan(bad,'drill',3,0)
 
+    def test_stationary_route_cannot_pretend_to_be_a_cut(self):
+        raw=plan();raw['steps'][0]['moves'][0].update(x=600,y=120,via=[])
+        with self.assertRaises(AI.PlanGeometryError):AI.compile_plan(raw,'drill',3,0)
+
     def test_queue_can_advance_while_another_player_returns_to_the_vacated_slot(self):
         raw=plan();raw['steps']=[{'name':'队列前移','notes':'O3 前移，O2 回到空出的队尾。','moves':[{'player':2,'x':600,'y':430},{'player':3,'x':700,'y':430}],'pass':None}]
         result=AI.compile_plan(raw,'drill',3,0)

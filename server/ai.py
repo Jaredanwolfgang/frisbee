@@ -110,7 +110,13 @@ def compile_plan(plan, kind, offense, defense):
             via = move.get('via', [])
             if not isinstance(via, list) or len(via) > 6:
                 raise AIError(422, 'AI 草稿的跑动路线过于复杂，请简化描述。')
-            frame['routes'].append({'id': str(uuid.uuid4()), 'player': move['player'], 'kind': 'run', 'end': end, 'points': [coordinates(p) for p in via]})
+            via = [coordinates(p) for p in via]
+            start = next(p for p in players if p['id'] == move['player'])
+            line = [start]+via+[end]
+            if sum(((b['x']-a['x'])**2+(b['y']-a['y'])**2)**.5 for a,b in zip(line,line[1:])) < 12:
+                label=('O' if start['team']=='offense' else 'D')+str(start['number'])
+                raise PlanGeometryError(422, f'AI 草稿中 {label} 的跑动没有实际位移。请把拉开点与回切接盘点分开，不能用原地跑线代替切入。')
+            frame['routes'].append({'id': str(uuid.uuid4()), 'player': move['player'], 'kind': 'run', 'end': end, 'points': via})
             endings[move['player']] = end
         if holder in moved:
             raise AIError(422, 'AI 草稿把出盘和持盘人的跑动放在同一步。请将先传后跑分步描述。')
@@ -348,6 +354,7 @@ class AIService:
                   '只复述已有意图，拆清先后关系、出盘人、接盘人、每次盘权、跑动目的地、等待者、角标和循环衔接。先传后跑要拆清，持盘人不能带盘跑。'
                   '必须列出所选人数的全部角色；无法确定的角色职责或代词指向写待确认，并放进 questions，不得偷偷猜测。可以提出编号约定供人确认。'
                   '不明确的起始持盘人、跑传顺序、左右相对谁、循环如何接回都要提问；但已说清的事实不要重复追问。'
+                  '涉及排队轮换时，必须在setup列出每列队首到队尾的编号顺序，并在steps明确每轮谁离队、哪些等待者前移、谁回到谁后面。接盘/持盘者已经离队时不再算进队列。不要只写模糊的依次轮换；无法确定队列顺序就提问。'
                   '默认进攻沿场地长边从左向右；向前/纵深表示沿长边推进，横向/回传/指定阵型按原意保留，不把所有动作改成向前。'
                   '不要添加用户没说的练习目的、额外动作、等待职责或循环；用户描述的人数与设置冲突时明确提问。等待者的全程职责写入roles或setup，不要把原地等待单独列成动作步骤。'
                   '每步用 O1/O2/D1 等编号，简洁可执行，最多11步。roles 必须完整覆盖 required_labels；示例只说明字段，不代表实际人数。严格按以下格式返回：'+json.dumps(schema,ensure_ascii=False))
@@ -384,7 +391,9 @@ class AIService:
                   '同一步的路线同时播放；先传后跑、先接再传必须拆步。出盘人同一步不跑，不能画成带盘跑动。接盘和换位需连续衔接，不能瞬移、自动复位或隐含循环。'
                   '角标是固定地点，全步骤共用，不计入人数。未要求角标可返回空数组。'
                   '球员图标约40坐标单位宽；同队球员起始和每步结束时都要至少相距50，队列间距建议60。回队尾不能落在静止队友的位置。'
+                  '拉开点与回切接盘点必须是不同的位置，先拉到接盘点外侧远端，再折返接盘；不要直接拉开到接盘点后画零长度回切。每条跑线必须有实际位移，原地等待不得创建moves。'
                   '已确认队列轮换时，须画出等待者在队列内前移的动作，再让出盘者回到空出的队尾；不能叠在一起，也不能省略已确认的前移。'
+                  '画队列前先给每组安排固定、间隔至少60的队首/第二/第三槽位；每步按确认的队列顺序分配到这些槽位。拉开或持盘接盘者已经离队，不占等待槽位。不能一直使用同一个队尾坐标却不移动原来的等候者。'
                   '结构示例（仅展示格式，不是固定人数或动作）：'+json.dumps(schema,ensure_ascii=False))
         self.acquire(ip)
         try:
@@ -396,7 +405,7 @@ class AIService:
                 # One bounded repair with the original confirmed description retained.
                 # Never silently move players to guessed destinations in Python.
                 repair = {'operation':'repair','kind':kind,'offense':offense,'defense':defense,'description':description,
-                          'feedback':error.message+' 只修正示意布局间距和已确认的队列前移；不要改角色编号、盘权、传盘人次或删动作来规避重叠。返回完整 json。'}
+                          'feedback':error.message+' 只修正示意布局间距、无位移跑线和已确认的队列前移；不要改角色编号、盘权、传盘人次或删动作来规避重叠。返回完整 json。'}
                 plan = self.client.complete(messages+[{'role':'assistant','content':json.dumps(plan,ensure_ascii=False)},{'role':'user','content':json.dumps(repair,ensure_ascii=False)}])
                 result = compile_plan(plan, kind, offense, defense)
             if result['status'] == 'ready':

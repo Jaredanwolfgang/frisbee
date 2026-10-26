@@ -76,6 +76,7 @@ async function loadLibrary({quiet=false}={}){
 }
 function requestEdit(action){if(canEdit){action?.();return;}pendingAuthAction=action||null;$('#auth-error').textContent='';$('#edit-password').value='';$('#auth-dialog').showModal();$('#edit-password').focus();}
 let kindFilter='all',category='全部',search='',sort='recent',createKind='drill';
+let creationUI=null;
 let boardFull=false,nativeFullscreen=false,orientationLocked=false;
 let draft=null,frameIndex=0,tool='move',history=[],dirty=false,playing=false,raf=0,playbackLoop=false,playbackRound=0,drag=null,selectedPlayer=null,selectedMarker=null;
 function toast(msg){$('#toast').textContent=msg;$('#toast').classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').classList.remove('visible'),3200);}
@@ -107,12 +108,13 @@ function stop(){playing=false;cancelAnimationFrame(raf);$('#play-btn').textConte
 function checkpoint(){history.push({draft:clone(draft),frameIndex});if(history.length>40)history.shift();dirty=true;$('#undo-btn').disabled=!canEdit||saving;$('#edit-status').textContent='有未保存的修改';}
 function setCreateKind(kind){createKind=kind;$$('[data-create-kind]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.createKind===kind));$('#preset-label').hidden=kind==='drill';$('#create-preset').value=kind==='drill'?'blank':'basic-vertical';$('#create-offense').value=kind==='drill'?3:7;$('#create-defense').value=kind==='drill'?0:7;updateCreateTotal();}
 function updateCreateTotal(){const n=Number($('#create-offense').value)+Number($('#create-defense').value),limit=createKind==='drill'?7:14;$('#create-total').textContent='共 '+n+' 人 · '+(createKind==='drill'?'Drill 最多 7 人':'每方最多 7 人');$('#create-total').classList.toggle('invalid',n<1||n>limit);}
-function newTactic(){if(!canEdit){requestEdit(newTactic);return;}setCreateKind(kindFilter==='tactic'?'tactic':'drill');$('#create-name').value='';$('#create-dialog').showModal();$('#create-name').focus();}
+function newTactic(){if(!canEdit){requestEdit(newTactic);return;}setCreateKind(kindFilter==='tactic'?'tactic':'drill');$('#create-name').value='';creationUI.openSetup('ai');}
 $$('[data-create-kind]').forEach(b=>b.onclick=()=>setCreateKind(b.dataset.createKind));
 ['#create-offense','#create-defense'].forEach(id=>$(id).addEventListener('input',()=>{$('#create-preset').value='blank';updateCreateTotal();}));
 $('#create-preset').onchange=()=>{if($('#create-preset').value!=='blank'){$('#create-offense').value=7;$('#create-defense').value=7;}updateCreateTotal();};
 $('#create-cancel').onclick=()=>$('#create-dialog').close();
 $('#create-form').onsubmit=e=>{e.preventDefault();const off=Number($('#create-offense').value),def=Number($('#create-defense').value);let players;try{players=Roster.create(off,def,createKind);}catch(error){toast(error.message);return;}
+ if(creationUI?.isAI()){creationUI.describe();return;}
  const preset=$('#create-preset').value,base=createKind==='tactic'&&preset!=='blank'?coreSamples.find(t=>t.id===preset):null;
  if(base)players=clone(base.frames[0].players);
  const first=players.find(p=>p.team==='offense')||players[0];draft={id:uid(),kind:createKind,name:$('#create-name').value.trim()||(createKind==='drill'?'新 Drill':'新战术'),category:createKind==='drill'?'基础训练':'进攻战术',level:'基础',tags:[],summary:'',english:'',example:false,updated:Date.now(),frames:[{name:'步骤 1',players,disc:{x:Math.min(975,first.x+22),y:first.y},routes:[],notes:''}]};if(base)draft.formation=base.formation;
@@ -318,7 +320,7 @@ document.addEventListener('click',async e=>{
  const visual=e.target.closest('[data-rule-visual]');if(visual){const v=rulesVisuals.find(x=>x.id===visual.dataset.ruleVisual);if(v){$('#visual-title').textContent=v.title;$('#visual-subtitle').textContent=v.en;$('#visual-image').src=v.image;$('#visual-image').alt=v.title+' · WFDF 官方示意';$('#visual-description').textContent=v.description;$('#visual-source').href=v.source;$('#rule-visual-dialog').showModal();}}
  const copy=e.target.closest('[data-copy-rule]');if(copy){const url=new URL('.',location.href);url.hash='rule='+encodeURIComponent(copy.dataset.copyRule);if(await copyText(url.href))toast('已复制规则条款链接。');else{$('#share-url').value=url.href;$('#share-copy-status').textContent='可长按链接手动复制。';$('#share-dialog').showModal();}}
 });
-initFrisbeeAI({requestEdit,toast,drawFrame:(frame,markers)=>svgField(frame,{mini:true,markers}),onDraft:tactic=>requestEdit(()=>{if(!validTactic(tactic)){toast('AI 草稿格式无效，请重新生成。');return;}draft=clone(tactic);openDraft();checkpoint();permissions();})});
+creationUI=initFrisbeeAI({requestEdit,toast,prepareCreation:()=>{setCreateKind(kindFilter==='tactic'?'tactic':'drill');$('#create-name').value='';},drawFrame:(frame,markers)=>svgField(frame,{mini:true,markers}),onDraft:tactic=>requestEdit(()=>{if(!validTactic(tactic)){toast('AI 草稿格式无效，请重新生成。');return;}draft=clone(tactic);openDraft();checkpoint();permissions();})});
 if(location.hash==='#rules'||location.hash.startsWith('#rule='))showRulesLink();
 window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
 render();syncStatus();loadLibrary();
