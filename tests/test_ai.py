@@ -42,6 +42,18 @@ class OutlineTest(unittest.TestCase):
 
 
 class CompileTest(unittest.TestCase):
+    def test_overlapping_start_and_return_to_occupied_queue_are_rejected(self):
+        bad=plan();bad['players'][1].update(x=600,y=430)
+        with self.assertRaises(AI.PlanGeometryError):AI.compile_plan(bad,'drill',3,0)
+        bad=plan();bad['steps'][0]['moves'][0].update(x=600,y=430)
+        with self.assertRaises(AI.PlanGeometryError):AI.compile_plan(bad,'drill',3,0)
+
+    def test_queue_can_advance_while_another_player_returns_to_the_vacated_slot(self):
+        raw=plan();raw['steps']=[{'name':'队列前移','notes':'O3 前移，O2 回到空出的队尾。','moves':[{'player':2,'x':600,'y':430},{'player':3,'x':700,'y':430}],'pass':None}]
+        result=AI.compile_plan(raw,'drill',3,0)
+        self.assertEqual(result['status'],'ready')
+        self.assertEqual(len(result['tactic']['frames'][1]['routes']),2)
+
     def test_plan_compiles_continuous_positions_and_actual_receiving_points(self):
         result=AI.compile_plan(plan(),'drill',3,0)
         t=result['tactic'];self.assertEqual(len(t['frames']),3)

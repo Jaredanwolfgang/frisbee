@@ -14,11 +14,13 @@ KEY='test-editor-only-with-enough-length'
 
 
 class FakeClient:
-    def __init__(self):self.gate=threading.Event();self.invalid_citation=False;self.calls=[]
+    def __init__(self):self.gate=threading.Event();self.invalid_citation=False;self.calls=[];self.bad_geometry_once=False
     def complete(self,messages):
         data=json.loads(messages[-1]['content']);self.calls.append(data)
         if data.get('operation')=='outline':return sample_outline()
         description=data['description']
+        if self.bad_geometry_once:
+            self.bad_geometry_once=False;bad=sample_plan();bad['players'][1].update(x=600,y=430);return bad
         return {'status':'clarify','questions':['谁先持盘？']} if description=='不明确' else sample_plan()
     def stream(self,messages):
         self.gate.wait(3)
@@ -65,6 +67,24 @@ class AIEndpointTest(unittest.TestCase):
         code,result=self.json_request('POST','/api/ai/tactic',{**payload,'description':edited,'confirmed':True},auth=True)
         self.assertEqual(code,200);self.assertEqual(self.client.calls[-1]['description'],edited)
         self.assertEqual(result['status'],'ready');self.assertEqual(self.store.library()['tactics'],[])
+
+    def test_overlapping_ai_layout_is_repaired_once_before_being_returned(self):
+        self.client.bad_geometry_once=True
+        payload={'description':'已确认的三人传跑说明','kind':'drill','offense':3,'defense':0,'confirmed':True}
+        code,data=self.json_request('POST','/api/ai/tactic',payload,auth=True)
+        self.assertEqual(code,200);self.assertEqual(data['status'],'ready')
+        self.assertEqual(len(self.client.calls),2);self.assertEqual(self.client.calls[-1]['operation'],'repair')
+        self.assertEqual(self.client.calls[-1]['description'],payload['description'])
+        self.assertEqual(self.store.library()['tactics'],[])
+
+    def test_persistent_overlaps_never_return_a_ready_draft(self):
+        def overlap(messages):
+            self.client.calls.append(json.loads(messages[-1]['content']))
+            bad=sample_plan();bad['players'][1].update(x=600,y=430);return bad
+        self.client.complete=overlap
+        code,data=self.json_request('POST','/api/ai/tactic',{'description':'已确认说明','kind':'drill','offense':3,'defense':0,'confirmed':True},auth=True)
+        self.assertEqual(code,422);self.assertEqual(len(self.client.calls),2)
+        self.assertIn('站位重叠',data['error']);self.assertEqual(self.store.library()['tactics'],[])
 
     def test_sources_flush_before_model_response_and_references_are_verified(self):
         conn,res=self.request('POST','/api/ai/rules',{'question':'防守犯规无争议，怎么读秒？'})

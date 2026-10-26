@@ -18,6 +18,20 @@ class AIError(Exception):
         super().__init__(message)
 
 
+class PlanGeometryError(AIError):
+    pass
+
+
+def check_player_spacing(players):
+    # Rendered player tokens are about 40 units wide. This is diagram legibility,
+    # not a claim about physical separation in metres; close opponents are permitted.
+    for i, first in enumerate(players):
+        for second in players[i+1:]:
+            if first['team'] == second['team'] and (first['x']-second['x'])**2+(first['y']-second['y'])**2 < 44**2:
+                prefix='O' if first['team']=='offense' else 'D'
+                raise PlanGeometryError(422, f'AI 布局中 {prefix}{first["number"]} 与 {prefix}{second["number"]} 站位重叠或过近。请明确队列前移与回队尾位置后重试。')
+
+
 def bounded_text(value, limit, name='内容'):
     if not isinstance(value, str) or not value.strip() or len(value) > limit:
         raise AIError(400, f'{name}需为 1–{limit} 字。')
@@ -64,6 +78,7 @@ def compile_plan(plan, kind, offense, defense):
     for team in ('offense', 'defense'):
         for number, player in enumerate((p for p in players if p['team'] == team), 1):
             player['number'] = number
+    check_player_spacing(players)
     holder = plan.get('disc_holder')
     attack = {p['id'] for p in players if p['team'] == 'offense'}
     if type(holder) is not int or holder not in attack:
@@ -114,6 +129,7 @@ def compile_plan(plan, kind, offense, defense):
         for player in players:
             if player['id'] in endings:
                 player.update(endings[player['id']])
+        check_player_spacing(players)
     markers = plan.get('markers', [])
     if not isinstance(markers, list) or len(markers) > 32:
         raise AIError(422, 'AI 草稿的角标数量无效。')
@@ -333,7 +349,7 @@ class AIService:
                   '必须列出所选人数的全部角色；无法确定的角色职责或代词指向写待确认，并放进 questions，不得偷偷猜测。可以提出编号约定供人确认。'
                   '不明确的起始持盘人、跑传顺序、左右相对谁、循环如何接回都要提问；但已说清的事实不要重复追问。'
                   '默认进攻沿场地长边从左向右；向前/纵深表示沿长边推进，横向/回传/指定阵型按原意保留，不把所有动作改成向前。'
-                  '不要添加用户没说的练习目的、额外动作、等待职责或循环；用户描述的人数与设置冲突时明确提问。'
+                  '不要添加用户没说的练习目的、额外动作、等待职责或循环；用户描述的人数与设置冲突时明确提问。等待者的全程职责写入roles或setup，不要把原地等待单独列成动作步骤。'
                   '每步用 O1/O2/D1 等编号，简洁可执行，最多11步。roles 必须完整覆盖 required_labels；示例只说明字段，不代表实际人数。严格按以下格式返回：'+json.dumps(schema,ensure_ascii=False))
         self.acquire(ip)
         try:
@@ -367,11 +383,22 @@ class AIService:
                   '每次出盘者必须是当前持盘者，接盘者必须是另一进攻人；接盘后盘权换给接盘者。'
                   '同一步的路线同时播放；先传后跑、先接再传必须拆步。出盘人同一步不跑，不能画成带盘跑动。接盘和换位需连续衔接，不能瞬移、自动复位或隐含循环。'
                   '角标是固定地点，全步骤共用，不计入人数。未要求角标可返回空数组。'
+                  '球员图标约40坐标单位宽；同队球员起始和每步结束时都要至少相距50，队列间距建议60。回队尾不能落在静止队友的位置。'
+                  '已确认队列轮换时，须画出等待者在队列内前移的动作，再让出盘者回到空出的队尾；不能叠在一起，也不能省略已确认的前移。'
                   '结构示例（仅展示格式，不是固定人数或动作）：'+json.dumps(schema,ensure_ascii=False))
         self.acquire(ip)
         try:
-            plan = self.client.complete([{'role':'system','content':system},{'role':'user','content':json.dumps({'kind':kind,'offense':offense,'defense':defense,'description':description},ensure_ascii=False)}])
-            result = compile_plan(plan, kind, offense, defense)
+            messages = [{'role':'system','content':system},{'role':'user','content':json.dumps({'kind':kind,'offense':offense,'defense':defense,'description':description},ensure_ascii=False)}]
+            plan = self.client.complete(messages)
+            try:
+                result = compile_plan(plan, kind, offense, defense)
+            except PlanGeometryError as error:
+                # One bounded repair with the original confirmed description retained.
+                # Never silently move players to guessed destinations in Python.
+                repair = {'operation':'repair','kind':kind,'offense':offense,'defense':defense,'description':description,
+                          'feedback':error.message+' 只修正示意布局间距和已确认的队列前移；不要改角色编号、盘权、传盘人次或删动作来规避重叠。返回完整 json。'}
+                plan = self.client.complete(messages+[{'role':'assistant','content':json.dumps(plan,ensure_ascii=False)},{'role':'user','content':json.dumps(repair,ensure_ascii=False)}])
+                result = compile_plan(plan, kind, offense, defense)
             if result['status'] == 'ready':
                 result['tactic'] = self.validator(result['tactic'])
             return result
