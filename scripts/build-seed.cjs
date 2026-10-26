@@ -4,7 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'dist/app.js'), 'utf8');
-const cut = app.indexOf('const PREFS_KEY=');
+const cut = app.indexOf('const MIGRATION_KEY=');
 if (cut < 0) throw new Error('Cannot locate catalog boundary');
 let counter = 0;
 const context = {

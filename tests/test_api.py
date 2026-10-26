@@ -132,9 +132,45 @@ class APITest(unittest.TestCase):
         doc = self.custom()
         doc['frames'][0]['players'][0]['team'] = []
         self.assertEqual(self.request('PUT', '/api/tactics/team-custom', {'tactic': doc, 'baseVersion': 0}, auth=True)[0], 400)
+
         doc = self.custom()
         doc['frames'][0]['players'][1]['id'] = doc['frames'][0]['players'][0]['id']
         self.assertEqual(self.request('PUT', '/api/tactics/team-custom', {'tactic': doc, 'baseVersion': 0}, auth=True)[0], 400)
+
+    def test_drill_supports_one_to_seven_players_and_stable_display_numbers(self):
+        for size in range(1, 8):
+            doc = self.custom('drill-' + str(size))
+            doc.update(kind='drill', category='基础训练')
+            for f in doc['frames']:
+                f['players'] = f['players'][:size]
+                f['routes'] = [r for r in f['routes'] if r['player'] <= size]
+            code, saved, _ = self.request('PUT', '/api/tactics/' + doc['id'], {'tactic': doc, 'baseVersion': 0}, auth=True)
+            self.assertEqual(code, 200)
+            self.assertEqual(saved['tactic']['kind'], 'drill')
+            self.assertTrue(all(len(f['players']) == size for f in saved['tactic']['frames']))
+        mixed = self.custom('mixed-drill')
+        mixed.update(kind='drill', category='基础训练')
+        for f in mixed['frames']:
+            f['players'] = f['players'][:3] + f['players'][7:9]
+            f['players'][3].update(id=501, number=1)
+            f['players'][4].update(id=502, number=2)
+            f['routes'] = []
+        code, saved, _ = self.request('PUT', '/api/tactics/mixed-drill', {'tactic': mixed, 'baseVersion': 0}, auth=True)
+        self.assertEqual(code, 200)
+        read = self.request('GET', '/api/tactics/mixed-drill')[1]['tactic']
+        self.assertEqual(read['frames'][0]['players'][3]['number'], 1)
+        self.assertEqual(read['frames'][0]['players'][3]['id'], 501)
+        self.assertEqual(read, saved['tactic'])
+
+    def test_drill_rejects_eight_players_but_tactic_keeps_seven_per_side(self):
+        doc = self.custom('too-many')
+        doc.update(kind='drill', category='基础训练')
+        for f in doc['frames']:
+            f['players'] = f['players'][:8]
+            f['routes'] = []
+        self.assertEqual(self.request('PUT', '/api/tactics/too-many', {'tactic': doc, 'baseVersion': 0}, auth=True)[0], 400)
+        normal = self.custom('normal-tactic')
+        self.assertEqual(self.request('PUT', '/api/tactics/normal-tactic', {'tactic': normal, 'baseVersion': 0}, auth=True)[0], 200)
 
 
 if __name__ == '__main__':

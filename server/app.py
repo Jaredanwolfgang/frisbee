@@ -16,6 +16,7 @@ import time
 import uuid
 
 MAX_BODY = 5 * 1024 * 1024
+MAX_PLAYERS = 14
 CATEGORIES = {'进攻战术', '防守战术', '端区战术', '基础训练'}
 ID = re.compile(r'^[A-Za-z0-9_-]{1,149}$')
 ROUTE_ID = re.compile(r'^[A-Za-z0-9_-]{1,100}$')
@@ -61,31 +62,43 @@ def tactic(raw):
            'summary': text(raw.get('summary'), 500),
            'english': text(raw.get('english', ''), 150),
            'tags': [text(v, 99) for v in tags], 'frames': [],
-           'example': raw.get('example') is True}
+           'example': raw.get('example') is True,
+           'kind': raw.get('kind', 'drill' if raw['category'] == '基础训练' else 'tactic')}
+    if out['kind'] not in ['tactic', 'drill']:
+        raise APIError(400, '请选择战术或 Drill。')
     if raw.get('formation'):
         out['formation'] = text(raw['formation'], 299)
     if raw.get('roles'):
         roles = raw['roles']
-        if not isinstance(roles, dict) or len(roles) > 14:
+        if not isinstance(roles, dict) or len(roles) > MAX_PLAYERS:
             raise APIError(400, '防守分工格式无效。')
         out['roles'] = {}
         for key, value in roles.items():
-            if not re.fullmatch(r'(?:[1-9]|1[0-4])', key):
+            if not re.fullmatch(r'[1-9][0-9]{0,5}', key):
                 raise APIError(400, '防守分工编号无效。')
             out['roles'][key] = text(value, 159)
     if isinstance(raw.get('catalogRevision'), int):
         out['catalogRevision'] = raw['catalogRevision']
     for f in frames:
-        if not isinstance(f, dict) or not isinstance(f.get('players'), list) or not 1 <= len(f['players']) <= 14:
+        if not isinstance(f, dict) or not isinstance(f.get('players'), list) or not 1 <= len(f['players']) <= MAX_PLAYERS:
             raise APIError(400, '球员列表无效。')
+        if out['kind'] == 'drill' and len(f['players']) > 7:
+            raise APIError(400, 'Drill 演示总人数最多 7 人（含防守球员）。')
         players, ids = [], set()
         for p in f['players']:
-            if not isinstance(p, dict) or type(p.get('id')) is not int or not 1 <= p['id'] <= 14 or p['id'] in ids:
+            if not isinstance(p, dict) or type(p.get('id')) is not int or not 1 <= p['id'] <= 999999 or p['id'] in ids:
                 raise APIError(400, '球员编号无效或重复。')
             if not isinstance(p.get('team'), str) or p['team'] not in {'offense', 'defense'}:
                 raise APIError(400, '攻守分组无效。')
             ids.add(p['id'])
-            players.append({'id': p['id'], 'team': p['team'], **point(p)})
+            player = {'id': p['id'], 'team': p['team'], **point(p)}
+            if 'number' in p:
+                if type(p['number']) is not int or not 1 <= p['number'] <= 7:
+                    raise APIError(400, '球员显示编号无效。')
+                player['number'] = p['number']
+            players.append(player)
+        if any(sum(p['team'] == team for p in players) > 7 for team in ['offense', 'defense']):
+            raise APIError(400, '每方最多 7 人。')
         if not isinstance(f.get('routes'), list) or len(f['routes']) > 40:
             raise APIError(400, '路线列表无效。')
         routes = []
@@ -107,6 +120,7 @@ def tactic(raw):
 def canonical(doc):
     """Route UUIDs and server clocks do not change a play's meaning."""
     doc = json.loads(json.dumps(doc))
+    doc.setdefault('kind', 'drill' if doc.get('category') == '基础训练' else 'tactic')
     for key in ['updated', '_version']:
         doc.pop(key, None)
     for f in doc['frames']:

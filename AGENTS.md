@@ -9,3 +9,5 @@
 - Preserve existing browser backups. Migration must keep conflicting records as copies rather than overwrite team edits.
 - Keep mobile landscape/fullscreen, offensive and defensive player roles, and step playback working.
 - Run `python3 -m unittest discover -s tests` and `node scripts/verify-catalog.cjs` before deploying changes that affect storage or the tactic model.
+
+- Drill demonstrations support 1–7 total players, including defenders. Ordinary tactics support at most 7 players per side. Do not reintroduce favorites, user accounts, or a marketing hero. Keep mobile quick creation and search prominent.
