@@ -311,6 +311,7 @@ document.addEventListener('click',async e=>{
  const visual=e.target.closest('[data-rule-visual]');if(visual){const v=rulesVisuals.find(x=>x.id===visual.dataset.ruleVisual);if(v){$('#visual-title').textContent=v.title;$('#visual-subtitle').textContent=v.en;$('#visual-image').src=v.image;$('#visual-image').alt=v.title+' · WFDF 官方示意';$('#visual-description').textContent=v.description;$('#visual-source').href=v.source;$('#rule-visual-dialog').showModal();}}
  const copy=e.target.closest('[data-copy-rule]');if(copy){const url=new URL('.',location.href);url.hash='rule='+encodeURIComponent(copy.dataset.copyRule);if(await copyText(url.href))toast('已复制规则条款链接。');else{$('#share-url').value=url.href;$('#share-copy-status').textContent='可长按链接手动复制。';$('#share-dialog').showModal();}}
 });
+initFrisbeeAI({requestEdit,toast,drawFrame:(frame,markers)=>svgField(frame,{mini:true,markers}),onDraft:tactic=>requestEdit(()=>{if(!validTactic(tactic)){toast('AI 草稿格式无效，请重新生成。');return;}draft=clone(tactic);openDraft();checkpoint();permissions();})});
 if(location.hash==='#rules'||location.hash.startsWith('#rule='))showRulesLink();
 window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
 render();syncStatus();loadLibrary();

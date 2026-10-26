@@ -14,25 +14,43 @@ api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
 store = api.Store(ROOT / 'data/dev.sqlite3', json.loads((ROOT / 'server/seed.json').read_text()))
 preview_port = int(os.getenv('FRISBEE_PREVIEW_PORT', '4175'))
-backend = ThreadingHTTPServer(('127.0.0.1', 0), api.make_handler(store, 'frisbee-local-development-key', '/frisbee/', False, f'http://127.0.0.1:{preview_port}'))
+ai_service = None
+if os.getenv('AI_API_KEY'):
+    ai_client = api.AI_MODULE.DeepSeekClient(os.environ['AI_API_KEY'], os.getenv('AI_BASE_URL', 'https://api.deepseek.com'), os.getenv('AI_RULES_MODEL', 'deepseek-flash'), os.getenv('AI_TACTIC_MODEL', 'deepseek-v4-pro'))
+    ai_service = api.AI_MODULE.AIService(ROOT/'dist/wfdf', ai_client, api.tactic)
+backend = ThreadingHTTPServer(('127.0.0.1', 0), api.make_handler(store, 'frisbee-local-development-key', '/frisbee/', False, f'http://127.0.0.1:{preview_port}', ai_service))
 
 
 class Preview(SimpleHTTPRequestHandler):
     def proxy(self):
         size = int(self.headers.get('Content-Length', 0))
-        conn = http.client.HTTPConnection('127.0.0.1', backend.server_port, timeout=25)
+        conn = http.client.HTTPConnection('127.0.0.1', backend.server_port, timeout=150)
         headers = {k: v for k, v in self.headers.items() if k.lower() not in {'host', 'connection', 'content-length'}}
         conn.request(self.command, self.path[len('/frisbee'):], self.rfile.read(size) if size else None, headers)
         response = conn.getresponse()
-        body = response.read()
+        streaming = response.getheader('Content-Type','').startswith('text/event-stream')
+        body = None if streaming else response.read()
         self.send_response(response.status)
         for k, v in response.getheaders():
             if k.lower() not in {'connection', 'server', 'date', 'transfer-encoding', 'content-length'}:
                 self.send_header(k, v)
-        self.send_header('Content-Length', str(len(body)))
+        if not streaming:
+            self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
-        conn.close()
+        try:
+            if streaming:
+                self.close_connection=True
+                while True:
+                    line=response.readline()
+                    if not line:break
+                    self.wfile.write(line)
+                    self.wfile.flush()
+            else:
+                self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            conn.close()
 
     def do_GET(self):
         if self.path.startswith('/frisbee/api/'):

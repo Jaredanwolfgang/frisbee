@@ -23,6 +23,8 @@ route = '''    # Frisbee playbook - isolated static service on the existing Dock
         set $upstream_frisbee frisbee-web:80;
         rewrite ^/frisbee/(.*)$ /$1 break;
         proxy_pass http://$upstream_frisbee;
+        proxy_buffering off;
+        proxy_read_timeout 180s;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

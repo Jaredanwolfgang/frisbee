@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 import hashlib
+import importlib.util
 import hmac
 import json
 import os
@@ -14,6 +15,10 @@ import sqlite3
 import threading
 import time
 import uuid
+
+AI_SPEC = importlib.util.spec_from_file_location('frisbee_ai', Path(__file__).with_name('ai.py'))
+AI_MODULE = importlib.util.module_from_spec(AI_SPEC)
+AI_SPEC.loader.exec_module(AI_MODULE)
 
 MAX_BODY = 5 * 1024 * 1024
 MAX_PLAYERS = 14
@@ -258,7 +263,7 @@ class Store:
         return {'added': added, 'copied': copied, 'skipped': skipped, 'revision': revision}
 
 
-def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_origin='https://jaredan.site'):
+def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_origin='https://jaredan.site', ai_service=None):
     if len(edit_key) < 24:
         raise ValueError('EDITOR_KEY must contain at least 24 characters')
     auth_attempts, auth_lock = {}, threading.Lock()
@@ -319,8 +324,58 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
             if not self.authorized():
                 raise APIError(401, '请先输入编辑口令。')
 
+        def require_same_origin(self):
+            origin = self.headers.get('Origin')
+            if self.headers.get('Sec-Fetch-Site') == 'cross-site' or (origin and origin != public_origin):
+                raise APIError(403, '请求来源无效。')
+
+        def ai_dispatch(self, path):
+            if path == '/api/ai/status' and self.command == 'GET':
+                return self.send(200, {'enabled': ai_service is not None, 'text': True, 'speech': False})
+            if self.command != 'POST' or path not in ('/api/ai/tactic', '/api/ai/rules'):
+                raise APIError(404, 'AI 接口不存在。')
+            self.require_same_origin()
+            if path == '/api/ai/tactic':
+                self.require_editor()
+            if ai_service is None:
+                raise APIError(503, 'AI 暂未配置；仍可手动画图和直接检索规则。')
+            try:
+                ai_size = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                raise APIError(400, '请求长度无效。') from None
+            if ai_size > 32768:
+                raise APIError(413, 'AI 请求过长，请缩短描述。')
+            data = self.body()
+            ip = self.headers.get('X-Real-IP', self.client_address[0])
+            try:
+                if path == '/api/ai/tactic':
+                    return self.send(200, ai_service.generate(data, ip))
+                prepared = ai_service.prepare_rules(data, ip)
+            except AI_MODULE.AIError as error:
+                raise APIError(error.status, error.message) from None
+            events = ai_service.rules_stream(prepared)
+            try:
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/event-stream; charset=utf-8')
+                self.send_header('Cache-Control', 'no-cache, no-transform')
+                self.send_header('X-Accel-Buffering', 'no')
+                self.send_header('Connection', 'close')
+                self.end_headers()
+                for event, payload in events:
+                    block = 'event: ' + event + '\ndata: ' + json.dumps(payload, ensure_ascii=False) + '\n\n'
+                    self.wfile.write(block.encode())
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            finally:
+                events.close()
+                ai_service.release_rules(prepared)
+                self.close_connection = True
+
         def dispatch(self):
             path = urlparse(self.path).path.rstrip('/')
+            if path.startswith('/api/ai/'):
+                return self.ai_dispatch(path)
             if self.command == 'GET' and path == '/api/health':
                 with store.transaction() as db:
                     db.execute('SELECT 1')
@@ -401,10 +456,16 @@ if __name__ == '__main__':
     seed_path = Path(__file__).with_name('seed.json')
     seeds = json.loads(seed_path.read_text())
     store = Store(os.getenv('DB_PATH', '/data/playbook.sqlite3'), seeds)
+    ai_service = None
+    if os.getenv('AI_API_KEY'):
+        client = AI_MODULE.DeepSeekClient(os.environ['AI_API_KEY'], os.getenv('AI_BASE_URL', 'https://api.deepseek.com'),
+                                         os.getenv('AI_RULES_MODEL', 'deepseek-flash'), os.getenv('AI_TACTIC_MODEL', 'deepseek-v4-pro'))
+        ai_service = AI_MODULE.AIService(os.getenv('RULES_DIR', '/rules'), client, tactic,
+                                         int(os.getenv('AI_HOURLY_LIMIT', '200')))
     handler = make_handler(store, os.environ['EDITOR_KEY'],
                            os.getenv('COOKIE_PATH', '/frisbee/'),
                            os.getenv('COOKIE_SECURE', '1') != '0',
-                           os.getenv('PUBLIC_ORIGIN', 'https://jaredan.site'))
+                           os.getenv('PUBLIC_ORIGIN', 'https://jaredan.site'), ai_service)
     server = ThreadingHTTPServer(('0.0.0.0', int(os.getenv('PORT', '8080'))), handler)
     print('Frisbee API ready', flush=True)
     server.serve_forever()

@@ -14,8 +14,15 @@ services:
       DB_PATH: /data/playbook.sqlite3
       PYTHONDONTWRITEBYTECODE: "1"
       APP_VERSION: ${APP_VERSION:-dev}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com}
+      AI_RULES_MODEL: ${AI_RULES_MODEL:-deepseek-flash}
+      AI_TACTIC_MODEL: ${AI_TACTIC_MODEL:-deepseek-v4-pro}
+      AI_HOURLY_LIMIT: ${AI_HOURLY_LIMIT:-200}
+      RULES_DIR: /rules
     volumes:
       - ./server:/app:ro
+      - ./dist/wfdf:/rules:ro
       - ./data:/data
     tmpfs:
       - /tmp

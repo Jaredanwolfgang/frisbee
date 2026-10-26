@@ -52,6 +52,7 @@ for name in ['compose.yaml', 'nginx.conf', 'README.md', 'AGENTS.md']:
     # Preserve the inode of Nginx's bind-mounted configuration file.
     shutil.copyfile(release / name, target / name)
 PY
+python3 -B scripts/configure-ai-proxy.py
 APP_VERSION="$FRISBEE_REVISION" docker compose --env-file .env up -d --wait --wait-timeout 90
 docker exec frisbee-web nginx -t
 docker exec frisbee-web nginx -s reload
