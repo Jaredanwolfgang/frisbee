@@ -127,6 +127,36 @@ class RetrievalTest(unittest.TestCase):
         self.assertNotIn('signal-17',ids)
         self.assertNotIn('signal-14',ids)
 
+    def test_english_self_touch_scenario_keeps_decisive_annotation_and_turnover_location(self):
+        query = ('The thrower releases the disc.\n'
+                 'The thrower then taps the disc to avoid an interception by a defender.\n'
+                 'The disc hits the ground.\n'
+                 'The defender gets possession where they would have caught the pass.')
+        sources,visuals = self.index.retrieve(query)
+        refs = {e['citation'] for e in sources}
+        self.assertTrue({'13.2.5','13.1.1','13.5','13.7.1','13.8','13.9','13.10','13.11','注释13.5'} <= refs)
+        annotation = next(e for e in sources if e['citation']=='注释13.5')
+        self.assertIn('The thrower may touch a disc they have thrown', annotation['en'])
+        self.assertIn('signal-08', {v['id'] for v in visuals})
+        self.assertNotIn('signal-14', {v['id'] for v in visuals})
+        self.assertLessEqual(len(sources),74)
+
+    def test_chinese_self_touch_retrieves_same_exception(self):
+        sources,_ = self.index.retrieve('出盘后自己拍盘阻止对方截盘，盘落地。对手能在本来要接到的位置拿盘吗？')
+        self.assertTrue({'13.1.1','13.7.1','注释13.5'} <= {e['citation'] for e in sources})
+
+    def test_english_lexical_fallback_without_topic_alias(self):
+        sources,_ = self.index.retrieve('After I release it, may I touch my own throw before anyone else?')
+        self.assertTrue({'13.2.5','注释13.5'} <= {e['citation'] for e in sources})
+
+    def test_english_substrings_do_not_trigger_unrelated_rules_or_gestures(self):
+        sources,visuals = self.index.retrieve('write a python script to download images')
+        self.assertEqual(sources,[])
+        self.assertEqual(visuals,[])
+        sources,visuals = self.index.retrieve('uncontested defensive foul, the stall count was four, where do we restart?')
+        self.assertIn('9.5.1', {e['citation'] for e in sources})
+        self.assertNotIn('signal-04', {v['id'] for v in visuals})
+
     def test_unrelated_text_does_not_force_a_model_answer(self):
         sources,_=self.index.retrieve('请给我写一段python爬虫代码')
         self.assertEqual(sources,[])

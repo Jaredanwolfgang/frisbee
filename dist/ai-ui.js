@@ -50,6 +50,8 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast,prepareCreation}){
    let value=escape(turn.answer).replace(/\[([^\[\]\n]{1,40})\]/g,(all,cite)=>allowed.has(cite)?'<button class="ai-inline-cite" data-ai-source="'+turn.id+'" data-ai-citation="'+escape(cite)+'">['+escape(cite)+']</button>':all);
    value=value.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');body.innerHTML=value;state.textContent='已附可核对条款 · '+((performance.now()-turn.started)/1000).toFixed(1)+' 秒';
    history.push({role:'user',content:turn.question},{role:'assistant',content:turn.answer.slice(0,2000)});history=history.slice(-4);
+  }else if(data.reason==='no_sources'){
+   body.textContent=turn.answer||'暂未匹配到相关原文，可用中英文补充动作或输入条款号。';state.textContent='暂未匹配到条款';
   }else if(turn.sources.length&&turn.answer){
    body.textContent='这次回复未通过条款引用校验，已隐藏解释内容。请先核对检索原文，或补充情形后重新提问。';state.textContent='请核对原文';
   }else{body.textContent=turn.answer||'请补充具体情形后再试。';state.textContent='需要补充情形';}

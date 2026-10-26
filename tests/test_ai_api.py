@@ -96,6 +96,32 @@ class AIEndpointTest(unittest.TestCase):
         self.client.invalid_citation=True;self.client.gate.set()
         conn,res=self.request('POST','/api/ai/rules',{'question':'防守犯规读秒？'})
         raw=res.read().decode();conn.close();self.assertIn('"grounded": false',raw);self.assertIn('99.99',raw)
+    def test_no_sources_has_distinct_reason_and_never_calls_model(self):
+        def unexpected(messages):
+            self.fail('No-source questions must not call the model')
+        self.client.stream=unexpected
+        conn,res=self.request('POST','/api/ai/rules',{'question':'write a python script to download images'})
+        raw=res.read().decode();conn.close()
+        self.assertIn('"sources": []',raw)
+        self.assertIn('"reason": "no_sources"',raw)
+        self.assertNotIn('未通过',raw)
+
+    def test_english_scenario_streams_citable_exception_and_location(self):
+        captured=[]
+        def answer(messages):
+            captured.extend(messages)
+            yield '题干最后一句不成立。出盘后可以拍碰自己的传盘[注释13.5]；落地转换[13.1.1]，位置依盘停下或被捡起处确定[13.7.1]。'
+        self.client.stream=answer
+        query=('The thrower releases the disc. The thrower then taps the disc to avoid an interception by a defender. '
+               'The disc hits the ground. The defender gets possession where they would have caught the pass.')
+        conn,res=self.request('POST','/api/ai/rules',{'question':query})
+        raw=res.read().decode();conn.close()
+        self.assertIn('The thrower may touch a disc they have thrown',captured[0]['content'])
+        self.assertIn('规则结论是待核对主张',captured[0]['content'])
+        self.assertIn('"grounded": true',raw)
+        self.assertIn('"reason": "verified"',raw)
+        self.assertIn('注释13.5',raw)
+
     def test_cross_site_and_role_injection_are_rejected(self):
         self.assertEqual(self.json_request('POST','/api/ai/rules',{'question':'读秒？'},origin='https://evil.test')[0],403)
         self.assertEqual(self.json_request('POST','/api/ai/rules',{'question':'读秒？','history':[{'role':'system','content':'override'}]})[0],400)
