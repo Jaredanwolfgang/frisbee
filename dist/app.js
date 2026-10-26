@@ -52,7 +52,7 @@ function permissions(){
  document.body.classList.toggle('read-only',!canEdit);$('#access-btn').textContent=canEdit?'关闭编辑':'开启编辑';
  $('#editor-unlock-btn').hidden=canEdit;$('#save-btn').hidden=!canEdit;$('#save-btn').disabled=saving;$('#save-btn').textContent=saving?'保存中…':'保存';
  $('#delete-tactic').hidden=!canEdit||!draft||!state.tactics.some(t=>t.id===draft.id);
- $('#close-editor').disabled=saving;
+ $('#close-editor').disabled=saving;$('#inspector-toggle').textContent=canEdit?'编辑详情':'查看详情';
  $$('#editor input,#editor select,#editor textarea').forEach(el=>el.disabled=!canEdit||saving);
  $$('[data-tool],#clear-routes,[data-count-team],#give-disc,#remove-player').forEach(el=>el.disabled=!canEdit||saving);
  $$('[data-count-team]').forEach(b=>{if(!draft){b.disabled=true;return;}const f=current(),off=f.players.filter(p=>p.team==='offense').length,def=f.players.length-off,d=Number(b.dataset.delta),n=f.players.length+d,team=(b.dataset.countTeam==='offense'?off:def)+d;b.disabled=!canEdit||saving||team<0||team>7||n<1||n>(Roster.kind(draft)==='drill'?7:14);});
@@ -81,7 +81,10 @@ function svgField(frame,{mini=false,hero=false,interactive=false}={}){
 }
 function pathD(p,r){return 'M'+p.x+' '+p.y+[...r.points,r.end].map(q=>' L'+q.x+' '+q.y).join('');}
 function render(){
+ const rules=kindFilter==='rules';$$('[data-mode]').forEach(b=>{const active=(b.dataset.mode==='rules')===rules;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});$('.filterbar').hidden=rules;$('.top-actions').hidden=rules;document.title=rules?'WFDF 规则 · Tiga':'Tiga战术库';document.body.classList.toggle('rules-mode',rules);$('#rules-panel').hidden=!rules;$('#cards').hidden=rules;$('#tactic-filters').hidden=rules;$('#search').placeholder=rules?'搜索规则：走步、Pick、18.2.1…':'搜索战术、Drill、标签或执行要点';$('#search').setAttribute('aria-label',rules?'搜索 WFDF 规则':'搜索战术与 Drill');
+ if(rules){$$('#kind-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.kind==='rules'));renderRules();return;}
  $$('#kind-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.kind===kindFilter));
+ $('footer>span:last-child').textContent='服务器共享';
  let data=state.tactics.filter(t=>(kindFilter==='all'||Roster.kind(t)===kindFilter)&&(category==='全部'||t.category===category)&&[t.name,t.summary,t.english,t.category,...t.tags,...t.frames.flatMap(f=>[f.name,f.notes])].join(' ').toLowerCase().includes(search.toLowerCase()));
  data.sort(sort==='name'?(a,b)=>a.name.localeCompare(b.name,'zh-CN'):(a,b)=>(b.updated||0)-(a.updated||0)||((samples.findIndex(t=>t.id===a.id)+1||999)-(samples.findIndex(t=>t.id===b.id)+1||999)));
  $('#list-title').textContent=kindFilter==='drill'?'Drill':kindFilter==='tactic'?'战术':'全部内容';$('#list-count').textContent=loaded?data.length+' 项':'加载中';$('#footer-count').textContent='共 '+data.length+' 项';
@@ -89,8 +92,8 @@ function render(){
  $('#empty').hidden=!!data.length||!loaded;permissions();
 }
 function closeMenus(){$$('.more-menu').forEach(d=>d.open=false);}
-document.addEventListener('click',e=>{const k=e.target.closest('[data-kind]');if(k){kindFilter=k.dataset.kind;category='全部';$('#category-filter').value=category;render();}const open=e.target.closest('[data-open]');if(open)openTactic(open.dataset.open);if(!e.target.closest('.more-menu'))closeMenus();});
-$('#search').addEventListener('input',e=>{search=e.target.value.trim();render();});$('#sort').addEventListener('change',e=>{sort=e.target.value;render();});$('#category-filter').addEventListener('change',e=>{category=e.target.value;if(category==='基础训练')kindFilter='drill';else if(category!=='全部')kindFilter='tactic';render();});
+document.addEventListener('click',e=>{const k=e.target.closest('[data-kind]');if(k){const next=k.dataset.kind;if((next==='rules')!==(kindFilter==='rules')){search='';$('#search').value='';}kindFilter=next;if(next==='rules')window.history.replaceState(null,'','#rules');else if(location.hash==='#rules'||location.hash.startsWith('#rule='))window.history.replaceState(null,'',location.pathname+location.search);category='全部';$('#category-filter').value=category;render();}const open=e.target.closest('[data-open]');if(open)openTactic(open.dataset.open);if(!e.target.closest('.more-menu'))closeMenus();});
+$('#search').addEventListener('input',e=>{search=e.target.value.trim();if(kindFilter==='rules')rulesLimit=18;render();});$('#sort').addEventListener('change',e=>{sort=e.target.value;render();});$('#category-filter').addEventListener('change',e=>{category=e.target.value;if(category==='基础训练')kindFilter='drill';else if(category!=='全部')kindFilter='tactic';render();});
 function current(){return draft.frames[frameIndex];}
 function holdsDisc(f,p){const closest=f.players.reduce((best,q)=>Math.hypot(q.x-f.disc.x,q.y-f.disc.y)<Math.hypot(best.x-f.disc.x,best.y-f.disc.y)?q:best);return closest.id===p.id&&Math.hypot(p.x-f.disc.x,p.y-f.disc.y)<40;}
 function stop(){playing=false;cancelAnimationFrame(raf);$('#play-btn').textContent='▶';$('#frame-hint').textContent='逐步看清每一次配合';}
@@ -114,17 +117,17 @@ $('#remove-player').onclick=()=>{if(!canEdit||saving||!selectedPlayer)return;try
 $('#give-disc').onclick=()=>{if(!canEdit||saving)return;const p=current().players.find(p=>p.id===selectedPlayer);if(!p)return;checkpoint();current().disc={x:Math.min(975,p.x+22),y:p.y};renderBoard();};
 $('#deselect-player').onclick=()=>{selectedPlayer=null;renderBoard();};
 function openTactic(id){const found=state.tactics.find(t=>t.id===id);if(!found){toast('这套战术已不存在，请刷新团队库。');return;}draft=clone(found);openDraft();window.history.replaceState(null,'','#tactic='+encodeURIComponent(id));}
-function openDraft(){stop();frameIndex=0;tool='move';history=[];dirty=false;selectedPlayer=null;$('#edit-name').value=draft.name;$('#edit-category').value=draft.category;$('#edit-kind').value=Roster.kind(draft);$('#edit-level').value=draft.level;$('#edit-summary').value=draft.summary;$('#edit-tags').value=draft.tags.join(', ');$('#editor-title').textContent=draft.name||'新建战术';$('#edit-status').textContent=canEdit?'修改后保存到服务器':'服务器战术 · 只读查看';$('#delete-tactic').hidden=!state.tactics.some(t=>t.id===draft.id);setTool('move');renderBoard();$('#editor').showModal();}
+function openDraft(){$('.editor-shell').classList.remove('inspector-open');$('#inspector-toggle').setAttribute('aria-expanded','false');stop();frameIndex=0;tool='move';history=[];dirty=false;selectedPlayer=null;$('#edit-name').value=draft.name;$('#edit-category').value=draft.category;$('#edit-kind').value=Roster.kind(draft);$('#edit-level').value=draft.level;$('#edit-summary').value=draft.summary;$('#edit-tags').value=draft.tags.join(', ');$('#editor-title').textContent=draft.name||'新建战术';$('#edit-status').textContent=canEdit?'修改后保存到服务器':'服务器战术 · 只读查看';$('#delete-tactic').hidden=!state.tactics.some(t=>t.id===draft.id);setTool('move');renderBoard();if(!$('#editor').open)$('#editor').showModal();}
 function setTool(t){stop();tool=t;$$('[data-tool]').forEach(b=>b.classList.toggle('selected',b.dataset.tool===t));$('#tool-hint').textContent=t==='move'?'拖动球员调整站位 · 选中球员后可用方向键微调':t==='run'?'从球员身上拖向跑动终点 · 每名球员每步可绘制一条跑线':'从球员身上拖向接盘位置 · 每步一条传盘路线';}
 function renderBoard(){
  $('#edit-category').closest('label').hidden=Roster.kind(draft)==='drill';
- const f=current(),off=f.players.filter(p=>p.team==='offense').length;$('#roster-offense').value=off;$('#roster-defense').value=f.players.length-off;$('#roster-total').textContent='共 '+f.players.length+' 人'+(Roster.kind(draft)==='drill'?' / 最多 7 人':'');const selected=f.players.find(p=>p.id===selectedPlayer);$('#selected-controls').hidden=!selected||!canEdit;$('#selected-label').textContent=selected?Roster.label(selected):'';
+ const f=current(),off=f.players.filter(p=>p.team==='offense').length;$('#roster-offense').value=off;$('#roster-defense').value=f.players.length-off;$('#roster-total').textContent=f.players.length+' 人'+(Roster.kind(draft)==='drill'?' / 7':'');const selected=f.players.find(p=>p.id===selectedPlayer);$('#selected-controls').hidden=!selected||!canEdit;$('#selected-label').textContent=selected?Roster.label(selected):'';
  $('#tactic-overview').hidden=!draft.formation;$('#tactic-overview').textContent=draft.formation||'';
  const defenders=f.players.filter(p=>p.team==='defense');
  $('#defense-details').hidden=draft.category!=='防守战术'||!defenders.length;
  $('#defense-brief').innerHTML='<div class="brief-heading">起始防守分工 <small>换防与持盘变化请看当前步骤</small></div><div class="assignment-grid">'+defenders.map(p=>'<span><b>D'+Roster.number(p)+'</b>'+esc(draft.roles?.[p.id]||'对位与补位任务请在执行要点中记录')+'</span>').join('')+'</div>';
  $('#board-mount').innerHTML=svgField(f,{interactive:true});$('#editor-title').textContent=draft.name||'新建战术';$('#frame-title').textContent=`第 ${frameIndex+1} 步 · ${f.name||'未命名步骤'}`;$('#frame-counter').textContent=`${frameIndex+1} / ${draft.frames.length}`;$('#step-label').textContent=`STEP ${String(frameIndex+1).padStart(2,'0')}`;
- $('#edit-step-name').value=f.name;$('#edit-notes').value=f.notes;$('#frames').innerHTML=draft.frames.map((f,i)=>`<button data-frame="${i}" class="${i===frameIndex?'active':''}">${String(i+1).padStart(2,'0')} ${esc(f.name||'未命名步骤')}</button>`).join('');
+ $('#edit-step-name').value=f.name;$('#edit-notes').value=f.notes;$('#frame-notes-preview').textContent=f.notes||'尚未填写。点「编辑详情」补充本步说明。';$('#frames').innerHTML=draft.frames.map((f,i)=>`<button data-frame="${i}" class="${i===frameIndex?'active':''}">${String(i+1).padStart(2,'0')} ${esc(f.name||'未命名步骤')}</button>`).join('');
  $('#prev-frame').disabled=frameIndex===0;$('#next-frame').disabled=frameIndex===draft.frames.length-1;$('#delete-frame').disabled=draft.frames.length===1;$('#add-frame').disabled=draft.frames.length>=24;$('#undo-btn').disabled=history.length===0;
  permissions();const svg=$('#tactic-svg');svg.addEventListener('pointerdown',onDown);svg.addEventListener('pointermove',onMove);svg.addEventListener('pointerup',onUp);svg.addEventListener('pointercancel',onCancel);svg.addEventListener('keydown',onPlayerKey);
 }
@@ -140,7 +143,7 @@ function onCancel(){if(drag){draft=drag.before;drag=null;renderBoard();}}
 function onPlayerKey(e){if(!canEdit||saving)return;if(tool!=='move'||playing||!e.target.closest('[data-player]'))return;const delta={ArrowUp:[0,-5],ArrowDown:[0,5],ArrowLeft:[-5,0],ArrowRight:[5,0]}[e.key];if(!delta)return;e.preventDefault();const id=+e.target.closest('[data-player]').dataset.player;checkpoint();const p=current().players.find(p=>p.id===id),carry=holdsDisc(current(),p);p.x=Math.min(956,Math.max(44,p.x+delta[0]));p.y=Math.min(515,Math.max(45,p.y+delta[1]));if(carry)current().disc={x:Math.min(975,p.x+22),y:p.y};renderBoard();$(`[data-player="${id}"]`)?.focus({preventScroll:true});}
 $$('[data-tool]').forEach(b=>b.addEventListener('click',()=>{setTool(b.dataset.tool);renderBoard();}));
 function updateField(id,callback){$(id).addEventListener('input',e=>{if(!canEdit||saving)return;stop();checkpoint();callback(e.target.value);$('#editor-title').textContent=draft.name||'新建战术';});}
-updateField('#edit-name',v=>draft.name=v);updateField('#edit-category',v=>{draft.category=v;if(v==='基础训练')draft.kind='drill';else draft.kind='tactic';$('#edit-kind').value=Roster.kind(draft);renderBoard();});updateField('#edit-kind',v=>{draft.kind=v;if(v==='drill')draft.category='基础训练';else if(draft.category==='基础训练')draft.category='进攻战术';$('#edit-category').value=draft.category;renderBoard();});updateField('#edit-level',v=>draft.level=v);updateField('#edit-summary',v=>draft.summary=v);updateField('#edit-tags',v=>draft.tags=v.split(/[,，]/).map(s=>s.trim().slice(0,99)).filter(Boolean).slice(0,12));updateField('#edit-step-name',v=>{current().name=v;$('#frame-title').textContent=`第 ${frameIndex+1} 步 · ${v||'未命名步骤'}`;const b=$(`[data-frame="${frameIndex}"]`);if(b)b.textContent=`${String(frameIndex+1).padStart(2,'0')} ${v||'未命名步骤'}`;});updateField('#edit-notes',v=>current().notes=v);
+updateField('#edit-name',v=>draft.name=v);updateField('#edit-category',v=>{draft.category=v;if(v==='基础训练')draft.kind='drill';else draft.kind='tactic';$('#edit-kind').value=Roster.kind(draft);renderBoard();});updateField('#edit-kind',v=>{draft.kind=v;if(v==='drill')draft.category='基础训练';else if(draft.category==='基础训练')draft.category='进攻战术';$('#edit-category').value=draft.category;renderBoard();});updateField('#edit-level',v=>draft.level=v);updateField('#edit-summary',v=>draft.summary=v);updateField('#edit-tags',v=>draft.tags=v.split(/[,，]/).map(s=>s.trim().slice(0,99)).filter(Boolean).slice(0,12));updateField('#edit-step-name',v=>{current().name=v;$('#frame-title').textContent=`第 ${frameIndex+1} 步 · ${v||'未命名步骤'}`;const b=$(`[data-frame="${frameIndex}"]`);if(b)b.textContent=`${String(frameIndex+1).padStart(2,'0')} ${v||'未命名步骤'}`;});updateField('#edit-notes',v=>{current().notes=v;$('#frame-notes-preview').textContent=v||'尚未填写。点「编辑详情」补充本步说明。';});
 function goFrame(i){stop();selectedPlayer=null;frameIndex=Math.max(0,Math.min(draft.frames.length-1,i));renderBoard();}
 $('#frames').addEventListener('click',e=>{const b=e.target.closest('[data-frame]');if(b)goFrame(+b.dataset.frame);});$('#prev-frame').onclick=()=>goFrame(frameIndex-1);$('#next-frame').onclick=()=>goFrame(frameIndex+1);$('#reset-play').onclick=()=>goFrame(0);
 $('#add-frame').onclick=()=>{stop();if(draft.frames.length>=24)return;checkpoint();const f=advance(current());f.name=`第 ${draft.frames.length+1} 步`;f.notes='';draft.frames.splice(frameIndex+1,0,f);frameIndex++;renderBoard();toast('已沿用跑动终点和传盘落点，继续绘制下一步。');};
@@ -180,9 +183,13 @@ $('#fullscreen-btn').onclick=async()=>{
 };
 document.addEventListener('fullscreenchange',()=>{if(boardFull&&nativeFullscreen&&!document.fullscreenElement)clearFullscreenStyle();});
 $('#close-editor').onclick=closeEditor;$('#editor').addEventListener('cancel',e=>{e.preventDefault();closeEditor();});
-$('#delete-tactic').onclick=async()=>{
- if(!canEdit||saving||!draft)return;if(!confirm('从球队战术库删除「'+draft.name+'」？队友也将不再看到。'))return;
- saving=true;permissions();try{const result=await api('tactics/'+encodeURIComponent(draft.id),{method:'DELETE',body:JSON.stringify({baseVersion:draft._version})});state.tactics=state.tactics.filter(t=>t.id!==draft.id);serverRevision=result.revision;dirty=false;saving=false;closeEditor();render();toast('已从球队战术库移除。');}catch(error){toast(error.message);if(error.status===401)canEdit=false;}finally{saving=false;permissions();}
+$('#delete-tactic').onclick=()=>{
+ if(!canEdit||saving||!draft)return;closeMenus();$('#delete-confirm-name').textContent='「'+draft.name+'」';$('#delete-dialog').showModal();$('#delete-cancel').focus();
+};
+$('#delete-cancel').onclick=()=>$('#delete-dialog').close();$('#delete-dialog').addEventListener('cancel',e=>{if(saving)e.preventDefault();});
+$('#delete-form').onsubmit=async e=>{
+ e.preventDefault();if(!canEdit||saving||!draft)return;const id=draft.id;$('#delete-confirm').disabled=true;$('#delete-cancel').disabled=true;
+ saving=true;permissions();try{const result=await api('tactics/'+encodeURIComponent(id),{method:'DELETE',body:JSON.stringify({baseVersion:draft._version})});state.tactics=state.tactics.filter(t=>t.id!==id);serverRevision=result.revision;dirty=false;saving=false;$('#delete-dialog').close();closeEditor();render();toast('已从球队战术库移除。');}catch(error){toast(error.message);if(error.status===401)canEdit=false;}finally{saving=false;$('#delete-confirm').disabled=false;$('#delete-cancel').disabled=false;permissions();}
 };
 ['#new-btn','#empty-new'].forEach(id=>$(id).onclick=newTactic);
 $('#help-btn').onclick=()=>{closeMenus();$('#help').showModal();};$$('.help-close').forEach(b=>b.onclick=()=>$('#help').close());
@@ -198,7 +205,54 @@ $('#access-btn').onclick=async()=>{if(!canEdit){requestEdit();return;}try{await 
 $('#editor-unlock-btn').onclick=()=>requestEdit();
 $('#auth-form').onsubmit=async e=>{e.preventDefault();$('#auth-submit').disabled=true;$('#auth-error').textContent='';try{await api('login',{method:'POST',body:JSON.stringify({password:$('#edit-password').value})});canEdit=true;$('#auth-dialog').close();$('#edit-password').value='';await loadLibrary({quiet:true});if(draft)renderBoard();const action=pendingAuthAction;pendingAuthAction=null;await action?.();toast('编辑已解锁，保存后会同步给队友。');}catch(error){$('#auth-error').textContent=error.message;}finally{$('#auth-submit').disabled=false;}};
 $('#auth-cancel').onclick=()=>{$('#auth-dialog').close();pendingAuthAction=null;};
-$('#share-btn').onclick=async()=>{if(!draft||!state.tactics.some(t=>t.id===draft.id)){toast('先保存到服务器，再分享给队友。');return;}const url=new URL(location.href);url.hash='tactic='+encodeURIComponent(draft.id);try{await navigator.clipboard.writeText(url.href);toast('已复制链接，队友可直接查看这套战术。');}catch{prompt('复制这个链接分享给队友：',url.href);}};
+async function copyText(value){
+ try{if(navigator.clipboard?.writeText){await Promise.race([navigator.clipboard.writeText(value),new Promise((_,reject)=>setTimeout(()=>reject(Error('copy timeout')),1200))]);return true;}}catch{}
+ const input=document.createElement('textarea');input.value=value;input.setAttribute('readonly','');input.className='clipboard-helper';($('#share-dialog').open?$('.share-content'):$('#editor').open?$('.editor-shell'):document.body).append(input);input.select();input.setSelectionRange(0,value.length);let copied=false;try{copied=document.execCommand('copy');}catch{}input.remove();return copied;
+}
+$('#share-btn').onclick=async()=>{
+ if(!draft)return;
+ if(dirty||!state.tactics.some(t=>t.id===draft.id)){if(!canEdit){toast('先开启编辑并保存，再分享。');return;}await saveDraft();if(dirty||!state.tactics.some(t=>t.id===draft.id))return;}
+ const url=new URL('.',location.href);url.hash='tactic='+encodeURIComponent(draft.id);
+ if(await copyText(url.href)){toast('链接已复制，队友打开后会直接进入这套战术。');return;}
+ $('#share-url').value=url.href;$('#share-copy-status').textContent='可点击复制，或长按链接手动复制。';$('#share-dialog').showModal();$('#share-url').focus();$('#share-url').select();
+};
+$('#view-share-link').onclick=()=>{if(!draft||!state.tactics.some(t=>t.id===draft.id)){toast('先保存到服务器，再分享给队友。');return;}const url=new URL('.',location.href);url.hash='tactic='+encodeURIComponent(draft.id);$('#share-url').value=url.href;$('#share-copy-status').textContent='队友打开后直接进入这套战术。';closeMenus();$('#share-dialog').showModal();$('#share-url').focus();$('#share-url').select();};
+$('#share-close').onclick=()=>$('#share-dialog').close();
+$('#share-copy').onclick=async()=>{$('#share-copy-status').textContent=await copyText($('#share-url').value)?'链接已复制。':'请长按或选中上方链接，手动复制。';};
+$('#inspector-close').onclick=()=>{$('.editor-shell').classList.remove('inspector-open');$('#inspector-toggle').setAttribute('aria-expanded','false');};
+$('#inspector-toggle').onclick=()=>{const open=$('.editor-shell').classList.toggle('inspector-open');$('#inspector-toggle').setAttribute('aria-expanded',String(open));};
+window.addEventListener('hashchange',()=>{
+ const id=new URLSearchParams(location.hash.slice(1)).get('tactic');
+ if(id&&loaded&&id!==draft?.id){if(dirty||saving){toast('请先保存或关闭当前编辑，再打开分享链接。');return;}openTactic(id);}
+ if(location.hash==='#rules'||location.hash.startsWith('#rule=')){const targetHash=location.hash;if($('#editor').open){if(dirty||saving)return;closeEditor();window.history.replaceState(null,'',targetHash);}showRulesLink();}
+});
+let rulesData=null,rulesLoading=null,rulesError='',rulesLimit=18;const modeQueries={tactics:'',rules:''};let lastTacticKind='all';
+function switchMode(mode){const wasRules=kindFilter==='rules';modeQueries[wasRules?'rules':'tactics']=search;if(!wasRules)lastTacticKind=kindFilter;kindFilter=mode==='rules'?'rules':lastTacticKind;search=modeQueries[mode];$('#search').value=search;if(mode==='rules')window.history.replaceState(null,'','#rules');else window.history.replaceState(null,'',location.pathname+location.search);render();}
+$$('[data-mode]').forEach(b=>b.onclick=()=>switchMode(b.dataset.mode));
+function sourceParagraph(text,cls=''){const value=esc(text||'');return value.length>600?'<p class="'+cls+'">'+esc((text||'').slice(0,240))+'…</p><details><summary>展开完整文字</summary><p class="'+cls+'">'+value+'</p></details>':'<p class="'+cls+'">'+value+'</p>';}
+function ruleText(e){return e.zh?sourceParagraph(e.zh)+(e.en?'<details><summary>English 原文</summary><p class="rule-en">'+esc(e.en)+'</p></details>':''):sourceParagraph(e.en,'rule-en')+(e.doc==='core'&&e.chapter!=='definitions'?'<small>此条款暂无对应中译文，请核对英文原文。</small>':'');}
+function ruleCard(e){
+ const source=e.doc==='core'?'规则正文':e.doc==='annotations'?'官方注释 · 英文':'赛事附录 · 英文';
+ const context=WFDFSearch.context(rulesData.entries,e);
+ return '<article class="rule-card"><header><h3>'+esc(e.doc==='annotations'?'注释 '+e.ref:e.ref)+'</h3><span>'+esc(source+' · '+e.title)+'</span></header>'+ruleText(e)+(context.length?'<details data-rule-context="'+esc(e.key)+'"><summary>查看本节完整上下文（'+context.length+' 条）</summary><div class="rule-context"></div></details>':'')+'<div class="rule-links"><a href="'+esc(e.url||'https://rules.wfdf.sport/resources/')+'" target="_blank" rel="noopener noreferrer">来源网页 ↗</a><button data-copy-rule="'+esc(e.key)+'">复制此条链接</button></div></article>';
+}
+async function fetchRules(){
+ if(rulesData||rulesLoading)return;rulesError='';
+ rulesLoading=(async()=>{try{const r=await fetch('wfdf/index.json');if(!r.ok)throw Error('规则文字暂时未能加载');rulesData=await r.json();$('#rules-chapter').innerHTML='<option value="">全部章节</option>'+rulesData.chapters.map(c=>'<option value="'+c.id+'">'+c.id+'. '+esc(c.title)+'</option>').join('')+'<option value="definitions">名词定义</option>';const linked=new URLSearchParams(location.hash.slice(1)).get('rule');if(linked)applyRuleLink(linked);}catch(error){rulesError=error.message;}finally{rulesLoading=null;if(kindFilter==='rules')renderRules();}})();
+}
+function renderRules(){
+ $('#list-title').textContent='WFDF 规则查询';$('#footer-count').textContent='WFDF · 2025–2028';$('footer>span:last-child').textContent='规则文字保存在服务器';
+ if(!rulesData){$('#list-count').textContent='';$('#rule-results').innerHTML=rulesError?'<div class="rules-message">'+esc(rulesError)+'<br><button class="quiet-btn" id="rules-retry">重新加载</button></div>':'<p class="rules-message">正在加载规则文字…</p>';$('#rules-more').hidden=true;if(rulesError)$('#rules-retry').onclick=fetchRules;else fetchRules();return;}
+ const entries=WFDFSearch.search(rulesData.entries,search,{scope:$('#rules-scope').value,chapter:$('#rules-chapter').value});
+ $('#list-count').textContent=entries.length+' 条';$('#rule-results').innerHTML=entries.length?entries.slice(0,rulesLimit).map(ruleCard).join(''):'<p class="rules-message">没有找到匹配条款。试试更短的关键词、英文术语或条款号，或切换到「全部来源」。</p>';$('#rules-more').hidden=entries.length<=rulesLimit;
+}
+function applyRuleLink(key){const entry=rulesData?.entries.find(e=>e.key===key);if(!entry)return;$('#rules-scope').value=entry.doc;$('#rules-chapter').value='';search=entry.ref;$('#search').value=search;rulesLimit=18;}
+function showRulesLink(){kindFilter='rules';const key=new URLSearchParams(location.hash.slice(1)).get('rule');if(key&&rulesData)applyRuleLink(key);render();}
+$('#rules-scope').onchange=()=>{$('#rules-chapter').disabled=['annotations','appendix'].includes($('#rules-scope').value);if($('#rules-chapter').disabled)$('#rules-chapter').value='';rulesLimit=18;renderRules();};
+$('#rules-chapter').onchange=()=>{rulesLimit=18;renderRules();};$('#rules-more').onclick=()=>{rulesLimit+=18;renderRules();};
+$('#rule-results').addEventListener('toggle',e=>{const key=e.target.dataset.ruleContext;if(!key||!e.target.open||e.target.dataset.filled)return;const entry=rulesData.entries.find(x=>x.key===key);e.target.querySelector('.rule-context').innerHTML=WFDFSearch.context(rulesData.entries,entry).map(x=>'<article><strong>'+esc(x.ref)+'</strong>'+ruleText(x)+'</article>').join('');e.target.dataset.filled='true';},true);
+document.addEventListener('click',async e=>{const quick=e.target.closest('[data-rule-query]');if(quick){search=quick.dataset.ruleQuery;$('#search').value=search;$('#rules-scope').value='core';$('#rules-chapter').value='';$('#rules-chapter').disabled=false;rulesLimit=18;renderRules();}const copy=e.target.closest('[data-copy-rule]');if(copy){const url=new URL('.',location.href);url.hash='rule='+encodeURIComponent(copy.dataset.copyRule);if(await copyText(url.href))toast('已复制规则条款链接。');else{$('#share-url').value=url.href;$('#share-copy-status').textContent='可长按链接手动复制。';$('#share-dialog').showModal();}}});
+if(location.hash==='#rules'||location.hash.startsWith('#rule='))showRulesLink();
 window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
 render();syncStatus();loadLibrary();
 setInterval(()=>{if(!document.hidden&&!saving&&!dirty)loadLibrary({quiet:true});},20000);

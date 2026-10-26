@@ -1,0 +1,27 @@
+WFDF Rules of Ultimate 2025–2028
+Original author and licensor: World Flying Disc Federation (WFDF).
+License: Creative Commons Attribution 4.0 (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+English core rules and official annotations: HTML transcription by
+Steinar H. Gunderson, https://urules.org/all.html (linked by WFDF).
+Personal/unofficial commentary is excluded. Core clause 1.10 is corrected
+against the WFDF original ("best perspective on the play"). Parent sentences
+following nested lists are retained with their parent clause.
+
+Chinese: translation published on the WFDF resources page, compiled by
+全国飞盘运动推广委员会, 2025-04-08.
+Translators/editors: 王哲、戴华、尧牧野、路佳、孟明、郭铮铮、李岩、张新光、薛志行.
+The source omits 19.2.1.1; we display English, without inventing a translation.
+
+Official annotations effective 2026-06-01. Event appendix v2.0 effective
+2026-01-01: text from WFDF's current publication, rather than the differing
+HTML appendix. Appendix text preserves page layout for tables; illustrations
+remain available from the original source and are not reproduced here.
+
+Sources and document versions: index.json. Checked 2026-10-25.
+Official resources: https://rules.wfdf.sport/resources/
+Modifications: text extraction, English/Chinese alignment, HTML-to-text
+conversion, source links, search indexing and non-normative topic aliases.
+This site is a team reference tool, not an official WFDF publication.
+No source PDFs, remote HTML scripts, or third-party trackers are bundled.
