@@ -36,3 +36,11 @@ assert.throws(()=>roster.remove({frames:[{players:roster.create(1,0,'drill'),dis
 console.log('PASS: variable Drill rosters, seven-player cap, stable numbering, cross-step resizing and route cleanup.');
 
 const restored=roster.resize(roster.remove(samples[0],4),7,7);assert(restored.frames[0].players.some(p=>p.id>14));
+
+ctx.markerSample=JSON.parse(JSON.stringify(samples[0]));ctx.markerSample.markers=[{id:'corner-1',x:150,y:140,label:'起点'}];
+assert(vm.runInContext('validTactic(markerSample)',ctx));
+const markerTactic=JSON.parse(JSON.stringify(ctx.markerSample));assert.equal(JSON.stringify(roster.resize(markerTactic,3,2).markers),JSON.stringify(markerTactic.markers));
+assert.equal(JSON.stringify(roster.remove(markerTactic,1).markers),JSON.stringify(markerTactic.markers));
+ctx.markerSample.markers.push({...ctx.markerSample.markers[0]});assert(!vm.runInContext('validTactic(markerSample)',ctx));
+ctx.markerSample.markers=[{id:'corner-1',x:0,y:140,label:'起点'}];assert(!vm.runInContext('validTactic(markerSample)',ctx));
+console.log('PASS: marker validation, unique IDs, field bounds and preservation during roster edits.');

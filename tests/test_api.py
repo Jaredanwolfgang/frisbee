@@ -172,6 +172,61 @@ class APITest(unittest.TestCase):
         normal = self.custom('normal-tactic')
         self.assertEqual(self.request('PUT', '/api/tactics/normal-tactic', {'tactic': normal, 'baseVersion': 0}, auth=True)[0], 200)
 
+    def test_markers_persist_for_shared_drill_without_counting_as_players(self):
+        doc = self.custom('marker-drill')
+        doc.update(kind='drill', category='基础训练')
+        for frame in doc['frames']:
+            frame['players'] = frame['players'][:3]
+            frame['routes'] = []
+        doc['markers'] = [{'id': 'cone-a', 'x': 160, 'y': 100, 'label': '起点 A'},
+                          {'id': 'cone-b', 'x': 600, 'y': 400, 'label': '接盘区 B'}]
+        code, result, _ = self.request('PUT', '/api/tactics/marker-drill', {'tactic': doc, 'baseVersion': 0}, auth=True)
+        self.assertEqual(code, 200)
+        saved = result['tactic']
+        self.assertEqual(saved['markers'], doc['markers'])
+        self.assertEqual(len(saved['frames'][0]['players']), 3)
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join()
+        self.store = API.Store(self.path, SEEDS)
+        self.start()
+        viewed = self.request('GET', '/api/tactics/marker-drill')[1]['tactic']
+        self.assertEqual(viewed['markers'], doc['markers'])
+        imported = self.request('POST', '/api/import', {'tactics': [viewed]}, auth=True)[1]
+        self.assertEqual(imported['skipped'], 1)
+        changed_ids = copy.deepcopy(viewed)
+        changed_ids['markers'][0]['id'] = 'new-cone-id'
+        self.assertEqual(API.canonical(changed_ids), API.canonical(viewed))
+        changed_ids['markers'][0]['x'] += 20
+        self.assertNotEqual(API.canonical(changed_ids), API.canonical(viewed))
+        viewed['markers'] = []
+        self.assertEqual(self.request('PUT', '/api/tactics/marker-drill', {'tactic': viewed, 'baseVersion': saved['_version']}, auth=True)[0], 200)
+        self.assertFalse(self.request('GET', '/api/tactics/marker-drill')[1]['tactic'].get('markers'))
+        legacy = self.custom()
+        explicit_empty = copy.deepcopy(legacy)
+        explicit_empty['markers'] = []
+        self.assertEqual(API.canonical(legacy), API.canonical(explicit_empty))
+
+    def test_marker_validation_and_write_permissions(self):
+        good = {'id': 'corner-1', 'x': 100, 'y': 200, 'label': '折返点'}
+        doc = self.custom('marker-validation')
+        doc['markers'] = [good]
+        self.assertEqual(self.request('PUT', '/api/tactics/marker-validation', {'tactic': doc, 'baseVersion': 0})[0], 401)
+        invalid = [None, {}, [good, good], [dict(good, x=1)], [dict(good, x=True)],
+                   [dict(good, label='a' * 25)], [dict(good, id='bad id')],
+                   [dict(good, id='c-' + str(n)) for n in range(33)]]
+        for markers in invalid:
+            with self.subTest(markers=markers):
+                doc['markers'] = markers
+                self.assertEqual(self.request('PUT', '/api/tactics/marker-validation', {'tactic': doc, 'baseVersion': 0}, auth=True)[0], 400)
+        # Cones are equipment; even 32 cones do not consume the Drill's seven player slots.
+        doc['kind'], doc['category'] = 'drill', '基础训练'
+        for frame in doc['frames']:
+            frame['players'] = frame['players'][:7]
+            frame['routes'] = []
+        doc['markers'] = [dict(good, id='valid-cone-' + str(n)) for n in range(32)]
+        self.assertEqual(self.request('PUT', '/api/tactics/marker-validation', {'tactic': doc, 'baseVersion': 0}, auth=True)[0], 200)
+
 
 if __name__ == '__main__':
     unittest.main()

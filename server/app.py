@@ -66,6 +66,17 @@ def tactic(raw):
            'kind': raw.get('kind', 'drill' if raw['category'] == '基础训练' else 'tactic')}
     if out['kind'] not in ['tactic', 'drill']:
         raise APIError(400, '请选择战术或 Drill。')
+    markers = raw.get('markers', [])
+    if not isinstance(markers, list) or len(markers) > 32:
+        raise APIError(400, '每套战术最多 32 个角标。')
+    marker_ids, clean_markers = set(), []
+    for marker in markers:
+        if not isinstance(marker, dict) or not isinstance(marker.get('id'), str) or not ROUTE_ID.fullmatch(marker['id']) or marker['id'] in marker_ids:
+            raise APIError(400, '角标编号无效或重复。')
+        marker_ids.add(marker['id'])
+        clean_markers.append({'id': marker['id'], **point(marker), 'label': text(marker.get('label', ''), 24)})
+    if clean_markers:
+        out['markers'] = clean_markers
     if raw.get('formation'):
         out['formation'] = text(raw['formation'], 299)
     if raw.get('roles'):
@@ -123,6 +134,9 @@ def canonical(doc):
     doc.setdefault('kind', 'drill' if doc.get('category') == '基础训练' else 'tactic')
     for key in ['updated', '_version']:
         doc.pop(key, None)
+    doc.setdefault('markers', [])
+    for marker in doc['markers']:
+        marker.pop('id', None)
     for f in doc['frames']:
         for r in f['routes']:
             r.pop('id', None)
