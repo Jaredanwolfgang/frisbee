@@ -17,6 +17,6 @@ const MobileUI=(()=>{
  });
  function dialogBack(dialog){const handler=handlers.get(dialog.id);if(handler)return handler();const cancel=new Event('cancel',{cancelable:true});dialog.dispatchEvent(cancel);if(!cancel.defaultPrevented)dialog.close();return !dialog.open;}
  function syncDialogs(){document.querySelectorAll('dialog[id]').forEach(dialog=>{const key='dialog:'+dialog.id;if(dialog.open)enter(key,()=>dialogBack(dialog));else leave(key);});document.body.classList.toggle('phone-dialog-open',media.matches&&!!document.querySelector('dialog[open]'));}
- new MutationObserver(syncDialogs).observe(document.body,{subtree:true,attributes:true,attributeFilter:['open']});media.addEventListener('change',syncDialogs);
+ new MutationObserver(syncDialogs).observe(document.body,{subtree:true,attributes:true,attributeFilter:['open']});watchMedia(media,syncDialogs);
  return {isPhone:()=>media.matches,enter,leave,registerBack:(id,handler)=>handlers.set(id,handler)};
 })();

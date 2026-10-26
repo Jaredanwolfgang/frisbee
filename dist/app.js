@@ -93,7 +93,7 @@ let draft=null,frameIndex=0,tool='move',history=[],dirty=false,playing=false,raf
 function canModifyDraft(){return canEdit&&(!MobileUI.isPhone()||mobileEdit);}
 function toast(msg){$('#toast').textContent=msg;$('#toast').classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').classList.remove('visible'),3200);}
 function svgField(frame,{mini=false,hero=false,interactive=false,markers=[]}={}){
- const dark=!mini||hero,base=dark?'#2b6047':'#dae5cf',line=dark?'#86aa80':'#9fb393',end=dark?'#24543e':'#cddcbe',run=dark?'#d7ee9f':'#688f4f',pass=dark?'#d1e7ee':'#6e98a3',id=uid().replaceAll('-','');
+ const dark=!mini||hero,base=dark?'#2b6047':'#dae5cf',line=dark?'#86aa80':'#9fb393',end=dark?'#24543e':'#cddcbe',run=dark?'#d7ee9f':'#688f4f',pass=dark?'#d1e7ee':'#6e98a3',id=uid().replace(/-/g,'');
  const playerLabel=Roster.label;
  const player=p=>`<g class="player" ${interactive?'data-player="'+p.id+'"':''} transform="translate(${p.x},${p.y})" ${interactive?'tabindex="0" role="button" aria-label="'+playerLabel(p)+' '+(p.team==='defense'?'防守':'进攻')+'球员，用方向键调整位置"':''}><circle r="${interactive?30:0}" fill="transparent"/><circle class="player-body" r="${mini?17:19}" fill="${p.team==='defense'?(dark?'#df9e76':'#c39773'):(dark?'#e4efb4':'#638951')}" stroke="${interactive&&p.id===selectedPlayer?'#f3ffd1':dark?'#234a36':'#f4f7ed'}" stroke-width="${interactive&&p.id===selectedPlayer?5:mini?2:3}"/><text text-anchor="middle" dy="5" fill="${p.team==='defense'?'#503d2f':dark?'#335034':'#fff'}" font-family="sans-serif" font-size="12" font-weight="600" pointer-events="none">${playerLabel(p)}</text></g>`;
  const cone=m=>`<g class="field-marker" ${interactive?'data-marker="'+esc(m.id)+'" tabindex="0" role="button" aria-label="角标 '+esc(m.label||'未命名')+'，可拖动或用方向键调整"':''} transform="translate(${m.x},${m.y})"><rect x="-30" y="-28" width="60" height="80" fill="transparent"/><circle r="30" fill="${interactive&&m.id===selectedMarker?'#f7efbe33':'transparent'}" stroke="${interactive&&m.id===selectedMarker?'#ffecb0':'none'}" stroke-width="3"/><path d="M0 -21 L-15 13 H15 Z" fill="#f1b653" stroke="#9b6a2c" stroke-width="2"/><path d="M-6 -9 H6 L9 0 H-9 Z" fill="#fff6dd"/><rect x="-21" y="12" width="42" height="7" rx="3" fill="#d18b39" stroke="#835d31" stroke-width="1.5"/><text x="0" y="39" text-anchor="middle" font-size="14" font-weight="600" fill="${dark?'#fff2cf':'#72542a'}" stroke="${dark?'#2b6047':'#dae5cf'}" stroke-width="3" paint-order="stroke" pointer-events="none">${esc(m.label)}</text></g>`;
@@ -232,7 +232,7 @@ $('#close-editor').onclick=editorBack;$('#editor').addEventListener('cancel',e=>
 $('#discard-cancel').onclick=()=>{$('#discard-dialog').close();if(MobileUI.isPhone()){mobileEdit=true;renderBoard();}};
 $('#discard-confirm').onclick=()=>{dirty=false;$('#discard-dialog').close();closeEditor({discard:true});};
 $('#discard-save').onclick=async()=>{await saveDraft();if(!dirty&&!saving){$('#discard-dialog').close();closeEditor();}};
-window.matchMedia('(max-width:600px)').addEventListener('change',()=>{if(draft)renderBoard();});
+watchMedia('(max-width:600px)',()=>{if(draft)renderBoard();});
 $('#delete-tactic').onclick=()=>{
  if(!canModifyDraft()||saving||!draft)return;closeMenus();$('#delete-confirm-name').textContent='「'+draft.name+'」';$('#delete-dialog').showModal();$('#delete-cancel').focus();
 };
@@ -279,8 +279,8 @@ window.addEventListener('hashchange',()=>{
  if(location.hash==='#rules'||location.hash.startsWith('#rule=')){const targetHash=location.hash;if($('#editor').open){if(dirty||saving)return;closeEditor();window.history.replaceState(window.history.state,'',targetHash);}showRulesLink();}
 });
 let rulesData=null,rulesVisuals=[],rulesVisualsError=false,rulesLoading=null,rulesError='',rulesLimit=8,rulesBilingual=false,focusedRuleKey=null,activeRuleVisuals=[];const modeQueries={tactics:'',rules:''};let lastTacticKind='all';
-function switchMode(mode){const wasRules=kindFilter==='rules';modeQueries[wasRules?'rules':'tactics']=search;if(!wasRules)lastTacticKind=kindFilter;kindFilter=mode==='rules'?'rules':lastTacticKind;search=modeQueries[mode];$('#search').value=search;if(mode==='rules')window.history.replaceState(window.history.state,'','#rules');else window.history.replaceState(window.history.state,'',location.pathname+location.search);render();}
-$$('[data-mode]').forEach(b=>b.onclick=()=>switchMode(b.dataset.mode));
+function switchMode(mode){closeMenus();const wasRules=kindFilter==='rules';modeQueries[wasRules?'rules':'tactics']=search;if(!wasRules)lastTacticKind=kindFilter;kindFilter=mode==='rules'?'rules':lastTacticKind;search=modeQueries[mode];$('#search').value=search;if(mode==='rules')window.history.replaceState(window.history.state,'','#rules');else window.history.replaceState(window.history.state,'',location.pathname+location.search);render();}
+$$('[data-mode]').forEach(b=>bindTap(b,()=>switchMode(b.dataset.mode)));
 function highlightRule(text){
  const query=search.trim();if(query.length<2||query.length>60||!text)return esc(text||'');
  const at=text.toLowerCase().indexOf(query.toLowerCase());return at<0?esc(text):esc(text.slice(0,at))+'<mark>'+esc(text.slice(at,at+query.length))+'</mark>'+esc(text.slice(at+query.length));

@@ -3,6 +3,7 @@
 const SpeedInfo={
  cached:false,library:null,ai:null,
  text(){const time=value=>Number.isFinite(value)?(value/1000).toFixed(2)+' 秒':'尚无记录';const nav=performance.getEntriesByType?.('navigation')?.[0];return [
+  ['页面启动',window.frisbeeStartupIssue||'正常'],
   ['网页首字节',time(nav?nav.responseStart-nav.startTime:null)],
   ['页面资源加载',time(nav?.loadEventEnd>0?nav.loadEventEnd-nav.startTime:null)],
   ['上次战术预览',this.cached?'已先显示缓存内容':'本次从服务器加载'],

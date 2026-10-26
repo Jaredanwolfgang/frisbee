@@ -7,7 +7,7 @@ const history={
  go(delta){moves.push(delta);tasks.push(()=>{index=Math.max(0,Math.min(entries.length-1,index+delta));url=new URL(entries[index].url);events.popstate?.();});}
 };
 const context={window:{history,matchMedia:()=>({get matches(){return phone;},addEventListener(){}}),addEventListener:(name,fn)=>events[name]=fn},location:{get href(){return url.href;},get pathname(){return url.pathname;},get search(){return url.search;}},document:{body:{classList:{toggle(){}}},querySelectorAll:()=>[],querySelector:()=>null},MutationObserver:class{observe(){}},queueMicrotask:fn=>tasks.push(fn),Date,Event};
-vm.createContext(context);vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../dist/mobile-ui.js'),'utf8')+'\nglobalThis.ui=MobileUI;',context);const ui=context.ui;
+vm.createContext(context);vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../dist/tap.js'),'utf8')+'\n'+fs.readFileSync(path.resolve(__dirname,'../dist/mobile-ui.js'),'utf8')+'\nglobalThis.ui=MobileUI;',context);const ui=context.ui;
 function flush(){let n=0;while(tasks.length){assert(++n<30,'navigation must settle without loops');tasks.shift()();}}
 let mode='edit',closed=false;
 ui.enter('dialog:editor',()=>{if(mode==='edit'){mode='view';return false;}closed=true;return true;});

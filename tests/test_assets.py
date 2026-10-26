@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import re
 import shutil
 import tempfile
@@ -16,8 +17,16 @@ class AssetTest(unittest.TestCase):
    self.assertRegex(first,r'^[0-9a-f]{16}$')
    self.assertIn('data-assets-version="'+first+'"',html)
    for name in ['styles.css','read-cache.js','app.js','ai-ui.js','mobile-ui.js','tiga-icon.svg']:
-    self.assertIn('assets/'+first+'/'+name,html)
+    if not name.endswith('.js'):self.assertIn('assets/'+first+'/'+name,html)
     self.assertEqual((root/'assets'/first/name).read_bytes(),(root/name).read_bytes())
+   self.assertEqual(html.count('<script src='),2)
+   self.assertIn('assets/'+first+'/startup.js',html)
+   self.assertLess(html.index('startup.js'),html.index('bundle.js'))
+   self.assertIn('assets/'+first+'/bundle.js',html)
+   order=json.loads((root/'assets'/first/'entrypoints.json').read_text())
+   self.assertEqual(order[-1],'app.js')
+   bundle=(root/'assets'/first/'bundle.js').read_text()
+   self.assertEqual(bundle,'\n;\n'.join('// '+name+'\n'+(root/name).read_text() for name in order))
    self.assertEqual(assets.prepare(root),first)
    self.assertEqual((root/'index.html').read_text(),html)
    with (root/'app.js').open('a') as f:f.write('\n// revision test\n')
