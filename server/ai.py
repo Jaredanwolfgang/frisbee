@@ -534,6 +534,7 @@ class AIService:
                   '进攻编号必须是1到offense，防守编号必须是offense+1到offense+defense，不得重复或从1重新编号。'
                   '战术 category 只能是进攻战术、防守战术或端区战术；Drill 固定基础训练。'
                   'steps 只描述从起始站位之后的1–11步，每步至多一条传盘，每人至多一条跑线；没传盘写 pass=null。'
+                  '“本轮停止/结束”“接盘后等待”属于结束条件或说明，不是独立动作步骤。把它们写在最后一个真实传跑步骤的 notes，禁止添加 moves=[] 且 pass=null 的停止步骤。'
                   '每条 moves 用 intent 标记已确认动作：cut_in、go_deep、upline、cross_field、clear 或 other；每条 pass 标记 swing、cross_field 或 other。不要用 other 绕过明确的术语意图。'
                   '每次出盘者必须是当前持盘者，接盘者必须是另一进攻人；接盘后盘权换给接盘者。'
                   '同一步的路线同时播放；先传后跑、先接再传必须拆步。出盘人同一步不跑，不能画成带盘跑动。接盘和换位需连续衔接，不能瞬移、自动复位或隐含循环。'
@@ -551,10 +552,11 @@ class AIService:
             try:
                 try:
                     result = compile_plan(plan, kind, offense, defense)
-                except PlanGeometryError as error:
+                except AIError as error:
+                    if error.status != 422: raise
                     # One bounded repair retaining the confirmed intent, never guessed Python moves.
                     repair = {'operation':'repair','kind':kind,'offense':offense,'defense':defense,'description':description,
-                              'feedback':error.message+' 只修正错误的术语方向、示意布局间距、无位移跑线和已确认的队列前移；不要改角色编号、盘权、传盘人次、动作意图或删动作来规避检查。返回完整 json。'}
+                              'feedback':error.message+' 修正计划格式、错误的术语方向、示意布局间距、无位移跑线和已确认的队列前移；不要改角色编号、盘权、传盘人次、动作意图或删除已确认的真实动作来规避检查。停止/结束/原地等待不是独立动作，不得生成空步骤，将其写入最后一个真实动作的notes。返回完整 json。'}
                     plan = self.client.complete(messages+[{'role':'assistant','content':json.dumps(plan,ensure_ascii=False)},{'role':'user','content':json.dumps(repair,ensure_ascii=False)}])
                     result = compile_plan(plan, kind, offense, defense)
             except AIError as error:

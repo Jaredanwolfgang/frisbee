@@ -89,6 +89,20 @@ class AIEndpointTest(unittest.TestCase):
         self.assertEqual(data['status'],'clarify');self.assertNotIn('tactic',data)
         self.assertIn('站位重叠',data['questions'][0]);self.assertEqual(self.store.library()['tactics'],[])
 
+    def test_empty_stop_step_is_repaired_without_asking_coach_to_restate_known_actions(self):
+        def answer(messages):
+            data=json.loads(messages[-1]['content']);self.client.calls.append(data)
+            raw=sample_plan()
+            if len(self.client.calls)==1:raw['steps'].append({'name':'停止','notes':'接盘后停止。','moves':[],'pass':None})
+            return raw
+        self.client.complete=answer
+        payload={'description':'O1给O2，O2回传O1，然后停止。','kind':'drill','offense':3,'defense':0,'confirmed':True}
+        code,result=self.json_request('POST','/api/ai/tactic',payload,auth=True)
+        self.assertEqual(code,200);self.assertEqual(result['status'],'ready')
+        self.assertEqual(len(self.client.calls),2);self.assertEqual(self.client.calls[-1]['operation'],'repair')
+        self.assertEqual(self.client.calls[-1]['description'],payload['description'])
+        self.assertEqual(self.store.library()['tactics'],[])
+
     def test_coach_conversation_preserves_brief_roles_and_knowledge_then_becomes_ready(self):
         payload={'kind':'drill','offense':3,'defense':0,'message':'Handler O1 传给 Upline 的 O2，再回盘。'}
         self.assertEqual(self.json_request('POST','/api/ai/coach',payload)[0],401)
