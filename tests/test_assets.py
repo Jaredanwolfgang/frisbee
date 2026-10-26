@@ -13,7 +13,9 @@ class AssetTest(unittest.TestCase):
  def test_release_urls_are_versioned_idempotent_and_change_with_content(self):
   with tempfile.TemporaryDirectory() as tmp:
    root=Path(tmp)/'dist';shutil.copytree(ROOT/'dist',root)
+   (root/'._app.js').write_bytes(b'legacy filesystem metadata')
    first=assets.prepare(root);html=(root/'index.html').read_text()
+   self.assertFalse((root/'assets'/first/'._app.js').exists())
    self.assertRegex(first,r'^[0-9a-f]{16}$')
    self.assertIn('data-assets-version="'+first+'"',html)
    for name in ['styles.css','read-cache.js','app.js','ai-ui.js','mobile-ui.js','tiga-icon.svg']:

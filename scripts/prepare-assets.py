@@ -24,7 +24,7 @@ def prepare(directory):
     for name in scripts:
         file=(root/name).resolve()
         if not file.is_relative_to(root) or file.suffix!='.js' or not file.is_file():raise ValueError('Invalid entry script')
-    files = sorted(p for p in root.rglob('*') if p.is_file() and 'assets' not in p.relative_to(root).parts and p.suffix in {'.js','.css','.svg','.json','.png','.webp'})
+    files = sorted(p for p in root.rglob('*') if p.is_file() and 'assets' not in p.relative_to(root).parts and not any(part.startswith('.') for part in p.relative_to(root).parts) and p.suffix in {'.js','.css','.svg','.json','.png','.webp'})
     digest = hashlib.sha256(Path(__file__).read_bytes())
     digest.update(json.dumps(scripts).encode())
     for file in files:
