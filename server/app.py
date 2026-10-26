@@ -339,10 +339,10 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
         def ai_dispatch(self, path):
             if path == '/api/ai/status' and self.command == 'GET':
                 return self.send(200, {'enabled': ai_service is not None, 'text': True, 'speech': False})
-            if self.command != 'POST' or path not in ('/api/ai/tactic', '/api/ai/rules'):
+            if self.command != 'POST' or path not in ('/api/ai/tactic', '/api/ai/outline', '/api/ai/rules'):
                 raise APIError(404, 'AI 接口不存在。')
             self.require_same_origin()
-            if path == '/api/ai/tactic':
+            if path in ('/api/ai/tactic','/api/ai/outline'):
                 self.require_editor()
             if ai_service is None:
                 raise APIError(503, 'AI 暂未配置；仍可手动画图和直接检索规则。')
@@ -355,6 +355,8 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
             data = self.body()
             ip = self.headers.get('X-Real-IP', self.client_address[0])
             try:
+                if path == '/api/ai/outline':
+                    return self.send(200, ai_service.outline(data, ip))
                 if path == '/api/ai/tactic':
                     return self.send(200, ai_service.generate(data, ip))
                 prepared = ai_service.prepare_rules(data, ip)

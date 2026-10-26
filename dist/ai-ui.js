@@ -3,28 +3,45 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast}){
  const $=s=>document.querySelector(s),escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  let generated=null,generation=null,chatRequest=null,history=[],turns=new Map(),turnNumber=0;
  const endpoint=path=>new URL('api/ai/'+path,location.href.split('#')[0]);
- function showGeneration(){requestEdit(()=>{$('#create-dialog').close();generated=null;$('#ai-plan-preview').innerHTML='';$('#ai-open-draft').hidden=true;$('#ai-tactic-result').textContent='';$('#ai-tactic-dialog').showModal();$('#ai-description').focus();});}
+ let reviewSignature=null,reviewQuestions=false,reviewBaseline='';
+ const sourceSnapshot=()=>JSON.stringify({description:$('#ai-description').value,kind:$('#ai-kind').value,offense:Number($('#ai-offense').value),defense:Number($('#ai-defense').value)});
+ const settings=()=>({kind:$('#ai-kind').value,offense:Number($('#ai-offense').value),defense:Number($('#ai-defense').value)});
+ function clearGenerated(){generated=null;$('#ai-plan-preview').innerHTML='';$('#ai-open-draft').hidden=true;}
+ function confirmState(){const valid=reviewSignature===sourceSnapshot(),changed=$('#ai-formal-description').value.trim()!==reviewBaseline.trim();$('#ai-confirm-generate').disabled=!!generation||!valid||!$('#ai-formal-description').value.trim()||(reviewQuestions&&!changed);}
+ function busy(on){for(const id of ['ai-kind','ai-offense','ai-defense','ai-description','ai-formal-description','ai-generate-btn'])$('#'+id).disabled=on;confirmState();}
+ function showGeneration(){requestEdit(()=>{$('#create-dialog').close();clearGenerated();reviewSignature=null;$('#ai-review-section').hidden=true;$('#ai-source-details').open=true;$('#ai-tactic-result').textContent='';$('#ai-tactic-dialog').showModal();$('#ai-description').focus({preventScroll:true});});}
  $('#ai-new-btn').onclick=showGeneration;$('#ai-create-btn').onclick=showGeneration;
  $('#ai-tactic-close').onclick=()=>$('#ai-tactic-dialog').close();
  $('#ai-tactic-dialog').addEventListener('close',()=>generation?.abort());
+ for(const id of ['ai-kind','ai-offense','ai-defense','ai-description'])$('#'+id).addEventListener('input',()=>{if(reviewSignature!==null){clearGenerated();$('#ai-tactic-result').textContent='原始描述或人数已修改，请先重新整理说明，再确认生成。';confirmState();}});
+ $('#ai-formal-description').addEventListener('input',()=>{clearGenerated();$('#ai-tactic-result').textContent='说明可继续修改；确认后按这版说明生成战术图。';confirmState();});
+ function showQuestions(questions){$('#ai-review-questions').hidden=!questions.length;$('#ai-review-questions').innerHTML=questions.length?'<strong>请在说明中补充这些信息，再确认生成</strong><ul>'+questions.map(q=>'<li>'+escape(q)+'</li>').join('')+'</ul>':'';}
+ async function generationRequest(path,payload){
+  const controller=new AbortController();generation=controller;const timer=setTimeout(()=>controller.abort(),140000);busy(true);
+  try{const response=await fetch(endpoint(path),{method:'POST',credentials:'same-origin',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await response.json();if(!response.ok)throw Error(data.error||'AI 暂时不可用，请稍后重试。');return data;}
+  finally{clearTimeout(timer);generation=null;busy(false);}
+ }
  $('#ai-tactic-form').onsubmit=async event=>{
-  event.preventDefault();if(generation)return;
-  generated=null;$('#ai-open-draft').hidden=true;$('#ai-plan-preview').innerHTML='';
-  const controller=new AbortController();generation=controller;const timer=setTimeout(()=>controller.abort(),140000);
-  $('#ai-generate-btn').disabled=true;$('#ai-tactic-result').textContent='正在整理传跑顺序并校验草稿…';
-  try{
-   const response=await fetch(endpoint('tactic'),{method:'POST',credentials:'same-origin',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({description:$('#ai-description').value,kind:$('#ai-kind').value,offense:Number($('#ai-offense').value),defense:Number($('#ai-defense').value)})});
-   const data=await response.json();if(!response.ok)throw Error(data.error||'生成失败，请稍后再试。');
-   if(data.status==='clarify'){
-    $('#ai-tactic-result').textContent='还需要确认这些信息。请补充到描述中，再生成：\n'+data.questions.map((q,i)=>(i+1)+'. '+q).join('\n');return;
-   }
-   if(data.status!=='ready'||!data.tactic)throw Error('没有收到完整的草稿，请重试。');
-   generated=data.tactic;const count=generated.frames[0].players.length;
-   $('#ai-tactic-result').textContent='草稿的结构与传跑衔接已校验，尚未保存。请核对人数、持盘人、角标位置和每步传跑顺序。';
+  event.preventDefault();if(generation)return;clearGenerated();reviewSignature=null;$('#ai-review-section').hidden=true;
+  const signature=sourceSnapshot();$('#ai-tactic-result').textContent='正在把口语整理成固定角色与传跑说明…';
+  try{const data=await generationRequest('outline',{...settings(),description:$('#ai-description').value});
+   if(data.status!=='review'||!data.formal_description)throw Error('未收到完整说明，请重新整理。');
+   reviewSignature=signature;reviewQuestions=!!data.questions?.length;reviewBaseline=data.formal_description;$('#ai-formal-description').value=reviewBaseline;showQuestions(data.questions||[]);$('#ai-review-section').hidden=false;$('#ai-source-details').open=false;
+   $('#ai-tactic-result').textContent='说明已整理，尚未生成战术图。请核对 O1 / O2 对应的人、盘权和动作顺序，可直接修改下方文字。';confirmState();$('#ai-review-title').focus({preventScroll:true});$('#ai-review-section').scrollIntoView({block:'start',behavior:'smooth'});
+  }catch(error){$('#ai-tactic-result').textContent=error.name==='AbortError'?'整理已停止或超时，原描述仍保留。':error.message;confirmState();}
+ };
+ $('#ai-confirm-generate').onclick=async()=>{
+  if(generation||reviewSignature!==sourceSnapshot())return;
+  const description=$('#ai-formal-description').value.trim();if(!description)return;
+  clearGenerated();$('#ai-tactic-result').textContent='正在依据你确认的说明画图，优先沿进攻长边安排站位…';
+  try{const data=await generationRequest('tactic',{...settings(),description,confirmed:true});
+   if(data.status==='clarify'){reviewQuestions=true;reviewBaseline=description;showQuestions(data.questions||[]);$('#ai-tactic-result').textContent='绘图前仍有需要明确的动作，请补充或修改形式化说明，再确认生成。';confirmState();return;}
+   if(data.status!=='ready'||!data.tactic)throw Error('没有收到完整草稿，请重试。');
+   generated=data.tactic;const count=generated.frames[0].players.length;showQuestions([]);
+   $('#ai-tactic-result').textContent='已按确认的说明生成草稿，结构与传跑衔接已校验，尚未保存。请再核对站位和路线。';
    $('#ai-plan-preview').innerHTML='<p class="ai-plan-facts">'+count+' 人 · '+generated.frames.length+' 步 · '+(generated.markers||[]).length+' 个角标</p><h3>'+escape(generated.name)+'</h3><p>'+escape(generated.summary)+'</p>'+(data.assumptions?.length?'<div class="ai-assumptions"><strong>绘图约定</strong><ul>'+data.assumptions.map(x=>'<li>'+escape(x)+'</li>').join('')+'</ul></div>':'')+'<div class="ai-frame-previews">'+generated.frames.slice(0,4).map(f=>'<figure>'+drawFrame(f,generated.markers||[])+'<figcaption>'+escape(f.name)+'</figcaption></figure>').join('')+'</div><ol class="ai-step-list">'+generated.frames.map(f=>'<li><strong>'+escape(f.name)+'</strong><p>'+escape(f.notes)+'</p></li>').join('')+'</ol>';
-   $('#ai-open-draft').hidden=false;
-  }catch(error){$('#ai-tactic-result').textContent=error.name==='AbortError'?'生成已停止或超时。描述仍保留，可以缩短后重试。':error.message;}
-  finally{clearTimeout(timer);generation=null;$('#ai-generate-btn').disabled=false;}
+   $('#ai-open-draft').hidden=false;$('#ai-plan-preview').scrollIntoView({block:'start',behavior:'smooth'});
+  }catch(error){$('#ai-tactic-result').textContent=error.name==='AbortError'?'生成已停止或超时，确认的说明仍保留。':error.message;}
  };
  $('#ai-open-draft').onclick=()=>{if(!generated)return;const draft=generated;$('#ai-tactic-dialog').close();onDraft(draft);};
  const sheet=$('#ai-chat-dialog'),sheetToggle=$('#ai-rules-btn');let sheetOpen=false,sheetHideTimer=0;

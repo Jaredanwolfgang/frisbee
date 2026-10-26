@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
-from ai_fixture import sample_plan
+from ai_fixture import sample_plan, sample_outline
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('ai_api_test',ROOT/'server/app.py')
@@ -14,9 +14,11 @@ KEY='test-editor-only-with-enough-length'
 
 
 class FakeClient:
-    def __init__(self):self.gate=threading.Event();self.invalid_citation=False
+    def __init__(self):self.gate=threading.Event();self.invalid_citation=False;self.calls=[]
     def complete(self,messages):
-        description=json.loads(messages[-1]['content'])['description']
+        data=json.loads(messages[-1]['content']);self.calls.append(data)
+        if data.get('operation')=='outline':return sample_outline()
+        description=data['description']
         return {'status':'clarify','questions':['谁先持盘？']} if description=='不明确' else sample_plan()
     def stream(self,messages):
         self.gate.wait(3)
@@ -42,12 +44,28 @@ class AIEndpointTest(unittest.TestCase):
     def json_request(self,*a,**kw):
         conn,res=self.request(*a,**kw);data=json.loads(res.read());code=res.status;conn.close();return code,data
     def test_generation_requires_editor_and_does_not_save_automatically(self):
-        payload={'description':'三人传接','kind':'drill','offense':3,'defense':0}
+        payload={'description':'三人传接','confirmed':True,'kind':'drill','offense':3,'defense':0}
         self.assertEqual(self.json_request('POST','/api/ai/tactic',payload)[0],401)
         code,data=self.json_request('POST','/api/ai/tactic',payload,auth=True)
         self.assertEqual(code,200);self.assertEqual(data['status'],'ready');self.assertEqual(len(data['tactic']['markers']),2)
         self.assertEqual(self.store.library()['tactics'],[])
         payload['description']='不明确';self.assertEqual(self.json_request('POST','/api/ai/tactic',payload,auth=True)[1]['status'],'clarify')
+    def test_outline_requires_editor_and_confirmation_uses_only_reviewed_text(self):
+        payload={'description':'拿盘那个人先传给往前跑的人，第三个人旁边等，然后再跑过去接回来。','kind':'drill','offense':3,'defense':0}
+        self.assertEqual(self.json_request('POST','/api/ai/outline',payload)[0],401)
+        self.assertEqual(self.json_request('POST','/api/ai/outline',payload,auth=True,origin='https://evil.test')[0],403)
+        code,review=self.json_request('POST','/api/ai/outline',payload,auth=True)
+        self.assertEqual(code,200);self.assertEqual(review['status'],'review')
+        self.assertIn('O1',review['formal_description']);self.assertIn('O2',review['formal_description']);self.assertNotIn('tactic',review)
+        self.assertEqual(self.store.library()['tactics'],[])
+        count=len(self.client.calls)
+        self.assertEqual(self.json_request('POST','/api/ai/tactic',payload,auth=True)[0],400)
+        self.assertEqual(len(self.client.calls),count)
+        edited=review['formal_description']+'\n教练修改：第二步的接盘点在前方。'
+        code,result=self.json_request('POST','/api/ai/tactic',{**payload,'description':edited,'confirmed':True},auth=True)
+        self.assertEqual(code,200);self.assertEqual(self.client.calls[-1]['description'],edited)
+        self.assertEqual(result['status'],'ready');self.assertEqual(self.store.library()['tactics'],[])
+
     def test_sources_flush_before_model_response_and_references_are_verified(self):
         conn,res=self.request('POST','/api/ai/rules',{'question':'防守犯规无争议，怎么读秒？'})
         self.assertEqual(res.status,200);self.assertEqual(res.getheader('X-Accel-Buffering'),'no')

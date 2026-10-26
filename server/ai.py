@@ -131,6 +131,39 @@ def compile_plan(plan, kind, offense, defense):
     return {'status': 'ready', 'tactic': tactic, 'assumptions': assumptions, 'questions': []}
 
 
+def formal_outline(raw, kind, offense, defense):
+    """Build the editable review from bounded role/step fields, without any coordinates."""
+    if not isinstance(raw, dict):
+        raise AIError(422, '未收到完整的角色说明，请重新整理。')
+    roles = raw.get('roles')
+    expected = [f'O{i}' for i in range(1, offense+1)]+[f'D{i}' for i in range(1, defense+1)]
+    if not isinstance(roles, list) or len(roles) != len(expected) or any(not isinstance(r,dict) for r in roles):
+        raise AIError(422, '整理出的角色人数不符，请检查人数后重试。')
+    if any(not isinstance(r.get('label'),str) for r in roles) or set(r['label'] for r in roles) != set(expected):
+        raise AIError(422, '整理出的球员编号有重复或缺失，请重试。')
+    descriptions = {r['label']:bounded_text(r.get('description'),250,'角色说明') for r in roles}
+    def texts(key, limit, size):
+        values = raw.get(key, [])
+        if not isinstance(values,list) or len(values)>limit:
+            raise AIError(422, '整理说明的格式无效，请重试。')
+        return [bounded_text(v,size,'整理说明') for v in values]
+    questions, assumptions = texts('questions',6,300), texts('assumptions',6,300)
+    steps, markers = texts('steps',11,500), texts('markers',32,100)
+    if not steps and not questions:
+        raise AIError(422, '尚未明确传跑动作，请补充描述。')
+    parts = ['名称：'+bounded_text(raw.get('name'),100,'名称'),
+             '角色对应：\n'+'\n'.join(label+'：'+descriptions[label] for label in expected),
+             '起始状态：\n'+bounded_text(raw.get('setup'),1500,'起始状态'),
+             '传跑顺序：\n'+'\n'.join(f'{i+1}. {value}' for i,value in enumerate(steps)),
+             '角标：\n'+ ('\n'.join(markers) if markers else '未要求角标。'),
+             '结束/循环：\n'+bounded_text(raw.get('ending'),1000,'结束说明')]
+    parts.append('类型：'+('Drill' if kind=='drill' else '战术')+f'；进攻/练习 {offense} 人，防守 {defense} 人。')
+    parts.append('绘图方向：进攻沿场地长边从左向右；指定的横向配合、回传和阵型保留原意。')
+    if assumptions:parts.append('编号/展示约定（请核对）：\n'+'\n'.join(assumptions))
+    if questions:parts.append('待补充（请填写后再确认）：\n'+'\n'.join(questions))
+    return {'status':'review','formal_description':bounded_text('\n\n'.join(parts),8000,'形式化说明'),'questions':questions,'assumptions':assumptions}
+
+
 TOPICS = [
     (['读秒','数秒','stall','重数','数到','从几','计数'], ['9.5','9.6','9.1','9.2']),
     (['走步', '轴心', 'travel'], ['18.2']), (['pick', '阻挡'], ['18.3']),
@@ -279,17 +312,51 @@ class AIService:
             if len(self.by_ip) > 4096:
                 self.by_ip = {k:v for k,v in self.by_ip.items() if v and now-v[-1] < 60}
 
-    def generate(self, data, ip):
-        description = bounded_text(data.get('description'), 4000, '教练描述')
+    @staticmethod
+    def roster_settings(data):
         kind, offense, defense = data.get('kind'), data.get('offense'), data.get('defense')
         if kind not in ('tactic', 'drill') or type(offense) is not int or type(defense) is not int or not 1 <= offense <= 7 or not 0 <= defense <= 7 or offense+defense > (7 if kind == 'drill' else 14):
             raise AIError(400, '请选择有效的类型和人数；Drill 含防守最多 7 人。')
+        return kind, offense, defense
+
+    def outline(self, data, ip):
+        description = bounded_text(data.get('description'), 4000, '口语描述')
+        kind, offense, defense = self.roster_settings(data)
+        schema = {'name':'练习名称','roles':[{'label':'O1','description':'描述中先持盘的人'},{'label':'O2','description':'描述中向前切出的队员'}],
+                  'setup':'起始持盘人与相对站位；未知信息明确写待确认',
+                  'steps':['O2 向前切入；O1 传给 O2。','O1 出盘后向前跑位，O2 原地持盘。'],
+                  'markers':['角标名称及用途（未提及时为空数组）'],'ending':'如何结束或循环；没说循环就不添加循环动作',
+                  'assumptions':['编号与展示方向的约定，不得假设关键传跑动作'], 'questions':['仅列影响准确绘图但尚未明确的问题；信息完整时为空数组']}
+        system = ('你是飞盘队的教练口述整理助手，输出 json。此阶段只整理成供教练修改和确认的说明，不生成坐标或战术图。'
+                  '把口语、昵称、这个人那个人等逐一对应到固定编号：进攻 O1 至 On、防守 D1 至 Dn。按出场/提及顺序编号，有明确号码则沿用；同一个人不能换编号。'
+                  '只复述已有意图，拆清先后关系、出盘人、接盘人、每次盘权、跑动目的地、等待者、角标和循环衔接。先传后跑要拆清，持盘人不能带盘跑。'
+                  '必须列出所选人数的全部角色；无法确定的角色职责或代词指向写待确认，并放进 questions，不得偷偷猜测。可以提出编号约定供人确认。'
+                  '不明确的起始持盘人、跑传顺序、左右相对谁、循环如何接回都要提问；但已说清的事实不要重复追问。'
+                  '默认进攻沿场地长边从左向右；向前/纵深表示沿长边推进，横向/回传/指定阵型按原意保留，不把所有动作改成向前。'
+                  '不要添加用户没说的练习目的、额外动作、等待职责或循环；用户描述的人数与设置冲突时明确提问。'
+                  '每步用 O1/O2/D1 等编号，简洁可执行，最多11步。roles 必须完整覆盖 required_labels；示例只说明字段，不代表实际人数。严格按以下格式返回：'+json.dumps(schema,ensure_ascii=False))
+        self.acquire(ip)
+        try:
+            result = self.client.complete([{'role':'system','content':system},{'role':'user','content':json.dumps({'operation':'outline','kind':kind,'offense':offense,'defense':defense,'required_labels':[f'O{i}' for i in range(1,offense+1)]+[f'D{i}' for i in range(1,defense+1)],'description':description},ensure_ascii=False)}])
+            return formal_outline(result, kind, offense, defense)
+        finally:
+            self.slots.release()
+
+    def generate(self, data, ip):
+        if data.get('confirmed') is not True:
+            raise AIError(400, '请先核对并确认形式化说明，再生成战术图。')
+        description = bounded_text(data.get('description'), 8000, '已确认的形式化说明')
+        kind, offense, defense = self.roster_settings(data)
         schema = {'status': 'ready', 'name': '名称', 'summary': '练习目的与已知条件', 'category':'进攻战术', 'assumptions': ['只列必须人工核对的场地比例或方向'],
                   'players': [{'id': 1, 'team': 'offense', 'x': 200, 'y': 200}, {'id': 2, 'team': 'offense', 'x': 600, 'y': 300}],
                   'disc_holder': 1, 'markers': [{'x': 700, 'y': 200, 'label': '接盘点'}],
                   'steps': [{'name': '传跑', 'notes': '动作顺序和目的', 'moves': [{'player': 2, 'x': 700, 'y': 200, 'via': []}], 'pass': {'from': 1, 'to': 2}}]}
         system = ('你是球队战术整理助手，准确复述教练意图，输出 json，不得输出 Markdown。'
-                  '这是1000×560横向场地，进攻向右，x40–960/y40–520。数字为示意坐标，不声称真实距离。'
+                  '输入是教练已核对的形式化说明，必须沿用 O1/O2/D1 的角色、盘权与传跑顺序，不重新分配编号。'
+                  '这是1000×560横向场地，长边是x轴，进攻向右，x40–960/y40–520。数字为示意坐标，不声称真实距离。'
+                  '绘图优先沿进攻长边铺开：起始持盘人通常在左方，向前/纵深切入主要增加x，练习主路线的纵深跨度优先大于横向跨度。'
+                  '向后回传应减小x，横向拉开应改变y；明确的左右换位、横向练习和阵型必须保留，不可为了长边偏好改变教练意图。'
+                  '不清楚的方向先澄清，不能把向前跑画成沿短边上下跑。'
                   '遵守用户选择的人数与类型。对描述中不明确的持盘人、传跑顺序或循环终点，不可猜测，'
                   '返回 {"status":"clarify","questions":["需要确认的问题"]}；人数与描述冲突也先澄清。'
                   '关键战术动作不可放进 assumptions 猜测；assumptions 只允许说明坐标比例、未指定的左右方向等展示约定。'

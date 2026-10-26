@@ -18,6 +18,29 @@ def plan():
                      {'name':'第二传','notes':'O1 接 O2 的回盘。','moves':[{'player':1,'x':450,'y':350,'via':[]}],'pass':{'from':2,'to':1}}]}
 
 
+class OutlineTest(unittest.TestCase):
+    def raw(self):
+        return {'name':'双人传接','roles':[{'label':'O1','description':'拿盘的人'},{'label':'O2','description':'往前跑的人'}],
+                'setup':'O1 持盘、O2 在前方。','steps':['O2 向前跑，O1 传给 O2。'],'markers':[],
+                'ending':'接盘后结束。','questions':[],'assumptions':[]}
+    def test_formal_review_retains_numbered_roles_and_unknown_information(self):
+        raw=self.raw();raw['questions']=['O2 具体向哪个接盘位置切入？']
+        result=AI.formal_outline(raw,'drill',2,0)
+        self.assertEqual(result['status'],'review');self.assertIn('O1：拿盘的人',result['formal_description'])
+        self.assertIn('长边',result['formal_description']);self.assertIn(raw['questions'][0],result['formal_description'])
+        self.assertNotIn('tactic',result);self.assertNotIn('frames',result)
+    def test_wrong_role_labels_and_unbounded_output_are_rejected(self):
+        for label in ['O1','O3','D1']:
+            raw=self.raw();raw['roles'][1]['label']=label
+            with self.assertRaises(AI.AIError):AI.formal_outline(raw,'drill',2,0)
+        raw=self.raw();raw['steps']=['a'*501]
+        with self.assertRaises(AI.AIError):AI.formal_outline(raw,'drill',2,0)
+    def test_defensive_roles_remain_distinct(self):
+        raw=self.raw();raw['roles'].append({'label':'D1','description':'防 O2 的人'})
+        result=AI.formal_outline(raw,'drill',2,1)
+        self.assertIn('D1：防 O2 的人',result['formal_description'])
+
+
 class CompileTest(unittest.TestCase):
     def test_plan_compiles_continuous_positions_and_actual_receiving_points(self):
         result=AI.compile_plan(plan(),'drill',3,0)
