@@ -44,7 +44,7 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast,prepareCreation}){
  function renderSourceButtons(turn){
   const limit=MobileUI.isPhone()?3:8;
   const box=document.querySelector('[data-turn="'+turn.id+'"] .ai-references');
-  box.innerHTML=(turn.sources.length?'<span>检索依据</span>'+turn.sources.slice(0,limit).map(s=>'<button data-ai-source="'+turn.id+'" data-ai-citation="'+escape(s.citation)+'">'+escape(s.citation)+'</button>').join('')+(turn.sources.length>limit?'<button data-ai-all-sources="'+turn.id+'">全部 '+turn.sources.length+' 条</button>':''):'')+(turn.visuals.length?'<div class="ai-gesture-row">'+turn.visuals.map(v=>'<button data-ai-visual="'+turn.id+'" data-visual-id="'+escape(v.id)+'"><img src="'+escape(v.image)+'" alt="'+escape(v.title)+'" loading="lazy"><span>'+escape(v.title)+'</span></button>').join('')+'</div>':'');
+  box.innerHTML=(turn.sources.length?'<span>检索依据</span>'+turn.sources.slice(0,limit).map(s=>'<button data-ai-source="'+turn.id+'" data-ai-citation="'+escape(s.citation)+'">'+escape(s.citation)+'</button>').join('')+(turn.sources.length>limit?'<button data-ai-all-sources="'+turn.id+'">全部 '+turn.sources.length+' 条</button>':''):'')+(turn.visuals.length?'<div class="ai-gesture-row">'+turn.visuals.map(v=>'<button data-ai-visual="'+turn.id+'" data-visual-id="'+escape(v.id)+'"><img src="'+escape(staticAsset(v.image))+'" alt="'+escape(v.title)+'" loading="lazy"><span>'+escape(v.title)+'</span></button>').join('')+'</div>':'');
  }
  function finishAnswer(turn,data){
   const article=document.querySelector('[data-turn="'+turn.id+'"]'),body=article.querySelector('.ai-answer'),state=article.querySelector('.ai-response-status');
@@ -76,14 +76,14 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast,prepareCreation}){
    const response=await fetch(endpoint('rules'),{method:'POST',credentials:'same-origin',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({question,history:history.map(m=>({...m,content:m.content.slice(0,1500)}))})});
    if(!response.ok){const data=await response.json();throw Error(data.error||'AI 暂时不可用。');}
    await consumeEvents(response,(event,data)=>{
-    if(event==='sources'){turn.sources=data.sources||[];turn.visuals=data.visuals||[];renderSourceButtons(turn);state.textContent='已检索 '+turn.sources.length+' 条依据，正在组织回答…';}
-    if(event==='delta'){turn.answer+=data.text||'';body.textContent=turn.answer;state.textContent='正在回复…';scrollChat();}
-    if(event==='done'){finishAnswer(turn,data);completed=true;}
+    if(event==='sources'){SpeedInfo.ai={sources:performance.now()-turn.started};turn.sources=data.sources||[];turn.visuals=data.visuals||[];renderSourceButtons(turn);state.textContent='已检索 '+turn.sources.length+' 条依据，正在组织回答…';}
+    if(event==='delta'){turn.answer+=data.text||'';if(!turn.firstText){turn.firstText=performance.now();SpeedInfo.ai.firstText=turn.firstText-turn.started;}if(!turn.paint)turn.paint=requestAnimationFrame(()=>{turn.paint=0;const box=$('#ai-chat-scroll'),follow=box.scrollHeight-box.scrollTop-box.clientHeight<100;body.textContent=turn.answer;state.textContent='正在回复 · 首字 '+((turn.firstText-turn.started)/1000).toFixed(1)+' 秒';if(follow)scrollChat();});}
+    if(event==='done'){SpeedInfo.ai.total=performance.now()-turn.started;cancelAnimationFrame(turn.paint||0);turn.paint=0;finishAnswer(turn,data);completed=true;}
     if(event==='error')throw Error(data.message||'回复中断，请重试。');
    });
    if(!completed)throw Error('回复未完整结束，以上文字尚未通过引用校验。');
   }catch(error){state.textContent=error.name==='AbortError'?'已停止；未完成的文字请以原文核对。':error.message;if(!turn.answer)body.textContent='可以补充信息后重试，或直接使用规则检索。';}
-  finally{clearTimeout(timer);chatRequest=null;$('#ai-chat-send').disabled=false;$('#ai-chat-stop').hidden=true;$('#ai-chat-clear').disabled=false;}
+  finally{cancelAnimationFrame(turn.paint||0);if(!completed&&turn.answer)body.textContent=turn.answer;clearTimeout(timer);chatRequest=null;$('#ai-chat-send').disabled=false;$('#ai-chat-stop').hidden=true;$('#ai-chat-clear').disabled=false;}
  };
  document.addEventListener('click',event=>{
   const quick=event.target.closest('[data-ai-question]');if(quick){$('#ai-question').value=quick.dataset.aiQuestion;$('#ai-question').focus();}
@@ -97,7 +97,7 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast,prepareCreation}){
    if(selected){const prefix=selected.doc==='core'?selected.ref.split('.').slice(0,2).join('.'):null;list=prefix?turn.sources.filter(s=>s.doc==='core'&&(s.ref===prefix||s.ref.startsWith(prefix+'.'))):[selected];}
    $('#ai-source-body').innerHTML=list.map(s=>'<article'+(s.citation===source.dataset.aiCitation?' class="ai-source-highlight"':'')+'><h3>'+escape(s.citation)+' · '+escape(s.title)+'</h3><p>'+escape(s.zh||s.en)+'</p>'+(s.zh&&s.en?'<details><summary>English 原文</summary><p lang="en">'+escape(s.en)+'</p></details>':'')+'<a href="'+escape(s.url)+'" target="_blank" rel="noopener noreferrer">来源 ↗</a></article>').join('');$('#ai-source-dialog').showModal();
   }
-  const visual=event.target.closest('[data-ai-visual]');if(visual){const v=turns.get(visual.dataset.aiVisual)?.visuals.find(v=>v.id===visual.dataset.visualId);if(!v)return;$('#visual-title').textContent=v.title;$('#visual-subtitle').textContent=v.en;$('#visual-image').src=v.image;$('#visual-image').alt=v.title+' · WFDF 官方示意';$('#visual-description').textContent=v.description;$('#visual-source').href=v.source;$('#rule-visual-dialog').showModal();}
+  const visual=event.target.closest('[data-ai-visual]');if(visual){const v=turns.get(visual.dataset.aiVisual)?.visuals.find(v=>v.id===visual.dataset.visualId);if(!v)return;$('#visual-title').textContent=v.title;$('#visual-subtitle').textContent=v.en;$('#visual-image').src=staticAsset(v.image);$('#visual-image').alt=v.title+' · WFDF 官方示意';$('#visual-description').textContent=v.description;$('#visual-source').href=v.source;$('#rule-visual-dialog').showModal();}
  });
  $('#ai-source-close').onclick=()=>$('#ai-source-dialog').close();
  fetch(endpoint('status'),{credentials:'same-origin'}).then(r=>r.json()).then(data=>{$$AIButtons(data.enabled);}).catch(()=>$$AIButtons(false));

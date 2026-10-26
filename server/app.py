@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from http.cookies import SimpleCookie, CookieError
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 import hashlib
 import importlib.util
 import hmac
@@ -205,12 +205,16 @@ class Store:
             db.execute("UPDATE metadata SET value=value+1 WHERE key='revision'")
         return db.execute("SELECT value FROM metadata WHERE key='revision'").fetchone()[0]
 
-    def library(self):
+    def library(self, known_revision=None):
         db = self.connect()
         try:
             db.execute('BEGIN')
+            revision = self.revision(db)
+            if known_revision == revision:
+                db.commit()
+                return {'unchanged': True, 'revision': revision}
             result = {'tactics': [self.document(r) for r in db.execute('SELECT * FROM tactics WHERE deleted=0 ORDER BY rowid')],
-                      'revision': self.revision(db)}
+                      'revision': revision}
             db.commit()
             return result
         finally:
@@ -395,7 +399,10 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
                     db.execute('SELECT 1')
                 return self.send(200, {'ok': True})
             if self.command == 'GET' and path == '/api/tactics':
-                return self.send(200, {**store.library(), 'canEdit': self.authorized()})
+                known = parse_qs(urlparse(self.path).query).get('revision', [''])[0]
+                if known and not re.fullmatch(r'[0-9]{1,16}', known):
+                    raise APIError(400, '同步版本无效。')
+                return self.send(200, {**store.library(int(known) if known else None), 'canEdit': self.authorized()})
             if self.command == 'POST' and path == '/api/login':
                 origin = self.headers.get('Origin')
                 if self.headers.get('Sec-Fetch-Site') == 'cross-site' or (origin and origin != public_origin):

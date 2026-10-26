@@ -46,6 +46,14 @@ python3 -B scripts/build-rule-visuals.py /path/to/hand-signals.pdf /path/to/pull
 
 两步导入会核对 20 章、368 条及中英对应情况；需在更新版本时人工检查 HTML 与官方文档差异、注释版本和附录版本，并更新日期、来源与验证。原始 PDF 和第三方 HTML 不进入部署包，运行时无需抓取外站。
 
+## 加载与同步
+
+- 发布时从同一 Git 提交生成 `dist/assets/<内容版本>/`，浏览器长期缓存这些不可变资源；入口 HTML 仍检查更新。旧版本资源保留，避免已打开页面请求失效。
+- 浏览器只读保存最近一次公开战术列表，再次打开先显示上次内容并提示正在同步；首次核对仍取完整服务器数据，不缓存编辑权限或凭证。服务器继续作为所有增删改的来源。
+- 在线同步使用修订号；内容未变时只返回版本及当前权限，不重复下载整套战术或重建 Gallery。离线、缓存损坏或浏览器禁用存储时仍可直接走服务器加载。
+- 更多菜单中的「速度诊断」显示当前设备的页面、首次战术同步、原文返回及 AI 首字/总耗时；仅在当前页面记录，不自动上传，也不记录问题或凭证。
+- AI 保持原有流式服务和条款校验，前端按显示帧合并文字更新，减少手机上的排版和滚动开销；模型与网络等待仍以实际链路为准。
+
 ## 服务与数据
 
 - `dist/`：无构建依赖的 HTML、CSS、JavaScript，包括战术图编辑、动画和教学示例。
@@ -65,6 +73,7 @@ node scripts/verify-catalog.cjs
 node scripts/verify-rules.cjs
 node scripts/verify-playback.cjs
 node scripts/verify-mobile-navigation.cjs
+node scripts/verify-read-cache.cjs
 node --check dist/mobile-ui.js
 node --check dist/ai-ui.js
 node --check dist/app.js

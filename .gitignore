@@ -10,3 +10,6 @@ __pycache__/
 .DS_Store
 ._*
 .openai/
+
+# Generated release assets; produced on the server from the pushed commit.
+dist/assets/

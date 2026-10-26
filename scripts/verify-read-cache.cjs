@@ -1,0 +1,13 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
+const values=new Map(),context={localStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value)},document:{documentElement:{dataset:{assetsVersion:'0123456789abcdef'}}},Date};
+vm.createContext(context);vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../dist/read-cache.js'),'utf8')+'\nglobalThis.cache=LibraryReadCache;globalThis.asset=staticAsset;',context);
+const cache=context.cache,valid=t=>t.id==='public-tactic';
+assert.equal(cache.read(valid),null);
+cache.write([{id:'public-tactic'}],42);assert.equal(cache.read(valid).revision,42);
+let saved=JSON.parse(values.get(cache.key));assert.deepEqual(Object.keys(saved).sort(),['format','revision','saved','tactics']);assert(!JSON.stringify(saved).includes('canEdit'));
+saved.saved=Date.now()-8*86400000;values.set(cache.key,JSON.stringify(saved));assert.equal(cache.read(valid),null);
+saved.saved=Date.now();saved.tactics=[{id:'bad'}];values.set(cache.key,JSON.stringify(saved));assert.equal(cache.read(valid),null);
+values.set(cache.key,'{broken');assert.equal(cache.read(valid),null);
+context.localStorage.getItem=()=>{throw Error('storage unavailable')};assert.equal(cache.read(valid),null);
+assert.equal(context.asset('wfdf/index.json'),'assets/0123456789abcdef/wfdf/index.json');
+console.log('PASS: bounded public read snapshots, expiry, malformed data, storage denial and versioned rules URLs.');

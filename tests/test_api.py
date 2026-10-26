@@ -127,6 +127,23 @@ class APITest(unittest.TestCase):
             bad['frames'][0]['routes'][0].update(kind=kind, points=via)
             self.assertEqual(self.request('PUT', '/api/tactics/curve-test', {'tactic': bad, 'baseVersion': 1}, auth=True)[0], 400)
 
+    def test_revision_poll_is_small_and_still_checks_editor_permission(self):
+        code, full, _ = self.request('GET', '/api/tactics')
+        revision = full['revision']
+        code, same, _ = self.request('GET', '/api/tactics?revision='+str(revision))
+        self.assertEqual(code,200)
+        self.assertTrue(same['unchanged'])
+        self.assertNotIn('tactics',same)
+        self.assertFalse(same['canEdit'])
+        self.assertLess(len(json.dumps(same)),120)
+        self.assertTrue(self.request('GET','/api/tactics?revision='+str(revision),auth=True)[1]['canEdit'])
+        self.request('PUT','/api/tactics/team-custom',{'tactic':self.custom(),'baseVersion':0},auth=True)
+        updated = self.request('GET','/api/tactics?revision='+str(revision))[1]
+        self.assertGreater(updated['revision'],revision)
+        self.assertIn('team-custom',{t['id'] for t in updated['tactics']})
+        for invalid in ['wrong','-1','1.5','9'*30]:
+            self.assertEqual(self.request('GET','/api/tactics?revision='+invalid)[0],400)
+
     def test_cookie_login_logout_and_csrf(self):
         self.assertEqual(self.request('POST', '/api/login', {'password': 'wrong'})[0], 401)
         self.assertEqual(self.request('POST', '/api/login', {'password': KEY}, extra={'Origin': 'https://another.site'})[0], 403)

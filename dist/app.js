@@ -31,7 +31,7 @@ let localBackup=[],migrated={};
 try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.tactics)&&saved.tactics.every(validTactic))localBackup=saved.tactics.filter(t=>!t.example||t.updated>1700000000000);}catch{}
 try{migrated=JSON.parse(localStorage.getItem(MIGRATION_KEY))||{};}catch{}
 let state={tactics:[],catalogRevision:3};
-let canEdit=false,loaded=false,connected=false,saving=false,serverRevision=-1,openedSharedLink=false,pendingAuthAction=null;
+let canEdit=false,loaded=false,connected=false,saving=false,serverRevision=-1,openedSharedLink=false,pendingAuthAction=null,cacheShown=false,libraryRequest=null;
 const API_BASE=new URL('api/',location.href.split('#')[0]);
 async function api(path='',options={}){
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
@@ -45,7 +45,7 @@ function syncStatus(){
  $('#sync-label').textContent=connected?'服务器已同步':loaded?'连接中断':'正在连接服务器';
  $('.local-status').classList.toggle('offline',!connected);
  const pending=migrationCandidates();$('#server-banner').hidden=connected&&!pending.length;
- $('#server-message').textContent=!connected?(loaded?'暂时无法连接服务器，当前内容仍可查看；未保存的草稿会保留在编辑器。':'正在连接球队战术库…'):('检测到 '+pending.length+' 套尚未上传的浏览器战术。上传后队友也能看到，原备份会保留。');
+ $('#server-message').textContent=!connected?(cacheShown?'显示上次同步的内容，连接成功后会自动更新；暂时只能查看。':loaded?'暂时无法连接服务器，当前内容仍可查看；未保存的草稿会保留在编辑器。':'正在连接球队战术库…'):('检测到 '+pending.length+' 套尚未上传的浏览器战术。上传后队友也能看到，原备份会保留。');
  $('#migrate-local').hidden=!connected||!pending.length;$('#retry-sync').hidden=connected;
 }
 function fillDraftForm(){if(!draft)return;playbackLoop=Roster.kind(draft)==='drill'&&draft.loop===true;$('#edit-name').value=draft.name;$('#edit-category').value=draft.category;$('#edit-kind').value=Roster.kind(draft);$('#edit-level').value=draft.level;$('#edit-summary').value=draft.summary;$('#edit-tags').value=draft.tags.join(', ');}
@@ -54,7 +54,7 @@ function syncSelectionToolbar(){
  $('#roster-slot').classList.toggle('has-selection',active);$('#roster-controls').inert=active;$('#roster-controls').setAttribute('aria-hidden',String(active));
 }
 function permissions(){
- $$('#discard-dialog button').forEach(b=>b.disabled=saving);const modify=canModifyDraft();$('#editor').classList.toggle('phone-viewing',MobileUI.isPhone()&&!mobileEdit);$('#mobile-edit-btn').disabled=saving;$('#mobile-edit-btn').hidden=!MobileUI.isPhone()||mobileEdit;$('#close-editor').setAttribute('aria-label',MobileUI.isPhone()&&mobileEdit?'返回查看':'返回战术库');
+ $$('#discard-dialog button').forEach(b=>b.disabled=saving);const modify=canModifyDraft();$('#editor').classList.toggle('phone-viewing',MobileUI.isPhone()&&!mobileEdit);$('#mobile-edit-btn').disabled=saving||cacheShown&&!connected;$('#mobile-edit-btn').hidden=!MobileUI.isPhone()||mobileEdit;$('#close-editor').setAttribute('aria-label',MobileUI.isPhone()&&mobileEdit?'返回查看':'返回战术库');
  document.body.classList.toggle('read-only',!canEdit);$('#access-btn').textContent=canEdit?'关闭编辑':'开启编辑';
  $('#editor-unlock-btn').hidden=canEdit;$('#save-btn').hidden=!modify;$('#save-btn').disabled=saving;$('#save-btn').textContent=saving?'保存中…':'保存';
  $('#delete-tactic').hidden=!modify||!draft||!state.tactics.some(t=>t.id===draft.id);
@@ -69,13 +69,21 @@ function permissions(){
  syncSelectionToolbar();
  const countLabel=draft?current().players.length+' 人 · ':'';$('#edit-status').textContent=countLabel+(!canEdit?'只读查看':dirty?'未保存':draft?._version?'已保存到服务器':'保存后队友可见');
 }
+function cacheLibrary(){if(connected&&serverRevision>=0)LibraryReadCache.write(state.tactics,serverRevision);}
+function restoreLibraryCache(){const cached=LibraryReadCache.read(validTactic);if(!cached)return;state.tactics=cached.tactics;serverRevision=cached.revision;loaded=true;cacheShown=true;SpeedInfo.cached=true;const id=new URLSearchParams(location.hash.slice(1)).get('tactic');if(id&&state.tactics.some(t=>t.id===id)){openedSharedLink=true;openTactic(id);}}
 async function loadLibrary({quiet=false}={}){
- try{const data=await api('tactics');if(!Array.isArray(data.tactics)||!data.tactics.every(validTactic))throw new Error('服务器中的战术格式无效。');
-  const changed=serverRevision!==data.revision;state.tactics=data.tactics;serverRevision=data.revision;canEdit=!!data.canEdit;loaded=true;connected=true;
-  render();if(changed){if(draft&&!dirty&&!saving){const remote=state.tactics.find(t=>t.id===draft.id);if(remote&&remote._version!==draft._version){stop();draft=clone(remote);frameIndex=Math.min(frameIndex,draft.frames.length-1);fillDraftForm();renderBoard();}}}
-  permissions();syncStatus();
+ if(libraryRequest)return libraryRequest;
+ libraryRequest=(async()=>{const started=performance.now();try{
+  const data=await api('tactics'+(connected&&serverRevision>=0?'?revision='+serverRevision:'')),wasLoaded=loaded,wasCached=cacheShown;
+  const changed=serverRevision!==data.revision||wasCached&&JSON.stringify(state.tactics)!==JSON.stringify(data.tactics);
+  if(!data.unchanged){if(!Array.isArray(data.tactics)||!data.tactics.every(validTactic))throw new Error('服务器中的战术格式无效。');state.tactics=data.tactics;}
+  if(!SpeedInfo.library)SpeedInfo.library={duration:performance.now()-started};serverRevision=data.revision;canEdit=!!data.canEdit;loaded=true;connected=true;cacheShown=false;
+  if(changed||!wasLoaded)render();
+  if(changed&&draft&&!dirty&&!saving){const remote=state.tactics.find(t=>t.id===draft.id);if(remote&&remote._version!==draft._version){stop();draft=clone(remote);frameIndex=Math.min(frameIndex,draft.frames.length-1);fillDraftForm();renderBoard();}else if(!remote){closeEditor();toast('这套战术已从共享战术库移除。');}}
+  if(changed||!wasLoaded||wasCached)cacheLibrary();permissions();syncStatus();
   if(!openedSharedLink){openedSharedLink=true;const id=new URLSearchParams(location.hash.slice(1)).get('tactic');if(id){if(state.tactics.some(t=>t.id===id))openTactic(id);else toast('分享的战术已不存在，或已被删除。');}}
- }catch(error){connected=false;syncStatus();if(!quiet)toast(error.message);}
+ }catch(error){connected=false;syncStatus();if(!quiet)toast(error.message);}finally{libraryRequest=null;}})();
+ return libraryRequest;
 }
 function requestEdit(action){if(canEdit){action?.();return;}pendingAuthAction=action||null;$('#auth-error').textContent='';$('#edit-password').value='';$('#auth-dialog').showModal();$('#edit-password').focus();}
 let kindFilter='all',category='全部',search='',sort='recent',createKind='drill';
@@ -193,7 +201,7 @@ async function saveDraft(){
  const snapshot=clone(draft);saving=true;permissions();
  try{const result=await api('tactics/'+encodeURIComponent(snapshot.id),{method:'PUT',body:JSON.stringify({tactic:snapshot,baseVersion:snapshot._version||0})});
   draft=clone(result.tactic);dirty=false;history=[];if(MobileUI.isPhone()){mobileEdit=false;closeInspector();}serverRevision=result.revision;const i=state.tactics.findIndex(t=>t.id===draft.id);if(i>=0)state.tactics[i]=clone(draft);else state.tactics.unshift(clone(draft));
-  window.history.replaceState(window.history.state,'','#tactic='+encodeURIComponent(draft.id));connected=true;render();renderBoard();$('#edit-status').textContent='已保存到服务器';toast('已保存到服务器，队友打开链接即可查看。');
+  window.history.replaceState(window.history.state,'','#tactic='+encodeURIComponent(draft.id));connected=true;cacheLibrary();render();renderBoard();$('#edit-status').textContent='已保存到服务器';toast('已保存到服务器，队友打开链接即可查看。');
  }catch(error){if(error.status===401){canEdit=false;toast('编辑权限已过期，请解锁后再次保存。');}else if(error.status===409){toast(error.message);if(confirm('这套战术已被队友更新或删除。是否将你的修改另存为新战术，保留双方内容？')){draft.id=uid();delete draft._version;draft.example=false;draft.name=(draft.name+'（副本）').slice(0,100);saving=false;await saveDraft();return;}}else{connected=false;toast(error.message);}}
  finally{saving=false;permissions();syncStatus();}
 }
@@ -231,9 +239,10 @@ $('#delete-tactic').onclick=()=>{
 $('#delete-cancel').onclick=()=>$('#delete-dialog').close();$('#delete-dialog').addEventListener('cancel',e=>{if(saving)e.preventDefault();});
 $('#delete-form').onsubmit=async e=>{
  e.preventDefault();if(!canModifyDraft()||saving||!draft)return;const id=draft.id;$('#delete-confirm').disabled=true;$('#delete-cancel').disabled=true;
- saving=true;permissions();try{const result=await api('tactics/'+encodeURIComponent(id),{method:'DELETE',body:JSON.stringify({baseVersion:draft._version})});state.tactics=state.tactics.filter(t=>t.id!==id);serverRevision=result.revision;dirty=false;saving=false;$('#delete-dialog').close();closeEditor();render();toast('已从球队战术库移除。');}catch(error){toast(error.message);if(error.status===401)canEdit=false;}finally{saving=false;$('#delete-confirm').disabled=false;$('#delete-cancel').disabled=false;permissions();}
+ saving=true;permissions();try{const result=await api('tactics/'+encodeURIComponent(id),{method:'DELETE',body:JSON.stringify({baseVersion:draft._version})});state.tactics=state.tactics.filter(t=>t.id!==id);serverRevision=result.revision;dirty=false;saving=false;$('#delete-dialog').close();closeEditor();cacheLibrary();render();toast('已从球队战术库移除。');}catch(error){toast(error.message);if(error.status===401)canEdit=false;}finally{saving=false;$('#delete-confirm').disabled=false;$('#delete-cancel').disabled=false;permissions();}
 };
 ['#new-btn','#empty-new'].forEach(id=>$(id).onclick=newTactic);
+function showSpeedInfo(){closeMenus();$('#speed-data').innerHTML=SpeedInfo.text().map(([label,value])=>'<div><dt>'+esc(label)+'</dt><dd>'+esc(value)+'</dd></div>').join('');$('#speed-dialog').showModal();}$('#speed-btn').onclick=showSpeedInfo;$('#ai-chat-speed').onclick=showSpeedInfo;$('#speed-close').onclick=()=>$('#speed-dialog').close();$('#speed-copy').onclick=async()=>{if(await copyText(SpeedInfo.report()))toast('已复制本机速度诊断。');else toast('复制未成功，请查看上方耗时。');};
 $('#help-btn').onclick=()=>{closeMenus();$('#help').showModal();};$$('.help-close').forEach(b=>b.onclick=()=>$('#help').close());
 $('#export-btn').onclick=()=>{closeMenus();const blob=new Blob([JSON.stringify({format:'disc-playbook',version:1,...state},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`飞盘战术备份-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('战术备份已导出。');};
 async function importToServer(tactics){
@@ -292,7 +301,7 @@ function ruleSection(group){
  return '<article class="rule-row'+(group.matches.includes(e.key)?' rule-hit':'')+(e.key===focusedRuleKey?' rule-target':'')+(definition?' definition-row':'')+(lead?' lead-rule':'')+'" data-rule-key="'+esc(e.key)+'" data-depth="'+Math.min(depth,3)+'">'+(definition||lead?'':'<button class="rule-number" data-copy-rule="'+esc(e.key)+'" title="复制此条链接" aria-label="复制 '+esc(e.ref)+' 条款链接">'+esc(e.ref)+'</button>')+'<div class="rule-copy">'+ruleWords(e)+'</div></article>';
  }).join('')+'</div></section>';
 }
-function visualThumb(v){return '<button class="visual-thumb" data-rule-visual="'+v.id+'" title="查看 '+esc(v.title)+' 示意"><img src="'+esc(v.image)+'" alt="'+esc(v.title)+'示意" loading="lazy"><span>'+esc(v.title)+'</span><small>'+esc(v.kind==='signal'?v.en+' · 手势':'WFDF 场地图')+' ↗</small></button>';}
+function visualThumb(v){return '<button class="visual-thumb" data-rule-visual="'+v.id+'" title="查看 '+esc(v.title)+' 示意"><img src="'+esc(staticAsset(v.image))+'" alt="'+esc(v.title)+'示意" loading="lazy"><span>'+esc(v.title)+'</span><small>'+esc(v.kind==='signal'?v.en+' · 手势':'WFDF 场地图')+' ↗</small></button>';}
 function renderVisuals(hits){
  const query=search.toLowerCase().trim(),all=['手势图','手势','hand signals','signals'].includes(query);
  let visuals=all?rulesVisuals.filter(v=>v.kind==='signal'):query?rulesVisuals.filter(v=>v.aliases.some(a=>query.includes(a.toLowerCase()))||hits.slice(0,5).some(e=>v.refs.some(r=>(e.doc==='annotations'?[e.related||'']:[e.ref,...(e.refs||[])]).some(ref=>ref===r||ref.startsWith(r+'.'))))):[];
@@ -304,7 +313,7 @@ function renderVisuals(hits){
 }
 async function fetchRules(){
  if(rulesData||rulesLoading)return;rulesError='';
- rulesLoading=(async()=>{try{const [r,v]=await Promise.all([fetch('wfdf/index.json'),fetch('wfdf/visuals.json').catch(()=>null)]);if(!r.ok)throw Error('规则文字暂时未能加载');rulesData=await r.json();try{if(!v?.ok)throw Error();rulesVisuals=(await v.json()).entries;}catch{rulesVisualsError=true;}
+ rulesLoading=(async()=>{try{const [r,v]=await Promise.all([fetch(staticAsset('wfdf/index.json')),fetch(staticAsset('wfdf/visuals.json')).catch(()=>null)]);if(!r.ok)throw Error('规则文字暂时未能加载');rulesData=await r.json();try{if(!v?.ok)throw Error();rulesVisuals=(await v.json()).entries;}catch{rulesVisualsError=true;}
  $('#rules-chapter').innerHTML='<option value="">全部章节</option>'+rulesData.chapters.map(c=>'<option value="'+c.id+'">'+c.id+'. '+esc(c.title)+'</option>').join('')+'<option value="definitions">名词定义</option>';
  const linked=new URLSearchParams(location.hash.slice(1)).get('rule');if(linked)applyRuleLink(linked);
  }catch(error){rulesError=error.message;rulesData=null;}finally{rulesLoading=null;if(kindFilter==='rules')renderRules();}})();
@@ -337,12 +346,12 @@ document.addEventListener('click',async e=>{
  const quick=e.target.closest('[data-rule-query]');if(quick){search=quick.dataset.ruleQuery;$('#search').value=search;rulesLimit=8;renderRules();}
  const chapter=e.target.closest('[data-rule-chapter]');if(chapter){$('#rules-chapter').value=chapter.dataset.ruleChapter;search='';$('#search').value='';rulesLimit=8;renderRules();}
  if(e.target.closest('#visual-more')){$('#visual-gallery-list').innerHTML=activeRuleVisuals.map(visualThumb).join('');$('#visual-gallery').showModal();}
- const visual=e.target.closest('[data-rule-visual]');if(visual){const v=rulesVisuals.find(x=>x.id===visual.dataset.ruleVisual);if(v){$('#visual-title').textContent=v.title;$('#visual-subtitle').textContent=v.en;$('#visual-image').src=v.image;$('#visual-image').alt=v.title+' · WFDF 官方示意';$('#visual-description').textContent=v.description;$('#visual-source').href=v.source;$('#rule-visual-dialog').showModal();}}
+ const visual=e.target.closest('[data-rule-visual]');if(visual){const v=rulesVisuals.find(x=>x.id===visual.dataset.ruleVisual);if(v){$('#visual-title').textContent=v.title;$('#visual-subtitle').textContent=v.en;$('#visual-image').src=staticAsset(v.image);$('#visual-image').alt=v.title+' · WFDF 官方示意';$('#visual-description').textContent=v.description;$('#visual-source').href=v.source;$('#rule-visual-dialog').showModal();}}
  const copy=e.target.closest('[data-copy-rule]');if(copy){const url=new URL('.',location.href);url.hash='rule='+encodeURIComponent(copy.dataset.copyRule);if(await copyText(url.href))toast('已复制规则条款链接。');else{$('#share-url').value=url.href;$('#share-copy-status').textContent='可长按链接手动复制。';$('#share-dialog').showModal();}}
 });
 creationUI=initFrisbeeAI({requestEdit,toast,prepareCreation:()=>{setCreateKind(kindFilter==='tactic'?'tactic':'drill');$('#create-name').value='';},drawFrame:(frame,markers)=>svgField(frame,{mini:true,markers}),onDraft:tactic=>requestEdit(()=>{if(!validTactic(tactic)){toast('AI 草稿格式无效，请重新生成。');return;}draft=clone(tactic);openDraft();checkpoint();permissions();})});
 if(location.hash==='#rules'||location.hash.startsWith('#rule='))showRulesLink();
 window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
-render();syncStatus();loadLibrary();
+restoreLibraryCache();render();syncStatus();loadLibrary();
 setInterval(()=>{if(!document.hidden&&!saving&&!dirty)loadLibrary({quiet:true});},20000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!saving&&!dirty)loadLibrary({quiet:true});});
