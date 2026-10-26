@@ -29,7 +29,8 @@
   const active=topics.filter(t=>t.terms.some(w=>q.includes(w))),tokens=q.split(/\s+/).filter(Boolean);
   return entries.flatMap((e,index)=>{
    if(scope!=='all'&&e.doc!==scope||chapter&&e.chapter!==chapter)return [];
-   const body=norm([e.ref,e.title,e.zh,e.en].join(' '));
+   let body=norm([e.ref,e.title,e.zh,e.en].join(' '));
+   if(q==='pick')body=body.replace(/\bpick(?:ed|ing|s)?\s+up\b/g,'');
    const relevant=active.some(t=>t.refs.some(r=>within(e.doc==='annotations'?e.related||'':e.ref,r)||(e.refs||[]).some(x=>within(x,r))));
    const direct=!!q&&tokens.every(t=>body.includes(t));
    const refmatch=numeric&&within(e.ref.toUpperCase(),refq);
@@ -48,6 +49,21 @@
   const prefix=ref.split('.').slice(0,e.doc==='appendix'?1:2).join('.');
   return entries.filter(x=>x.doc===(e.doc==='annotations'?'core':e.doc)&&within(x.ref,prefix));
  }
- root.WFDFSearch={search,context,topics};
+ function sections(entries,hits){
+  const groups=new Map();
+  for(const hit of hits){
+   const numeric=hit.doc==='core'&&/^\d+(?:\.\d+)+$/.test(hit.ref);
+   const prefix=numeric?hit.ref.split('.').slice(0,2).join('.'):hit.ref;
+   const key=numeric?'core:'+prefix:hit.key;
+   if(!groups.has(key)){
+    const rows=numeric?entries.filter(e=>e.doc==='core'&&within(e.ref,prefix)):[hit];
+    const root=rows.find(e=>e.ref===prefix)||hit;
+    groups.set(key,{root,rows,matches:[]});
+   }
+   groups.get(key).matches.push(hit.key);
+  }
+  return Array.from(groups.values());
+ }
+ root.WFDFSearch={search,context,sections,topics};
  if(typeof module!=='undefined')module.exports=root.WFDFSearch;
 })(globalThis);

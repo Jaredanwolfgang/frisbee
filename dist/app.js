@@ -81,7 +81,7 @@ function svgField(frame,{mini=false,hero=false,interactive=false}={}){
 }
 function pathD(p,r){return 'M'+p.x+' '+p.y+[...r.points,r.end].map(q=>' L'+q.x+' '+q.y).join('');}
 function render(){
- const rules=kindFilter==='rules';$$('[data-mode]').forEach(b=>{const active=(b.dataset.mode==='rules')===rules;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});$('.filterbar').hidden=rules;$('.top-actions').hidden=rules;document.title=rules?'WFDF 规则 · Tiga':'Tiga战术库';document.body.classList.toggle('rules-mode',rules);$('#rules-panel').hidden=!rules;$('#cards').hidden=rules;$('#tactic-filters').hidden=rules;$('#search').placeholder=rules?'搜索规则：走步、Pick、18.2.1…':'搜索战术、Drill、标签或执行要点';$('#search').setAttribute('aria-label',rules?'搜索 WFDF 规则':'搜索战术与 Drill');
+ const rules=kindFilter==='rules';$$('[data-mode]').forEach(b=>{const active=(b.dataset.mode==='rules')===rules;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});$('.filterbar').hidden=rules;$('.top-actions').hidden=rules;document.title=rules?'WFDF 规则 · Tiga':'Tiga战术库';document.body.classList.toggle('rules-mode',rules);$('#rules-panel').hidden=!rules;$('#rules-filters').hidden=!rules;$('#rules-info-btn').hidden=!rules;$('#cards').hidden=rules;$('#tactic-filters').hidden=rules;$('#search').placeholder=rules?'搜索规则：走步、Pick、18.2.1…':'搜索战术、Drill、标签或执行要点';$('#search').setAttribute('aria-label',rules?'搜索 WFDF 规则':'搜索战术与 Drill');
  if(rules){$$('#kind-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.kind==='rules'));renderRules();return;}
  $$('#kind-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.kind===kindFilter));
  $('footer>span:last-child').textContent='服务器共享';
@@ -93,7 +93,7 @@ function render(){
 }
 function closeMenus(){$$('.more-menu').forEach(d=>d.open=false);}
 document.addEventListener('click',e=>{const k=e.target.closest('[data-kind]');if(k){const next=k.dataset.kind;if((next==='rules')!==(kindFilter==='rules')){search='';$('#search').value='';}kindFilter=next;if(next==='rules')window.history.replaceState(null,'','#rules');else if(location.hash==='#rules'||location.hash.startsWith('#rule='))window.history.replaceState(null,'',location.pathname+location.search);category='全部';$('#category-filter').value=category;render();}const open=e.target.closest('[data-open]');if(open)openTactic(open.dataset.open);if(!e.target.closest('.more-menu'))closeMenus();});
-$('#search').addEventListener('input',e=>{search=e.target.value.trim();if(kindFilter==='rules')rulesLimit=18;render();});$('#sort').addEventListener('change',e=>{sort=e.target.value;render();});$('#category-filter').addEventListener('change',e=>{category=e.target.value;if(category==='基础训练')kindFilter='drill';else if(category!=='全部')kindFilter='tactic';render();});
+$('#search').addEventListener('input',e=>{search=e.target.value.trim();if(kindFilter==='rules')rulesLimit=8;render();});$('#sort').addEventListener('change',e=>{sort=e.target.value;render();});$('#category-filter').addEventListener('change',e=>{category=e.target.value;if(category==='基础训练')kindFilter='drill';else if(category!=='全部')kindFilter='tactic';render();});
 function current(){return draft.frames[frameIndex];}
 function holdsDisc(f,p){const closest=f.players.reduce((best,q)=>Math.hypot(q.x-f.disc.x,q.y-f.disc.y)<Math.hypot(best.x-f.disc.x,best.y-f.disc.y)?q:best);return closest.id===p.id&&Math.hypot(p.x-f.disc.x,p.y-f.disc.y)<40;}
 function stop(){playing=false;cancelAnimationFrame(raf);$('#play-btn').textContent='▶';$('#frame-hint').textContent='逐步看清每一次配合';}
@@ -226,32 +226,77 @@ window.addEventListener('hashchange',()=>{
  if(id&&loaded&&id!==draft?.id){if(dirty||saving){toast('请先保存或关闭当前编辑，再打开分享链接。');return;}openTactic(id);}
  if(location.hash==='#rules'||location.hash.startsWith('#rule=')){const targetHash=location.hash;if($('#editor').open){if(dirty||saving)return;closeEditor();window.history.replaceState(null,'',targetHash);}showRulesLink();}
 });
-let rulesData=null,rulesLoading=null,rulesError='',rulesLimit=18;const modeQueries={tactics:'',rules:''};let lastTacticKind='all';
+let rulesData=null,rulesVisuals=[],rulesVisualsError=false,rulesLoading=null,rulesError='',rulesLimit=8,rulesBilingual=false,focusedRuleKey=null,activeRuleVisuals=[];const modeQueries={tactics:'',rules:''};let lastTacticKind='all';
 function switchMode(mode){const wasRules=kindFilter==='rules';modeQueries[wasRules?'rules':'tactics']=search;if(!wasRules)lastTacticKind=kindFilter;kindFilter=mode==='rules'?'rules':lastTacticKind;search=modeQueries[mode];$('#search').value=search;if(mode==='rules')window.history.replaceState(null,'','#rules');else window.history.replaceState(null,'',location.pathname+location.search);render();}
 $$('[data-mode]').forEach(b=>b.onclick=()=>switchMode(b.dataset.mode));
-function sourceParagraph(text,cls=''){const value=esc(text||'');return value.length>600?'<p class="'+cls+'">'+esc((text||'').slice(0,240))+'…</p><details><summary>展开完整文字</summary><p class="'+cls+'">'+value+'</p></details>':'<p class="'+cls+'">'+value+'</p>';}
-function ruleText(e){return e.zh?sourceParagraph(e.zh)+(e.en?'<details><summary>English 原文</summary><p class="rule-en">'+esc(e.en)+'</p></details>':''):sourceParagraph(e.en,'rule-en')+(e.doc==='core'&&e.chapter!=='definitions'?'<small>此条款暂无对应中译文，请核对英文原文。</small>':'');}
-function ruleCard(e){
- const source=e.doc==='core'?'规则正文':e.doc==='annotations'?'官方注释 · 英文':'赛事附录 · 英文';
- const context=WFDFSearch.context(rulesData.entries,e);
- return '<article class="rule-card"><header><h3>'+esc(e.doc==='annotations'?'注释 '+e.ref:e.ref)+'</h3><span>'+esc(source+' · '+e.title)+'</span></header>'+ruleText(e)+(context.length?'<details data-rule-context="'+esc(e.key)+'"><summary>查看本节完整上下文（'+context.length+' 条）</summary><div class="rule-context"></div></details>':'')+'<div class="rule-links"><a href="'+esc(e.url||'https://rules.wfdf.sport/resources/')+'" target="_blank" rel="noopener noreferrer">来源网页 ↗</a><button data-copy-rule="'+esc(e.key)+'">复制此条链接</button></div></article>';
+function highlightRule(text){
+ const query=search.trim();if(query.length<2||query.length>60||!text)return esc(text||'');
+ const at=text.toLowerCase().indexOf(query.toLowerCase());return at<0?esc(text):esc(text.slice(0,at))+'<mark>'+esc(text.slice(at,at+query.length))+'</mark>'+esc(text.slice(at+query.length));
+}
+function ruleWords(e){
+ const zh=e.zh?'<p lang="zh-CN">'+highlightRule(e.zh)+'</p>':'';
+ const en=e.en&&(!e.zh||rulesBilingual)?'<p lang="en" class="rule-en">'+highlightRule(e.en)+'</p>':'';
+ return zh+en;
+}
+function ruleSection(group){
+ const root=group.root,short=root.doc==='core'&&root.chapter!=='definitions'&&root.zh?.length<32&&group.rows.length>1;
+ const title=short?root.zh.replace(/[“”「」：:]/g,''):root.title;
+ const label=root.doc==='core'?'':root.doc==='annotations'?'官方注释':'赛事附录';
+ const rows=short?group.rows.filter(e=>e.key!==root.key):group.rows;
+ return '<section class="rule-section" data-section="'+esc(root.key)+'"><header><div class="rule-section-title"><span>'+esc(root.ref)+'</span><h3>'+esc(title)+'</h3>'+(label?'<small>'+label+'</small>':'')+'</div><div class="rule-section-actions"><button data-copy-rule="'+esc(root.key)+'" aria-label="复制本节链接" title="复制本节链接">↗</button><a href="'+esc(root.url)+'" target="_blank" rel="noopener noreferrer" aria-label="查看来源网页" title="查看来源网页">⋯</a></div></header><div class="rule-rows">'+rows.map(e=>{
+ const depth=root.doc==='core'?Math.max(0,e.ref.split('.').length-root.ref.split('.').length-1):0;
+ const definition=e.chapter==='definitions',lead=e.key===root.key;
+ return '<article class="rule-row'+(group.matches.includes(e.key)?' rule-hit':'')+(e.key===focusedRuleKey?' rule-target':'')+(definition?' definition-row':'')+(lead?' lead-rule':'')+'" data-rule-key="'+esc(e.key)+'" data-depth="'+Math.min(depth,3)+'">'+(definition||lead?'':'<button class="rule-number" data-copy-rule="'+esc(e.key)+'" title="复制此条链接" aria-label="复制 '+esc(e.ref)+' 条款链接">'+esc(e.ref)+'</button>')+'<div class="rule-copy">'+ruleWords(e)+'</div></article>';
+ }).join('')+'</div></section>';
+}
+function visualThumb(v){return '<button class="visual-thumb" data-rule-visual="'+v.id+'" title="查看 '+esc(v.title)+' 示意"><img src="'+esc(v.image)+'" alt="'+esc(v.title)+'示意" loading="lazy"><span>'+esc(v.title)+'</span><small>'+esc(v.kind==='signal'?v.en+' · 手势':'WFDF 场地图')+' ↗</small></button>';}
+function renderVisuals(hits){
+ const query=search.toLowerCase().trim(),all=['手势图','手势','hand signals','signals'].includes(query);
+ let visuals=all?rulesVisuals.filter(v=>v.kind==='signal'):query?rulesVisuals.filter(v=>v.aliases.some(a=>query.includes(a.toLowerCase()))||hits.slice(0,5).some(e=>v.refs.some(r=>(e.doc==='annotations'?[e.related||'']:[e.ref,...(e.refs||[])]).some(ref=>ref===r||ref.startsWith(r+'.'))))):[];
+ if(!all&&!hits.length)visuals=[];
+ visuals.sort((a,b)=>Number(b.aliases.some(x=>x.toLowerCase()===query))-Number(a.aliases.some(x=>x.toLowerCase()===query)));
+ activeRuleVisuals=visuals;$('#rule-visuals').hidden=!visuals.length;$('#rule-visuals').classList.toggle('all-signals',all);
+ $('#rule-visuals').innerHTML=(all?visuals:visuals.slice(0,4)).map(visualThumb).join('')+(!all&&visuals.length>4?'<button class="visual-more" id="visual-more">全部 '+visuals.length+' 张图解 ↗</button>':'');
+ return all;
 }
 async function fetchRules(){
  if(rulesData||rulesLoading)return;rulesError='';
- rulesLoading=(async()=>{try{const r=await fetch('wfdf/index.json');if(!r.ok)throw Error('规则文字暂时未能加载');rulesData=await r.json();$('#rules-chapter').innerHTML='<option value="">全部章节</option>'+rulesData.chapters.map(c=>'<option value="'+c.id+'">'+c.id+'. '+esc(c.title)+'</option>').join('')+'<option value="definitions">名词定义</option>';const linked=new URLSearchParams(location.hash.slice(1)).get('rule');if(linked)applyRuleLink(linked);}catch(error){rulesError=error.message;}finally{rulesLoading=null;if(kindFilter==='rules')renderRules();}})();
+ rulesLoading=(async()=>{try{const [r,v]=await Promise.all([fetch('wfdf/index.json'),fetch('wfdf/visuals.json').catch(()=>null)]);if(!r.ok)throw Error('规则文字暂时未能加载');rulesData=await r.json();try{if(!v?.ok)throw Error();rulesVisuals=(await v.json()).entries;}catch{rulesVisualsError=true;}
+ $('#rules-chapter').innerHTML='<option value="">全部章节</option>'+rulesData.chapters.map(c=>'<option value="'+c.id+'">'+c.id+'. '+esc(c.title)+'</option>').join('')+'<option value="definitions">名词定义</option>';
+ const linked=new URLSearchParams(location.hash.slice(1)).get('rule');if(linked)applyRuleLink(linked);
+ }catch(error){rulesError=error.message;rulesData=null;}finally{rulesLoading=null;if(kindFilter==='rules')renderRules();}})();
 }
 function renderRules(){
- $('#list-title').textContent='WFDF 规则查询';$('#footer-count').textContent='WFDF · 2025–2028';$('footer>span:last-child').textContent='规则文字保存在服务器';
- if(!rulesData){$('#list-count').textContent='';$('#rule-results').innerHTML=rulesError?'<div class="rules-message">'+esc(rulesError)+'<br><button class="quiet-btn" id="rules-retry">重新加载</button></div>':'<p class="rules-message">正在加载规则文字…</p>';$('#rules-more').hidden=true;if(rulesError)$('#rules-retry').onclick=fetchRules;else fetchRules();return;}
- const entries=WFDFSearch.search(rulesData.entries,search,{scope:$('#rules-scope').value,chapter:$('#rules-chapter').value});
- $('#list-count').textContent=entries.length+' 条';$('#rule-results').innerHTML=entries.length?entries.slice(0,rulesLimit).map(ruleCard).join(''):'<p class="rules-message">没有找到匹配条款。试试更短的关键词、英文术语或条款号，或切换到「全部来源」。</p>';$('#rules-more').hidden=entries.length<=rulesLimit;
+ $('#list-title').textContent='';$('#footer-count').textContent='WFDF · 2025–2028';$('footer>span:last-child').textContent='';
+ $$('[data-rule-query]').forEach(b=>{const active=b.dataset.ruleQuery.toLowerCase()===search.toLowerCase();b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
+ $('#rules-language-btn').setAttribute('aria-pressed',String(rulesBilingual));
+ if(!rulesData){$('#rules-results-meta').textContent='';$('#list-count').textContent='';$('#rule-results').innerHTML=rulesError?'<div class="rules-message">'+esc(rulesError)+'<br><button class="quiet-btn" id="rules-retry">重新加载</button></div>':'<p class="rules-message">正在加载规则文字…</p>';$('#rules-more').hidden=true;if(rulesError)$('#rules-retry').onclick=fetchRules;else fetchRules();return;}
+ const scope=$('#rules-scope').value,chapter=$('#rules-chapter').value;
+ const hits=WFDFSearch.search(rulesData.entries,search,{scope,chapter});
+ const allSignals=renderVisuals(hits);$('#rules-more').hidden=true;$('#rules-language-btn').hidden=allSignals||scope==='annotations'||scope==='appendix';
+ if(allSignals){$('#rules-results-meta').textContent='24 种官方手势 · 点击放大';$('#rule-results').innerHTML=rulesVisualsError?'<p class="rules-message">示意图暂时无法加载，请刷新重试。</p>':'';return;}
+ if(!search&&!chapter&&scope==='core'){
+  $('#rules-results-meta').textContent='正文 2025–2028 · 按章节阅读';$('#rule-results').innerHTML='<div class="rule-chapter-grid">'+rulesData.chapters.map(c=>'<button data-rule-chapter="'+c.id+'"><span>'+c.id.padStart(2,'0')+'</span><strong>'+esc(c.title)+'</strong><i>›</i></button>').join('')+'<button data-rule-chapter="definitions"><span>词</span><strong>名词定义</strong><i>›</i></button></div>';return;
+ }
+ const groups=WFDFSearch.sections(rulesData.entries,hits);
+ $('#list-count').textContent=hits.length+' 条';$('#rules-results-meta').textContent=hits.length?(search?hits.length+' 条命中 · '+groups.length+' 节上下文':groups.length+' 节 · '+hits.length+' 条'):'没有匹配条款';
+ $('#rule-results').innerHTML=groups.length?groups.slice(0,rulesLimit).map(ruleSection).join(''):'<p class="rules-message">试试更短的关键词、英文术语或条款号，或扩大来源和章节范围。</p>';
+ $('#rules-more').hidden=groups.length<=rulesLimit;
+ if(focusedRuleKey){const key=focusedRuleKey;focusedRuleKey=null;requestAnimationFrame(()=>Array.from(document.querySelectorAll('[data-rule-key]')).find(el=>el.dataset.ruleKey===key)?.scrollIntoView({block:'center'}));}
 }
-function applyRuleLink(key){const entry=rulesData?.entries.find(e=>e.key===key);if(!entry)return;$('#rules-scope').value=entry.doc;$('#rules-chapter').value='';search=entry.ref;$('#search').value=search;rulesLimit=18;}
+function applyRuleLink(key){const entry=rulesData?.entries.find(e=>e.key===key);if(!entry)return;$('#rules-scope').value=entry.doc;$('#rules-chapter').value='';$('#rules-chapter').disabled=entry.doc!=='core';search=entry.ref;$('#search').value=search;rulesLimit=8;focusedRuleKey=key;}
 function showRulesLink(){kindFilter='rules';const key=new URLSearchParams(location.hash.slice(1)).get('rule');if(key&&rulesData)applyRuleLink(key);render();}
-$('#rules-scope').onchange=()=>{$('#rules-chapter').disabled=['annotations','appendix'].includes($('#rules-scope').value);if($('#rules-chapter').disabled)$('#rules-chapter').value='';rulesLimit=18;renderRules();};
-$('#rules-chapter').onchange=()=>{rulesLimit=18;renderRules();};$('#rules-more').onclick=()=>{rulesLimit+=18;renderRules();};
-$('#rule-results').addEventListener('toggle',e=>{const key=e.target.dataset.ruleContext;if(!key||!e.target.open||e.target.dataset.filled)return;const entry=rulesData.entries.find(x=>x.key===key);e.target.querySelector('.rule-context').innerHTML=WFDFSearch.context(rulesData.entries,entry).map(x=>'<article><strong>'+esc(x.ref)+'</strong>'+ruleText(x)+'</article>').join('');e.target.dataset.filled='true';},true);
-document.addEventListener('click',async e=>{const quick=e.target.closest('[data-rule-query]');if(quick){search=quick.dataset.ruleQuery;$('#search').value=search;$('#rules-scope').value='core';$('#rules-chapter').value='';$('#rules-chapter').disabled=false;rulesLimit=18;renderRules();}const copy=e.target.closest('[data-copy-rule]');if(copy){const url=new URL('.',location.href);url.hash='rule='+encodeURIComponent(copy.dataset.copyRule);if(await copyText(url.href))toast('已复制规则条款链接。');else{$('#share-url').value=url.href;$('#share-copy-status').textContent='可长按链接手动复制。';$('#share-dialog').showModal();}}});
+$('#rules-scope').onchange=()=>{$('#rules-chapter').disabled=['annotations','appendix'].includes($('#rules-scope').value);if($('#rules-chapter').disabled)$('#rules-chapter').value='';rulesLimit=8;renderRules();};
+$('#rules-chapter').onchange=()=>{rulesLimit=8;renderRules();};$('#rules-more').onclick=()=>{rulesLimit+=8;renderRules();};
+$('#rules-language-btn').onclick=()=>{rulesBilingual=!rulesBilingual;renderRules();};
+$('#rules-info-btn').onclick=()=>$('#rules-sources').showModal();$('#rules-sources-close').onclick=()=>$('#rules-sources').close();$('#visual-close').onclick=()=>$('#rule-visual-dialog').close();$('#visual-gallery-close').onclick=()=>$('#visual-gallery').close();
+document.addEventListener('click',async e=>{
+ const quick=e.target.closest('[data-rule-query]');if(quick){search=quick.dataset.ruleQuery;$('#search').value=search;rulesLimit=8;renderRules();}
+ const chapter=e.target.closest('[data-rule-chapter]');if(chapter){$('#rules-chapter').value=chapter.dataset.ruleChapter;search='';$('#search').value='';rulesLimit=8;renderRules();}
+ if(e.target.closest('#visual-more')){$('#visual-gallery-list').innerHTML=activeRuleVisuals.map(visualThumb).join('');$('#visual-gallery').showModal();}
+ const visual=e.target.closest('[data-rule-visual]');if(visual){const v=rulesVisuals.find(x=>x.id===visual.dataset.ruleVisual);if(v){$('#visual-title').textContent=v.title;$('#visual-subtitle').textContent=v.en;$('#visual-image').src=v.image;$('#visual-image').alt=v.title+' · WFDF 官方示意';$('#visual-description').textContent=v.description;$('#visual-source').href=v.source;$('#rule-visual-dialog').showModal();}}
+ const copy=e.target.closest('[data-copy-rule]');if(copy){const url=new URL('.',location.href);url.hash='rule='+encodeURIComponent(copy.dataset.copyRule);if(await copyText(url.href))toast('已复制规则条款链接。');else{$('#share-url').value=url.href;$('#share-copy-status').textContent='可长按链接手动复制。';$('#share-dialog').showModal();}}
+});
 if(location.hash==='#rules'||location.hash.startsWith('#rule='))showRulesLink();
 window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
 render();syncStatus();loadLibrary();

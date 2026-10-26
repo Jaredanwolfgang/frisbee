@@ -21,3 +21,15 @@ assert(entries.every(e=>!e.en?.includes("Steinar's comment")));
 assert(entries.every(e=>e.url.startsWith('https://urules.org/')||e.url.startsWith('https://rules.wfdf.sport/')));
 assert(!fs.readdirSync(path.join(__dirname,'../dist/wfdf')).some(f=>f.endsWith('.pdf')));
 console.log('PASS: 368 clauses / 20 chapters, bilingual coverage, current source attribution, topic/ID searches, exceptions in context, 147 annotations and v2.0 appendix; no PDF assets.');
+const {sections}=require('../dist/rules-search.js');
+const travelGroups=sections(entries,search(entries,'走步')),travelSection=travelGroups.find(g=>g.root.ref==='18.2');
+assert.equal(travelSection.rows.length,21);assert(travelSection.rows.some(e=>e.ref==='18.2.1.1.2'));assert(travelSection.rows.some(e=>e.ref==='18.2.8'));
+assert.equal(new Set(travelGroups.flatMap(g=>g.rows.map(e=>e.key))).size,travelGroups.flatMap(g=>g.rows).length);
+assert.equal(sections(entries,search(entries,'18.2.1'))[0].root.ref,'18.2');
+assert(!search(entries,'Pick').some(e=>e.ref==='8.5'));
+const visuals=require('../dist/wfdf/visuals.json').entries;
+assert.equal(visuals.filter(v=>v.kind==='signal').length,24);assert.equal(visuals.filter(v=>v.kind==='diagram').length,14);
+assert.equal(new Set(visuals.map(v=>v.id)).size,visuals.length);
+for(const [id,ref] of [['signal-10','18.3'],['signal-11','18.2'],['signal-07','11'],['signal-16','20']])assert(visuals.find(v=>v.id===id).refs.includes(ref));
+for(const v of visuals){assert(v.source.startsWith('https://rules.wfdf.sport/'));const png=fs.readFileSync(path.join(__dirname,'../dist',v.image));assert.equal(png.subarray(1,4).toString(),'PNG');assert(png.readUInt32BE(16)>300);assert(png.readUInt32BE(20)>200);}
+console.log('PASS: grouped rule sections preserve all exceptions without duplicate rows; 24 official hand signals and 14 pull panels have valid local assets and attributed sources.');
