@@ -18,7 +18,9 @@
 ## 界面与规则查询
 
 - 顶部切换「Tiga战术库 / WFDF」，分别保留两种模式的查询。战术以场地图 Gallery 展示；主页不显示编辑按钮和同步状态，编辑入口保留在「···」更多菜单中。
-- 球员人数合并到绘图工具栏；编辑器固定在视口内，手机可直接看场地、播放、步骤和本步要点，其他表单由「编辑详情」展开。
+- 手机打开战术默认查看，点「编辑」才启用绘图和人数调整；新建草稿直接进入编辑。播放栏固定在页面下方，选中球员或弧线不会改变场地尺寸。详情独立整页阅读，保存后返回查看。
+- 手机 AI 问规则使用整页对话，返回后保留聊天；条款引用在回答内展开，长条文可进入全文页后返回。浏览器返回键逐层退出全文、详情、编辑或新建步骤；未保存修改离开前可继续编辑、保存或放弃。分享、编辑解锁和删除确认使用底部短面板。
+- 手机输入框保持 16px 字号，输入区域随可见视口调整；保留原生缩放和横屏全屏。桌面继续使用战术编辑器和规则问答底部窗口。
 - 打开战术，顶部「···」可删除已存在的战术或手动复制专属链接。删除需编辑权限和确认，在服务器保留软删除记录。
 - WFDF 规则为本站保存的文字，按中文、英文、条款号和章节搜索；来源和章节作为搜索栏内的限定，常用标签放在下方。空搜索先显示章节目录；结果按小节连续阅读，保留条款层级、条件和例外，统一切换中英对照。版本与来源通过右上角 ⓘ 查看，不嵌入或部署 PDF。
 - 相关查询显示 WFDF 官方 24 种手势图和 14 张开盘情形图；点击缩略图放大阅读，开盘图保留飞行/滚动/轴心图例。标签「手势图」可浏览全部手势；图片本地保存，来源记录在 `dist/wfdf/visuals.json`。
@@ -61,6 +63,10 @@ python3 -B scripts/build-rule-visuals.py /path/to/hand-signals.pdf /path/to/pull
 python3 -B -m unittest discover -s tests
 node scripts/verify-catalog.cjs
 node scripts/verify-rules.cjs
+node scripts/verify-playback.cjs
+node scripts/verify-mobile-navigation.cjs
+node --check dist/mobile-ui.js
+node --check dist/ai-ui.js
 node --check dist/app.js
 ```
 

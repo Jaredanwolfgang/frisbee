@@ -17,6 +17,7 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast,prepareCreation}){
  function showGeneration(){requestEdit(()=>{prepareCreation?.();openSetup('ai');});}
  $('#ai-new-btn').onclick=showGeneration;$('#ai-create-btn').onclick=()=>mode('ai');$('#manual-create-btn').onclick=()=>mode('manual');
  document.querySelectorAll('[data-create-kind]').forEach(el=>el.addEventListener('click',()=>mode(creationMode)));
+ MobileUI.registerBack('create-dialog',()=>{if(generation){generation.abort();return false;}if(creationPage!=='setup'){const index=pageOrder.indexOf(creationPage);page(pageOrder[index-1],-1);return false;}$('#create-dialog').close();return true;});
  $('#create-cancel').onclick=()=>$('#create-dialog').close();$('#create-dialog').addEventListener('close',()=>generation?.abort());
  $('#creation-back').onclick=()=>{if(generation)return;$('#ai-tactic-result').textContent='';const index=pageOrder.indexOf(creationPage);if(index>0)page(pageOrder[index-1],-1);};
  for(const id of ['create-offense','create-defense','create-preset'])$('#'+id).addEventListener('input',()=>{if(reviewSignature!==null){clearGenerated();confirmState();}});
@@ -29,8 +30,9 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast,prepareCreation}){
  $('#ai-confirm-generate').onclick=async()=>{if(generation||reviewSignature!==sourceSnapshot())return;const description=$('#ai-formal-description').value.trim();if(!description)return;clearGenerated();$('#ai-tactic-result').textContent='正在按确认的说明画图并检查布局…';try{const data=await generationRequest('tactic',{...settings(),description,confirmed:true});if(data.status==='clarify'){reviewQuestions=true;reviewBaseline=description;showQuestions(data.questions||[]);$('#ai-tactic-result').textContent='请补充说明中的待确认信息。';confirmState();return;}if(data.status!=='ready'||!data.tactic)throw Error('没有收到完整草稿，请重试。');generated=data.tactic;showQuestions([]);$('#ai-tactic-result').textContent='';preview();$('#ai-open-draft').hidden=false;page('preview');}catch(error){$('#ai-tactic-result').textContent=error.name==='AbortError'?'生成已停止或超时，确认的说明仍保留。':error.message;}};
  $('#ai-open-draft').onclick=()=>{if(!generated)return;const draft=generated;$('#create-dialog').close();onDraft(draft);};
  const sheet=$('#ai-chat-dialog'),sheetToggle=$('#ai-rules-btn');let sheetOpen=false,sheetHideTimer=0;
- function fitSheet(){const viewport=window.visualViewport,mobile=window.matchMedia('(max-width:600px)').matches;sheet.style.setProperty('--ai-visual-height',(viewport?.height||window.innerHeight)+'px');sheet.style.setProperty('--ai-keyboard-offset',(mobile&&viewport?Math.max(0,window.innerHeight-viewport.height-viewport.offsetTop):0)+'px');}
- function closeSheet(returnFocus=true){if(!sheetOpen)return;sheetOpen=false;sheet.classList.remove('is-open');sheet.inert=true;sheet.setAttribute('aria-hidden','true');sheetToggle.setAttribute('aria-expanded','false');if(returnFocus&&!$('#rules-header-actions').hidden)sheetToggle.focus({preventScroll:true});clearTimeout(sheetHideTimer);sheetHideTimer=setTimeout(()=>{if(!sheetOpen)sheet.hidden=true;},230);}
+ function syncPhoneSheet(){const phone=MobileUI.isPhone();document.body.classList.toggle('phone-ai-open',phone&&sheetOpen);document.querySelector('.workspace').inert=phone&&sheetOpen;$('#ai-chat-close').setAttribute('aria-label',phone?'返回规则':'收起 AI 问答');if(phone&&sheetOpen)MobileUI.enter('rules-ai',()=>{closeSheet(false);return true;});}
+ function fitSheet(){syncPhoneSheet();const viewport=window.visualViewport,mobile=window.matchMedia('(max-width:600px)').matches;sheet.style.setProperty('--ai-visual-height',(viewport?.height||window.innerHeight)+'px');sheet.style.setProperty('--ai-keyboard-offset',(mobile&&viewport?Math.max(0,window.innerHeight-viewport.height-viewport.offsetTop):0)+'px');}
+ function closeSheet(returnFocus=true){if(!sheetOpen)return;sheetOpen=false;syncPhoneSheet();MobileUI.leave('rules-ai');sheet.classList.remove('is-open');sheet.inert=true;sheet.setAttribute('aria-hidden','true');sheetToggle.setAttribute('aria-expanded','false');if(returnFocus&&!$('#rules-header-actions').hidden)sheetToggle.focus({preventScroll:true});clearTimeout(sheetHideTimer);sheetHideTimer=setTimeout(()=>{if(!sheetOpen)sheet.hidden=true;},230);}
  function openSheet(){clearTimeout(sheetHideTimer);sheetOpen=true;sheet.hidden=false;sheet.inert=false;sheet.setAttribute('aria-hidden','false');sheetToggle.setAttribute('aria-expanded','true');fitSheet();requestAnimationFrame(()=>{if(!sheetOpen)return;void sheet.offsetHeight;sheet.classList.add('is-open');scrollChat();if(window.matchMedia('(min-width:701px)').matches)$('#ai-question').focus({preventScroll:true});else $('#ai-chat-title').focus({preventScroll:true});});}
  sheetToggle.onclick=()=>sheetOpen?closeSheet():openSheet();$('#ai-chat-close').onclick=()=>closeSheet();
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&sheetOpen&&!document.querySelector('dialog[open]')){event.preventDefault();closeSheet();}});
@@ -40,8 +42,9 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast,prepareCreation}){
  $('#ai-chat-clear').onclick=()=>{if(chatRequest)return;history=[];turns.clear();$('#ai-messages').innerHTML='';$('#ai-chat-intro').hidden=false;};
  function scrollChat(){const box=$('#ai-chat-scroll');box.scrollTop=box.scrollHeight;}
  function renderSourceButtons(turn){
+  const limit=MobileUI.isPhone()?3:8;
   const box=document.querySelector('[data-turn="'+turn.id+'"] .ai-references');
-  box.innerHTML=(turn.sources.length?'<span>检索依据</span>'+turn.sources.slice(0,8).map(s=>'<button data-ai-source="'+turn.id+'" data-ai-citation="'+escape(s.citation)+'">'+escape(s.citation)+'</button>').join('')+(turn.sources.length>8?'<button data-ai-all-sources="'+turn.id+'">全部 '+turn.sources.length+' 条</button>':''):'')+(turn.visuals.length?'<div class="ai-gesture-row">'+turn.visuals.map(v=>'<button data-ai-visual="'+turn.id+'" data-visual-id="'+escape(v.id)+'"><img src="'+escape(v.image)+'" alt="'+escape(v.title)+'" loading="lazy"><span>'+escape(v.title)+'</span></button>').join('')+'</div>':'');
+  box.innerHTML=(turn.sources.length?'<span>检索依据</span>'+turn.sources.slice(0,limit).map(s=>'<button data-ai-source="'+turn.id+'" data-ai-citation="'+escape(s.citation)+'">'+escape(s.citation)+'</button>').join('')+(turn.sources.length>limit?'<button data-ai-all-sources="'+turn.id+'">全部 '+turn.sources.length+' 条</button>':''):'')+(turn.visuals.length?'<div class="ai-gesture-row">'+turn.visuals.map(v=>'<button data-ai-visual="'+turn.id+'" data-visual-id="'+escape(v.id)+'"><img src="'+escape(v.image)+'" alt="'+escape(v.title)+'" loading="lazy"><span>'+escape(v.title)+'</span></button>').join('')+'</div>':'');
  }
  function finishAnswer(turn,data){
   const article=document.querySelector('[data-turn="'+turn.id+'"]'),body=article.querySelector('.ai-answer'),state=article.querySelector('.ai-response-status');
@@ -65,7 +68,7 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast,prepareCreation}){
  $('#ai-chat-form').onsubmit=async event=>{
   event.preventDefault();if(chatRequest)return;
   const question=$('#ai-question').value.trim();if(!question)return;
-  $('#ai-chat-intro').hidden=true;$('#ai-question').value='';const id=String(++turnNumber),turn={id,question,sources:[],visuals:[],answer:'',started:performance.now()};turns.set(id,turn);
+  $('#ai-chat-intro').hidden=true;$('#ai-question').value='';if(MobileUI.isPhone())$('#ai-question').blur();const id=String(++turnNumber),turn={id,question,sources:[],visuals:[],answer:'',started:performance.now()};turns.set(id,turn);
   $('#ai-messages').insertAdjacentHTML('beforeend','<article class="ai-user"><p>'+escape(question)+'</p></article><article class="ai-assistant" data-turn="'+id+'"><div class="ai-response-status">正在检索条款…</div><div class="ai-answer" aria-live="polite"></div><div class="ai-references"></div></article>');
   const article=document.querySelector('[data-turn="'+id+'"]'),body=article.querySelector('.ai-answer'),state=article.querySelector('.ai-response-status');
   const controller=new AbortController();chatRequest=controller;const timer=setTimeout(()=>controller.abort(),140000);$('#ai-chat-send').disabled=true;$('#ai-chat-stop').hidden=false;$('#ai-chat-clear').disabled=true;scrollChat();let completed=false;
@@ -84,8 +87,13 @@ function initFrisbeeAI({requestEdit,onDraft,drawFrame,toast,prepareCreation}){
  };
  document.addEventListener('click',event=>{
   const quick=event.target.closest('[data-ai-question]');if(quick){$('#ai-question').value=quick.dataset.aiQuestion;$('#ai-question').focus();}
-  const source=event.target.closest('[data-ai-source],[data-ai-all-sources]');
-  if(source){const turn=turns.get(source.dataset.aiSource||source.dataset.aiAllSources);if(!turn)return;const selected=turn.sources.find(s=>s.citation===source.dataset.aiCitation);let list=turn.sources;
+  const source=event.target.closest('[data-ai-source],[data-ai-all-sources],[data-ai-read-source]');
+  if(source){const turn=turns.get(source.dataset.aiSource||source.dataset.aiAllSources||source.dataset.aiReadSource);if(!turn)return;const selected=turn.sources.find(s=>s.citation===source.dataset.aiCitation);let list=turn.sources;
+   if(selected&&MobileUI.isPhone()&&!source.dataset.aiReadSource){
+    const article=document.querySelector('[data-turn="'+turn.id+'"]');let preview=article.querySelector('.ai-source-inline');if(!preview){preview=document.createElement('div');preview.className='ai-source-inline';article.append(preview);}if(preview.dataset.citation===selected.citation){preview.remove();return;}
+    const full=selected.zh||selected.en,limit=selected.zh?100:280,excerpt=full.length>limit;preview.dataset.citation=selected.citation;
+    preview.innerHTML='<details open><summary>'+escape(selected.citation)+' · '+escape(selected.title)+'</summary>'+(excerpt?'<small>原文节选 · 全文包含适用条件和例外</small>':'')+'<p'+(!selected.zh?' lang="en"':'')+'>'+escape(full.slice(0,limit))+(excerpt?'…':'')+'</p>'+(excerpt?'<small>以上为原文节选，请阅读全文核对条件和例外。</small>':'')+'<button data-ai-read-source="'+turn.id+'" data-ai-citation="'+escape(selected.citation)+'">阅读全文与相关条款 →</button></details>';preview.scrollIntoView({block:'nearest',behavior:'smooth'});return;
+   }
    if(selected){const prefix=selected.doc==='core'?selected.ref.split('.').slice(0,2).join('.'):null;list=prefix?turn.sources.filter(s=>s.doc==='core'&&(s.ref===prefix||s.ref.startsWith(prefix+'.'))):[selected];}
    $('#ai-source-body').innerHTML=list.map(s=>'<article'+(s.citation===source.dataset.aiCitation?' class="ai-source-highlight"':'')+'><h3>'+escape(s.citation)+' · '+escape(s.title)+'</h3><p>'+escape(s.zh||s.en)+'</p>'+(s.zh&&s.en?'<details><summary>English 原文</summary><p lang="en">'+escape(s.en)+'</p></details>':'')+'<a href="'+escape(s.url)+'" target="_blank" rel="noopener noreferrer">来源 ↗</a></article>').join('');$('#ai-source-dialog').showModal();
   }
