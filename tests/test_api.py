@@ -99,6 +99,34 @@ class APITest(unittest.TestCase):
             frame['routes'] = []
         self.assertEqual(self.request('PUT', '/api/tactics/team-custom', {'tactic': doc, 'baseVersion': 0}, auth=True)[0], 400)
 
+    def test_curved_pass_is_shared_persisted_and_imported(self):
+        doc = self.custom('curve-test')
+        route = {'id': 'curve-route', 'player': doc['frames'][0]['players'][0]['id'],
+                 'kind': 'pass', 'points': [], 'end': {'x': 700, 'y': 280},
+                 'bend': {'x': 450, 'y': 140}}
+        doc['frames'][0]['routes'] = [route]
+        body = {'tactic': doc, 'baseVersion': 0}
+        self.assertEqual(self.request('PUT', '/api/tactics/curve-test', body)[0], 401)
+        self.assertEqual(self.request('PUT', '/api/tactics/curve-test', body, auth=True)[0], 200)
+        saved = self.request('GET', '/api/tactics/curve-test')[1]['tactic']
+        self.assertEqual(saved['frames'][0]['routes'], [route])
+        reopened = API.Store(self.path, SEEDS)
+        with reopened.transaction() as db:
+            stored = json.loads(db.execute("SELECT document FROM tactics WHERE id='curve-test'").fetchone()[0])
+        self.assertEqual(stored['frames'][0]['routes'], [route])
+        self.assertEqual(self.request('POST', '/api/import', {'tactics': [stored]}, auth=True)[1]['skipped'], 1)
+        straight = copy.deepcopy(saved)
+        del straight['frames'][0]['routes'][0]['bend']
+        self.assertNotEqual(API.canonical(straight), API.canonical(saved))
+        for invalid in [None, {'x': 10, 'y': 100}, {'x': True, 'y': 100}, {'x': 100, 'y': '100'}]:
+            bad = copy.deepcopy(saved)
+            bad['frames'][0]['routes'][0]['bend'] = invalid
+            self.assertEqual(self.request('PUT', '/api/tactics/curve-test', {'tactic': bad, 'baseVersion': 1}, auth=True)[0], 400)
+        for kind, via in [('run', []), ('pass', [{'x': 400, 'y': 200}])]:
+            bad = copy.deepcopy(saved)
+            bad['frames'][0]['routes'][0].update(kind=kind, points=via)
+            self.assertEqual(self.request('PUT', '/api/tactics/curve-test', {'tactic': bad, 'baseVersion': 1}, auth=True)[0], 400)
+
     def test_cookie_login_logout_and_csrf(self):
         self.assertEqual(self.request('POST', '/api/login', {'password': 'wrong'})[0], 401)
         self.assertEqual(self.request('POST', '/api/login', {'password': KEY}, extra={'Origin': 'https://another.site'})[0], 403)

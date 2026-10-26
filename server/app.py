@@ -132,8 +132,13 @@ def tactic(raw):
             via = r.get('points')
             if not isinstance(via, list) or len(via) > 12:
                 raise APIError(400, '路线中间点无效。')
-            routes.append({'id': r['id'], 'player': r['player'], 'kind': r['kind'],
-                           'end': point(r.get('end')), 'points': [point(p) for p in via]})
+            clean_route = {'id': r['id'], 'player': r['player'], 'kind': r['kind'],
+                           'end': point(r.get('end')), 'points': [point(p) for p in via]}
+            if 'bend' in r:
+                if r['kind'] != 'pass' or via:
+                    raise APIError(400, '弧线仅支持无折点的传盘路线。')
+                clean_route['bend'] = point(r['bend'])
+            routes.append(clean_route)
         out['frames'].append({'name': text(f.get('name'), 100), 'notes': text(f.get('notes'), 3000),
                               'players': players, 'disc': point(f.get('disc')), 'routes': routes})
     return out

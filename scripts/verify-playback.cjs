@@ -19,3 +19,14 @@ const broken=JSON.parse(JSON.stringify(drill));broken.frames[0].players[0].x+=50
 // Legacy records without an explicit kind still receive the right playback behavior.
 const legacy={...drill};delete legacy.kind;assert.equal(playback.nextIndex(legacy,3,true),0);
 console.log('PASS: three continuous pendulum rounds, correct holders and receiving points; single-play stop, tactic isolation and reset detection.');
+
+vm.runInContext('globalThis.geometry=RouteGeometry;',ctx);
+const geometry=ctx.geometry,plain={points:[],end:{x:800,y:280}},curved={...plain,bend:{x:500,y:100}},start={x:200,y:280};
+const point=(p,x,y)=>{assert(Math.abs(p.x-x)<1e-8);assert(Math.abs(p.y-y)<1e-8);};
+point(geometry.at(start,curved,0),200,280);point(geometry.at(start,curved,.5),500,100);point(geometry.at(start,curved,1),800,280);
+assert.equal(geometry.path(start,curved),'M200 280 Q500 -80 800 280');
+assert.equal(geometry.path(start,plain),'M200 280 L800 280');point(geometry.at(start,plain,.5),500,280);
+const legacyRoute={points:[{x:200,y:100}],end:{x:800,y:100}};
+assert.equal(geometry.path(start,legacyRoute),'M200 280 L200 100 L800 100');point(geometry.at(start,legacyRoute,180/780),200,100);
+point(geometry.at(start,{points:[],end:start},.5),200,280);
+console.log('PASS: curved SVG and playback share exact start, bend and end; existing straight and waypoint routes unchanged.');
