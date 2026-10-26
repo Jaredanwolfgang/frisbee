@@ -23,6 +23,7 @@ services:
     volumes:
       - ./server:/app:ro
       - ./dist/wfdf:/rules:ro
+      - ./dist/knowledge:/knowledge:ro
       - ./data:/data
     tmpfs:
       - /tmp

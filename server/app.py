@@ -348,10 +348,10 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
         def ai_dispatch(self, path):
             if path == '/api/ai/status' and self.command == 'GET':
                 return self.send(200, {'enabled': ai_service is not None, 'text': True, 'speech': False})
-            if self.command != 'POST' or path not in ('/api/ai/tactic', '/api/ai/outline', '/api/ai/rules'):
+            if self.command != 'POST' or path not in ('/api/ai/tactic', '/api/ai/outline', '/api/ai/coach', '/api/ai/rules'):
                 raise APIError(404, 'AI 接口不存在。')
             self.require_same_origin()
-            if path in ('/api/ai/tactic','/api/ai/outline'):
+            if path in ('/api/ai/tactic','/api/ai/outline','/api/ai/coach'):
                 self.require_editor()
             if ai_service is None:
                 raise APIError(503, 'AI 暂未配置；仍可手动画图和直接检索规则。')
@@ -359,11 +359,13 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
                 ai_size = int(self.headers.get('Content-Length', '0'))
             except ValueError:
                 raise APIError(400, '请求长度无效。') from None
-            if ai_size > 32768:
+            if ai_size > (65536 if path == '/api/ai/coach' else 32768):
                 raise APIError(413, 'AI 请求过长，请缩短描述。')
             data = self.body()
             ip = self.headers.get('X-Real-IP', self.client_address[0])
             try:
+                if path == '/api/ai/coach':
+                    return self.send(200, ai_service.coach(data, ip))
                 if path == '/api/ai/outline':
                     return self.send(200, ai_service.outline(data, ip))
                 if path == '/api/ai/tactic':

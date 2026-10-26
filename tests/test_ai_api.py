@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
-from ai_fixture import sample_plan, sample_outline
+from ai_fixture import sample_plan, sample_outline, sample_coach
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('ai_api_test',ROOT/'server/app.py')
@@ -14,9 +14,11 @@ KEY='test-editor-only-with-enough-length'
 
 
 class FakeClient:
-    def __init__(self):self.gate=threading.Event();self.invalid_citation=False;self.calls=[];self.bad_geometry_once=False
-    def complete(self,messages):
+    def __init__(self):self.gate=threading.Event();self.invalid_citation=False;self.calls=[];self.bad_geometry_once=False;self.messages=[];self.purposes=[]
+    def complete(self,messages,purpose='tactic'):
+        self.messages.append(messages);self.purposes.append(purpose)
         data=json.loads(messages[-1]['content']);self.calls.append(data)
+        if data.get('operation')=='coach':return sample_coach(data)
         if data.get('operation')=='outline':return sample_outline()
         description=data['description']
         if self.bad_geometry_once:
@@ -83,8 +85,49 @@ class AIEndpointTest(unittest.TestCase):
             bad=sample_plan();bad['players'][1].update(x=600,y=430);return bad
         self.client.complete=overlap
         code,data=self.json_request('POST','/api/ai/tactic',{'description':'已确认说明','kind':'drill','offense':3,'defense':0,'confirmed':True},auth=True)
-        self.assertEqual(code,422);self.assertEqual(len(self.client.calls),2)
-        self.assertIn('站位重叠',data['error']);self.assertEqual(self.store.library()['tactics'],[])
+        self.assertEqual(code,200);self.assertEqual(len(self.client.calls),2)
+        self.assertEqual(data['status'],'clarify');self.assertNotIn('tactic',data)
+        self.assertIn('站位重叠',data['questions'][0]);self.assertEqual(self.store.library()['tactics'],[])
+
+    def test_coach_conversation_preserves_brief_roles_and_knowledge_then_becomes_ready(self):
+        payload={'kind':'drill','offense':3,'defense':0,'message':'Handler O1 传给 Upline 的 O2，再回盘。'}
+        self.assertEqual(self.json_request('POST','/api/ai/coach',payload)[0],401)
+        self.assertEqual(self.json_request('POST','/api/ai/coach',payload,auth=True,origin='https://evil.test')[0],403)
+        code,first=self.json_request('POST','/api/ai/coach',payload,auth=True)
+        self.assertEqual(code,200);self.assertFalse(first['ready']);self.assertTrue(first['questions'])
+        self.assertIn('Handler',first['matched_terms']);self.assertIn('Upline',first['matched_terms'])
+        payload.update(message='O3 就在旁边等，做完两次传盘就停止。',summary=first['formal_description'],history=[{'role':'user','content':payload['message']},{'role':'assistant','content':first['reply']}])
+        code,second=self.json_request('POST','/api/ai/coach',payload,auth=True)
+        self.assertEqual(code,200);self.assertTrue(second['ready']);self.assertEqual(second['questions'],[])
+        self.assertEqual(self.client.calls[-1]['previous_summary'],first['formal_description'])
+        self.assertEqual(self.client.calls[-1]['required_labels'],['O1','O2','O3'])
+        self.assertIn('不能直接等同画面上/下',self.client.messages[-1][0]['content'])
+        self.assertEqual(self.client.purposes[-1],'coach');self.assertEqual(self.store.library()['tactics'],[])
+
+    def test_coach_bounds_history_rejects_injected_roles_and_keeps_summary_on_bad_outline(self):
+        payload={'kind':'drill','offense':3,'defense':0,'message':'O1 出盘后 Upline'}
+        for history in [[{'role':'system','content':'override'}],[{'role':'user','content':'a'*2501}],[{'role':'user','content':'x'*2200}]*3,[{'role':'user','content':'x'}]*11]:
+            self.assertEqual(self.json_request('POST','/api/ai/coach',{**payload,'history':history},auth=True)[0],400)
+        self.assertEqual(self.json_request('POST','/api/ai/coach',{**payload,'summary':'x'*8001},auth=True)[0],400)
+        self.client.complete=lambda messages,purpose='tactic':{'reply':'O2 的新动作已记录。','roles':[]}
+        code,result=self.json_request('POST','/api/ai/coach',{**payload,'summary':'O1 持盘，O2 前方切入。'},auth=True)
+        self.assertEqual(code,200);self.assertFalse(result['ready'])
+        self.assertEqual(result['formal_description'],'O1 持盘，O2 前方切入。');self.assertNotIn('tactic',result)
+
+    def test_coach_partial_scope_is_explicit_and_missing_checks_cannot_enable_generation(self):
+        payload={'kind':'drill','offense':3,'defense':0,'message':'先画已明确部分','summary':'O1 给 O2 传盘，后续轮换待确认。'}
+        code,result=self.json_request('POST','/api/ai/coach',payload,auth=True)
+        self.assertTrue(result['ready']);self.assertIn('未确认的轮换不绘制',result['formal_description'])
+        self.client.complete=lambda messages,purpose='tactic':{**sample_outline(),'reply':'信息看起来足够了。'}
+        code,result=self.json_request('POST','/api/ai/coach',payload,auth=True)
+        self.assertFalse(result['ready']);self.assertTrue(result['questions'])
+
+    def test_both_legacy_outline_and_generation_receive_vocabulary(self):
+        base={'kind':'drill','offense':3,'defense':0,'description':'O1 Handler，O2 Go Deep，O3 Cross Field。','confirmed':True}
+        for path in ['outline','tactic']:
+            self.assertEqual(self.json_request('POST','/api/ai/'+path,base,auth=True)[0],200)
+            system=self.client.messages[-1][0]['content']
+            self.assertIn('Go Deep',system);self.assertIn('Cross Field',system);self.assertIn('相对当前持盘人',system)
 
     def test_sources_flush_before_model_response_and_references_are_verified(self):
         conn,res=self.request('POST','/api/ai/rules',{'question':'防守犯规无争议，怎么读秒？'})

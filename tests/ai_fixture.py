@@ -20,6 +20,17 @@ def sample_outline():
             'ending':'完成两次传盘后结束，不自动循环。','assumptions':['按提及顺序对应 O1、O2、O3。'],'questions':[]}
 
 
+def sample_coach(data):
+    raw=sample_outline()
+    clear=bool(data.get('previous_summary')) or '其余人' in data['message']
+    raw.update(reply='已保留 O1、O2 的分工。当前动作已明确，可以核对方案后生成。' if clear else 'O1 是持盘 Handler，O2 向前接应。请确认 O3 是否在旁边等待？',
+               checks={'disc_holder':'O1','sequence_resolved':clear,'space_resolved':clear})
+    if not clear:raw['questions']=['O3 是否在旁边静止等待？']
+    if '先画已明确部分' in data['message']:
+        raw['steps']=raw['steps'][:1];raw['ending']='只演示已确认的一次传接，未确认的轮换不绘制，完成即停止。'
+    return raw
+
+
 class Fixture(BaseHTTPRequestHandler):
     def do_POST(self):
         data=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
@@ -30,7 +41,9 @@ class Fixture(BaseHTTPRequestHandler):
                 self.wfile.write(('data: '+json.dumps(event,ensure_ascii=False)+'\n\n').encode());self.wfile.flush();time.sleep(.05)
             self.wfile.write(b'data: [DONE]\n\n')
         else:
-            payload={'choices':[{'message':{'content':json.dumps(sample_outline() if json.loads(data['messages'][-1]['content']).get('operation')=='outline' else sample_plan(),ensure_ascii=False)},'finish_reason':'stop'}]}
+            request=json.loads(data['messages'][-1]['content']);op=request.get('operation')
+            result=sample_coach(request) if op=='coach' else sample_outline() if op=='outline' else sample_plan()
+            payload={'choices':[{'message':{'content':json.dumps(result,ensure_ascii=False)},'finish_reason':'stop'}]}
             raw=json.dumps(payload,ensure_ascii=False).encode();self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
     def log_message(self,*args):pass
 

@@ -18,6 +18,18 @@ def plan():
                      {'name':'第二传','notes':'O1 接 O2 的回盘。','moves':[{'player':1,'x':450,'y':350,'via':[]}],'pass':{'from':2,'to':1}}]}
 
 
+class KnowledgeTest(unittest.TestCase):
+    def test_aliases_boundaries_and_direction_frame(self):
+        kb=AI.TacticKnowledge(ROOT/'dist/knowledge/tactics.json')
+        matches={e['id'] for e in kb.match('O1 HANDLER; O2 cut-in，O3 go deep。再跨场传盘，回切；Open side 与 Break-side。')}
+        self.assertTrue({'handler','cut-in','go-deep','cross-field','open','break'}<=matches)
+        self.assertNotIn('open',{e['id'] for e in kb.match('reopened')})
+        self.assertNotIn('break',{e['id'] for e in kb.match('breakfast')})
+        self.assertIn('主要改变 y',kb.context('Swing'))
+        self.assertIn('不能直接等同画面上/下',kb.context('普通配合'))
+        self.assertIn('角色本身不代表',kb.context('Handler'))
+
+
 class OutlineTest(unittest.TestCase):
     def raw(self):
         return {'name':'双人传接','roles':[{'label':'O1','description':'拿盘的人'},{'label':'O2','description':'往前跑的人'}],
@@ -42,6 +54,18 @@ class OutlineTest(unittest.TestCase):
 
 
 class CompileTest(unittest.TestCase):
+    def test_named_cut_direction_and_lateral_pass_intents_are_checked(self):
+        raw=plan();move=raw['steps'][0]['moves'][0];move.update(intent='cut_in',x=750,y=250)
+        with self.assertRaises(AI.PlanGeometryError):AI.compile_plan(raw,'drill',3,0)
+        move.update(x=450,y=220);self.assertEqual(AI.compile_plan(raw,'drill',3,0)['status'],'ready')
+        for intent in ['go_deep','upline']:
+            move.update(intent=intent,x=450,y=220)
+            with self.assertRaises(AI.PlanGeometryError):AI.compile_plan(raw,'drill',3,0)
+            move.update(x=750,y=250);self.assertEqual(AI.compile_plan(raw,'drill',3,0)['status'],'ready')
+        move.update(intent='other',x=750,y=280);raw['steps'][0]['pass']['intent']='swing'
+        with self.assertRaises(AI.PlanGeometryError):AI.compile_plan(raw,'drill',3,0)
+        move.update(y=350);self.assertEqual(AI.compile_plan(raw,'drill',3,0)['status'],'ready')
+
     def test_overlapping_start_and_return_to_occupied_queue_are_rejected(self):
         bad=plan();bad['players'][1].update(x=600,y=430)
         with self.assertRaises(AI.PlanGeometryError):AI.compile_plan(bad,'drill',3,0)

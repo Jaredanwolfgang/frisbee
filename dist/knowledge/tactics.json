@@ -1,0 +1,37 @@
+{
+  "version": "2026-10-26.1",
+  "title": "Tiga 飞盘战术术语库",
+  "note": "教练术语与本系统绘图约定，不是 WFDF 规则；不同球队用法可能不同，以教练确认的含义为准。",
+  "conventions": [
+    "场地长边为 x 轴，进攻从左向右（+x），宽度为 y 轴。队员口述的左/右必须说明是面向进攻方向还是画面方向。",
+    "角色、区域、动作分开记录；Handler/Cutter 不自动产生跑线，Deep/Middle 不自动确定球员编号。",
+    "Open/Break 依赖逼防和场地参照，不能直接等同画面上/下。没说清时询问，或提出上/下的展示约定供确认。",
+    "Cut in 相对当前持盘人；Go Deep 相对进攻方向；Swing/Cross Field 主要利用宽度。不要把所有术语都画成长边前进。",
+    "编号 O1…On / D1…Dn 在整个对话中固定。先传后跑、接盘后再传拆步，盘权随传盘更新。",
+    "没有指定的精确距离、曲率不是必要缺项，可采用示意比例并明确说明；不得猜测关键接盘人、传跑先后或循环轮换。"
+  ],
+  "sources": [
+    {"id":"usau","title":"USA Ultimate · Skills, Strategy & Drills","url":"https://usaultimate.org/wp-content/uploads/2020/09/Skills-and-Drills-manual_revised2019.pdf"},
+    {"id":"mzu","title":"Mile Zero Ultimate · Ultimate Glossary","url":"https://www.milezeroultimate.com/?page_id=2303"},
+    {"id":"cts","title":"Catch the Spirit · Ultimate Glossary","url":"https://www.catchthespirit.co.uk/ultimate/ultimate-glossary"},
+    {"id":"vision","title":"Ultiworld · Strategies To Improve Field Vision","url":"https://ultiworld.com/2016/04/26/tuesday-tips-intuition-increase-field-vision/"}
+  ],
+  "entries": [
+    {"id":"handler","term":"Handler","zh":"控盘手","category":"角色","aliases":["handlers","控盘","后场","控盘手"],"meaning":"主要负责组织持盘和接应回传的角色。","diagram":"通常在盘附近或后方；角色本身不代表必须站在固定点或自动向前跑。","clarify":"有多名 Handler 时，确认谁起始持盘、谁接应。","example":"O1 持盘，O2 是接应 Handler。","sources":["usau","cts"]},
+    {"id":"cutter","term":"Cutter","zh":"跑位手","category":"角色","aliases":["cutters","跑位手","切入手"],"meaning":"利用切入和拉开创造接盘空间的角色。","diagram":"按具体动作画路线，不因 Cutter 身份自动添加一次切入。","clarify":"多名 Cutter 时确认动作顺序和对应编号。","example":"O3 是 Cutter，先 Cut in，再清空通道。","sources":["usau","vision"]},
+    {"id":"upline","term":"Upline","zh":"上线切入","category":"动作","aliases":["up line","up-line","上线","沿线切"],"meaning":"通常指 Handler 从盘附近向前切入的短距离接应。","diagram":"向进攻方向增加 x，利用持盘人前侧通道；不自动画成大范围 Go Deep。","clarify":"确认是哪名 Handler、从哪侧上线、是否接盘；不一定贴边线。","example":"O2 从 O1 身侧 Upline，接 O1 的盘。","sources":["vision"]},
+    {"id":"swing","term":"Swing","zh":"横传转移","category":"动作","aliases":["swing pass","横传","横向转移"],"meaning":"把盘横向转移，改变进攻角度。","diagram":"主要改变 y；可以接近同一纵深或略回传，不强制向前。","clarify":"确认出盘人和接盘人；Swing 本身不指定谁需要跑位。","example":"O1 Swing 给另一侧的 O2。","sources":["usau","cts"]},
+    {"id":"break","term":"Break","zh":"破逼防侧","category":"区域 / 动作","aliases":["break side","breakside","break-side","破防侧","破逼防","反侧"],"meaning":"可指被防盘人封堵的一侧，或向该侧的破逼防出盘；比赛中也可能指防守方得分。","diagram":"先确定逼防允许侧，Break 在相对另一侧；不能固定为画面上方或下方。","clarify":"是 Break-side 接应、破逼防传盘，还是防守得分？需要绘图时确认逼防方向。","example":"画面下方为 Open；O3 切到上方 Break 侧接盘。","sources":["mzu","cts"]},
+    {"id":"open","term":"Open","zh":"开放侧 / 空位","category":"区域","aliases":["open side","openside","open-side","开放侧","顺侧","空位"],"meaning":"Open side 是逼防允许的一侧；某人 is open 也可能仅表示他摆脱防守。","diagram":"根据已确认的逼防框架定位；空位描述不能自动变成一次向某侧跑动。","clarify":"Open 指开放侧，还是该队员无人防守？","example":"O2 在 Open side 回切；先确认 Open 在画面哪侧。","sources":["cts","vision"]},
+    {"id":"deep","term":"Deep","zh":"纵深 / 深区","category":"区域 / 角色","aliases":["deeps","深区","纵深","长手"],"meaning":"相对盘更靠近进攻目标端区的区域，也可能指负责深区的角色。","diagram":"通常对应更大的 x；只有明确 Go Deep / Cut Deep 才画向前深切。","clarify":"是站在 Deep 区域的人，还是要求该人跑 Deep？","example":"O3 起始在 Deep，随后 Cut in。","sources":["usau","mzu"]},
+    {"id":"middle","term":"Middle","zh":"中间 / 中段","category":"区域 / 角色","aliases":["middles","中间","中段","中场"],"meaning":"依语境指场地中路、队形中间位置，或中段接应角色。","diagram":"场地中路主要接近 y 中心；中段角色还需确定纵深，不能只凭 Middle 固定位置。","clarify":"Middle Handler、Middle Cutter，还是切回场地中间？","example":"O2 是中间 Handler，O3 从 Deep 切向中路。","sources":["usau"]},
+    {"id":"cut-in","term":"Cut in","zh":"回切 / 近切","category":"动作","aliases":["cut-in","cut in","incut","in-cut","in cut","cut under","under cut","回切","近切"],"meaning":"向持盘人方向切入，争取较近的接盘窗口。","diagram":"接盘点应比起点更接近当前持盘人；通常减小 x，但由相对盘的位置决定。","clarify":"确认切入者、持盘人和是否传给他；不把回切误作 Upline。","example":"O3 先 Go Deep 拉开，再 Cut in 接 O1 的盘。","sources":["mzu","vision"]},
+    {"id":"go-deep","term":"Go Deep","zh":"深切 / 拉长","category":"动作","aliases":["cut deep","deep cut","go-deep","深切","拉长","跑深"],"meaning":"向进攻端区方向跑，攻击纵深空间。","diagram":"主要增加 x；不默认每次 Deep 都有一传长盘。","clarify":"只是拉开，还是接长传？谁传盘？","example":"O3 Go Deep 拉开，O2 随后回切。","sources":["mzu","vision"]},
+    {"id":"cross-field","term":"Cross Field","zh":"跨场 / 大横向转移","category":"动作","aliases":["cross-field","crossfield","跨场","跨场传盘","大横传"],"meaning":"把盘或跑动转移到场地另一侧，具体是传盘还是横切取决于动词。","diagram":"主要利用宽度改变 y；不把 Cross Field 自动画成沿 x 的长传。","clarify":"是 O1 跨场传给 O2，还是 O2 横切到另一侧？","example":"O1 Cross-field pass 给另一侧 O3。","sources":["usau","cts"]},
+    {"id":"reset","term":"Reset / Dump","zh":"接应 / 回传","category":"动作","aliases":["reset","dump","回传","重置","救盘"],"meaning":"通过盘附近或后方的安全接应延续进攻。","diagram":"接应点可在侧后方，回传通常减小 x；必须明确新的持盘人。","clarify":"谁来接应？回传后是停下，还是继续 Swing？","example":"O1 Dump 给 O2，O2 再 Swing 给 O3。","sources":["usau","vision"]},
+    {"id":"clear","term":"Clear out","zh":"清空 / 让线","category":"动作","aliases":["clear","clear out","clear-out","清空","让线","清线"],"meaning":"离开接盘通道，为下一位队员留出空间。","diagram":"给清空者单独画路线，目的地与下一位的接盘通道分开。","clarify":"确认清空后到哪里，是否回队尾；不自动假设轮换。","example":"O2 没接到盘，清空到外侧，O3 再 Cut in。","sources":["vision"]},
+    {"id":"force","term":"Force / Mark","zh":"逼防 / 防盘","category":"防守","aliases":["force","mark","marker","逼防","防盘","逼正手","逼反手"],"meaning":"防盘人限制某侧的出盘，让进攻更多使用另一侧。","diagram":"防盘位置与 Open/Break 一起确定；正反手还涉及出盘手惯用手，不直接翻译成屏幕左右。","clarify":"逼哪侧？按场地哪一侧作为 Open？是否要展示防守人？","example":"D1 防 O1，允许画面下方出盘，上方是 Break。","sources":["mzu","cts"]},
+    {"id":"vertical","term":"Vertical stack","zh":"竖排","category":"阵型","aliases":["vertical","vert stack","vertical stack","竖排","纵列"],"meaning":"跑位队员沿进攻纵深排成纵列，利用两侧通道切入。","diagram":"纵列主要沿 x 展开；Handler 在盘附近，列内队员留出图标间距。","clarify":"确认 Handler 数量、切入顺序及 Open/Break 框架。","example":"两个 Handler、五个 Cutter 竖排，尾部先切。","sources":["usau","vision"]},
+    {"id":"horizontal","term":"Horizontal stack","zh":"横排","category":"阵型","aliases":["horizontal","horizontal stack","ho stack","横排"],"meaning":"跑位队员横向分布，结合纵深切入与接应配合。","diagram":"Cutter 横向沿 y 拉开，动作仍可沿 x 进深；不能把横排的名称理解为所有跑线横着走。","clarify":"确认 Handler/Cutter 数量与谁先发起切入。","example":"三个 Handler、四个 Cutter 横排，中间 Cutter 发起。","sources":["vision"]}
+  ]
+}
