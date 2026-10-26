@@ -49,6 +49,10 @@ function syncStatus(){
  $('#migrate-local').hidden=!connected||!pending.length;$('#retry-sync').hidden=connected;
 }
 function fillDraftForm(){if(!draft)return;playbackLoop=Roster.kind(draft)==='drill'&&draft.loop===true;$('#edit-name').value=draft.name;$('#edit-category').value=draft.category;$('#edit-kind').value=Roster.kind(draft);$('#edit-level').value=draft.level;$('#edit-summary').value=draft.summary;$('#edit-tags').value=draft.tags.join(', ');}
+function syncSelectionToolbar(){
+ const active=!!(canEdit&&draft&&(current().players.some(p=>p.id===selectedPlayer)||(draft.markers||[]).some(m=>m.id===selectedMarker)));
+ $('#roster-slot').classList.toggle('has-selection',active);$('#roster-controls').inert=active;$('#roster-controls').setAttribute('aria-hidden',String(active));
+}
 function permissions(){
  document.body.classList.toggle('read-only',!canEdit);$('#access-btn').textContent=canEdit?'关闭编辑':'开启编辑';
  $('#editor-unlock-btn').hidden=canEdit;$('#save-btn').hidden=!canEdit;$('#save-btn').disabled=saving;$('#save-btn').textContent=saving?'保存中…':'保存';
@@ -59,6 +63,7 @@ function permissions(){
  $$('[data-count-team]').forEach(b=>{if(!draft){b.disabled=true;return;}const f=current(),off=f.players.filter(p=>p.team==='offense').length,def=f.players.length-off,d=Number(b.dataset.delta),n=f.players.length+d,team=(b.dataset.countTeam==='offense'?off:def)+d;b.disabled=!canEdit||saving||team<0||team>7||n<1||n>(Roster.kind(draft)==='drill'?7:14);});
  $('#undo-btn').disabled=!canEdit||saving||!history.length;$('#add-frame').disabled=!canEdit||saving||!!draft&&draft.frames.length>=24;$('#delete-frame').disabled=!canEdit||saving||!draft||draft.frames.length===1;
  $('#tool-hint').textContent=!canEdit?'只读查看 · 可播放、切换步骤和全屏展示':tool==='move'?'拖动排站位；点球员可设持盘人或移除':tool==='marker'?'点场地放置角标；拖动调整位置，点选后命名或移除':'点球员，再点终点；也可直接拖出路线';
+ syncSelectionToolbar();
  const countLabel=draft?current().players.length+' 人 · ':'';$('#edit-status').textContent=countLabel+(!canEdit?'只读查看':dirty?'未保存':draft?._version?'已保存到服务器':'保存后队友可见');
 }
 async function loadLibrary({quiet=false}={}){
