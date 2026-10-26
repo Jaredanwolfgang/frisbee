@@ -64,5 +64,20 @@ const Roster = (() => {
     delete t.formation;
     return t;
   }
-  return {max, number, label, kind, create, resize, remove};
+  const formations={
+    vertical:{name:'竖排 2–5',points:[[245,335],[210,150],[420,265],[495,265],[570,265],[645,265],[720,265]]},
+    horizontal:{name:'横排 3–4',points:[[250,280],[205,130],[205,430],[560,100],[560,220],[560,340],[560,460]]},
+    zone:{name:'区域 3–3–1',points:[[310,250],[330,350],[400,280],[500,90],[500,465],[610,285],[800,280]]}
+  };
+  function arrange(frame,key,team){
+    if(!formations[key]||!['offense','defense'].includes(team))throw new Error('请选择有效的站位模板。');
+    const f=copy(frame),group=f.players.filter(p=>p.team===team).sort((a,b)=>number(a)-number(b));
+    if(group.length!==7)throw new Error('这组站位模板需要 7 名队员，请先调整人数。');
+    const holder=f.players.reduce((a,b)=>Math.hypot(a.x-f.disc.x,a.y-f.disc.y)<=Math.hypot(b.x-f.disc.x,b.y-f.disc.y)?a:b);
+    group.forEach((p,i)=>{[p.x,p.y]=formations[key].points[i];});
+    if(holder.team===team)f.disc={x:Math.min(975,holder.x+22),y:holder.y};
+    f.routes=[];
+    return f;
+  }
+  return {max, number, label, kind, create, resize, remove, formations, arrange};
 })();
