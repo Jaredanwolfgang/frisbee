@@ -450,19 +450,23 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
                 return self.stats_login()
             if segments == ['logout'] and self.command == 'POST':
                 return self.stats_logout()
-            if len(segments) == 3 and segments[0] == 'games' and segments[2] == 'comments' and STATS_MODULE.GAME_ID.fullmatch(segments[1]):
+            if len(segments) == 3 and segments[0] in ('games', 'trainings') and segments[2] == 'comments' and STATS_MODULE.GAME_ID.fullmatch(segments[1]):
                 if self.command not in ('POST', 'DELETE'):
                     raise APIError(404, '统计接口不存在。')
                 self.require_same_origin()
                 pid = self.player_identity()
                 if pid is None:
-                    raise APIError(401, '请先用盘名登录，再写赛后总结。')
+                    raise APIError(401, '请先用盘名登录，再写总结。')
                 has_body = self.headers.get('Content-Length', '0').strip() not in ('', '0')
                 data = self.body() if self.command == 'POST' else {}
                 try:
+                    if segments[0] == 'games':
+                        if self.command == 'POST':
+                            return self.send(200, stats_store.add_comment(pid, data, game_id=segments[1]))
+                        return self.send(200, stats_store.delete_comment(pid, game_id=segments[1]))
                     if self.command == 'POST':
-                        return self.send(200, stats_store.add_comment(segments[1], pid, data))
-                    return self.send(200, stats_store.delete_comment(segments[1], pid))
+                        return self.send(200, stats_store.add_comment(pid, data, training_id=segments[1]))
+                    return self.send(200, stats_store.delete_comment(pid, training_id=segments[1]))
                 except STATS_MODULE.StatsError as error:
                     raise APIError(error.status, error.message) from None
             if self.command not in ('POST', 'PUT', 'DELETE'):

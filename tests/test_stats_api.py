@@ -263,6 +263,43 @@ class StatsAPITest(unittest.TestCase):
         self.assertEqual(data['game']['video'], 'https://b23.tv/abc')
         self.assertEqual(self.request('GET', '/api/stats', auth=False)[1]['games'][0]['video'], 'https://b23.tv/abc')
 
+    def test_trainings_attendance_drills_scrimmage_and_reviews(self):
+        a, b = self.player('疾风', 7), self.player('芒果', 3, 'female')
+        code, data = self.request('POST', '/api/stats/trainings', {'name': '周二训练'})
+        self.assertEqual(code, 200, data)
+        tid = data['training']['id']
+        self.assertEqual((data['training']['warmup'], data['training']['attendees'], data['training']['drills'], data['training']['games'], data['training']['comments']), ('', [], [], [], []))
+        self.assertEqual(self.request('PUT', f'/api/stats/trainings/{tid}', {})[0], 400)
+        self.assertEqual(self.request('PUT', f'/api/stats/trainings/{tid}', {'attendees': [a, a]})[0], 400)
+        self.assertEqual(self.request('PUT', f'/api/stats/trainings/{tid}', {'attendees': [999]})[0], 400)
+        self.assertEqual(self.request('PUT', f'/api/stats/trainings/{tid}', {'drills': ['drill-pendulum', 'drill-pendulum']})[0], 400)
+        self.assertEqual(self.request('PUT', f'/api/stats/trainings/{tid}', {'drills': ['missing-drill']})[0], 400)
+        code, data = self.request('PUT', f'/api/stats/trainings/{tid}', {'warmup': '动态拉伸 10 分钟', 'attendees': [a, b], 'drills': ['drill-pendulum']})
+        self.assertEqual(code, 200)
+        self.assertEqual((data['training']['warmup'], data['training']['attendees'], [d['name'] for d in data['training']['drills']]), ('动态拉伸 10 分钟', [a, b], ['二人钟摆']))
+        # A scrimmage lives inside its training and never shows in the official game list.
+        self.assertEqual(self.request('POST', '/api/stats/games', {'name': 'x', 'trainingId': 'missing'})[0], 404)
+        code, data = self.request('POST', '/api/stats/games', {'name': '队内对抗', 'trainingId': tid})
+        self.assertEqual(code, 200)
+        scrimmage = data['game']['id']
+        listed = self.request('GET', '/api/stats', auth=False)[1]
+        self.assertEqual(listed['games'], [])
+        self.assertEqual([g['id'] for g in listed['trainings'][0]['games']], [scrimmage])
+        self.request('POST', '/api/stats/games', {'name': '正式赛'})
+        self.assertEqual([g['name'] for g in self.request('GET', '/api/stats', auth=False)[1]['games']], ['正式赛'])
+        # Training reviews use the player identity, same as post-game reviews.
+        self.assertEqual(self.request('POST', f'/api/stats/trainings/{tid}/comments', {'text': 'x'})[0], 401)
+        cookie = self.login('疾风')
+        code, data, _ = self.exchange('POST', f'/api/stats/trainings/{tid}/comments', {'text': '接盘节奏有进步'}, auth=False, extra={'Cookie': cookie})
+        self.assertEqual(code, 200, data)
+        self.assertEqual([c['text'] for c in self.request('GET', '/api/stats', auth=False)[1]['trainings'][0]['comments']], ['接盘节奏有进步'])
+        # Deleting the training removes it and its scrimmage from the snapshot.
+        self.assertEqual(self.request('DELETE', f'/api/stats/trainings/{tid}')[0], 200)
+        data = self.request('GET', '/api/stats', auth=False)[1]
+        self.assertEqual(data['trainings'], [])
+        self.assertEqual([g['name'] for g in data['games']], ['正式赛'])
+        self.assertEqual(self.request('PUT', f'/api/stats/trainings/{tid}', {'warmup': 'x'})[0], 404)
+
     def test_tactic_library_untouched_by_stats_tables(self):
         self.player('疾风', 7)
         data = self.request('GET', '/api/tactics', auth=False)[1]

@@ -12,11 +12,15 @@ MAX_GAMES = 300
 MAX_EVENTS = 600
 MAX_LINE = 14
 MAX_COMMENT = 800
+MAX_TRAININGS = 200
+MAX_WARMUP = 2000
+MAX_DRILLS = 20
 EVENT_KINDS = {'pass', 'goal', 'turnover', 'defense', 'point'}
 GAME_STATUS = {'live', 'finished'}
 POINT_START = {'offense', 'defense'}
 GENDERS = {'male', 'female'}
 GAME_ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+TACTIC_ID = re.compile(r'^[A-Za-z0-9_-]{1,149}$')
 
 
 class StatsError(Exception):
@@ -55,6 +59,19 @@ def video_link(value):
     return value
 
 
+def id_values(raw, key, low, high, label):
+    values = raw.get(key)
+    if not isinstance(values, list) or not low <= len(values) <= high:
+        raise StatsError(400, f'{label}数量需为 {low}–{high}。')
+    out = []
+    for value in values:
+        pid = player_id(value)
+        if pid in out:
+            raise StatsError(400, f'{label}有重复。')
+        out.append(pid)
+    return out
+
+
 def line_ids(raw):
     values = raw.get('line')
     if not isinstance(values, list) or not 1 <= len(values) <= MAX_LINE:
@@ -77,16 +94,27 @@ class StatsStore:
             db.execute('CREATE TABLE IF NOT EXISTS stats_players (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, number INTEGER NOT NULL, gender TEXT NOT NULL DEFAULT \'\', updated INTEGER NOT NULL)')
             db.execute("CREATE TABLE IF NOT EXISTS stats_games (id TEXT PRIMARY KEY, name TEXT NOT NULL, opponent TEXT NOT NULL DEFAULT '', video TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'live', created INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)")
             db.execute('CREATE TABLE IF NOT EXISTS stats_events (game_id TEXT NOT NULL, seq INTEGER NOT NULL, kind TEXT NOT NULL, from_id INTEGER, to_id INTEGER, line TEXT, start TEXT, created INTEGER NOT NULL, PRIMARY KEY (game_id, seq))')
-            db.execute('CREATE TABLE IF NOT EXISTS stats_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT NOT NULL, player_id INTEGER NOT NULL, text TEXT NOT NULL, author_name TEXT NOT NULL, author_number INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL, UNIQUE (game_id, player_id))')
+            db.execute('CREATE TABLE IF NOT EXISTS stats_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT, training_id TEXT, player_id INTEGER NOT NULL, text TEXT NOT NULL, author_name TEXT NOT NULL, author_number INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS stats_trainings (id TEXT PRIMARY KEY, name TEXT NOT NULL, warmup TEXT NOT NULL DEFAULT \'\', attendees TEXT NOT NULL DEFAULT \'[]\', drills TEXT NOT NULL DEFAULT \'[]\', created INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)')
             # Older databases keep their rows; new columns are added in place.
             for statement in ("ALTER TABLE stats_players ADD COLUMN gender TEXT NOT NULL DEFAULT ''",
                               'ALTER TABLE stats_events ADD COLUMN line TEXT',
                               'ALTER TABLE stats_events ADD COLUMN start TEXT',
-                              'ALTER TABLE stats_games ADD COLUMN video TEXT NOT NULL DEFAULT \'\''):
+                              'ALTER TABLE stats_games ADD COLUMN video TEXT NOT NULL DEFAULT \'\'',
+                              'ALTER TABLE stats_games ADD COLUMN training_id TEXT',
+                              'ALTER TABLE stats_comments ADD COLUMN training_id TEXT'):
                 try:
                     db.execute(statement)
                 except sqlite3.OperationalError:
                     pass
+            # Databases created before training reviews declare game_id NOT NULL;
+            # rebuild the table so training comments can leave game_id empty.
+            columns = {r['name']: r['notnull'] for r in db.execute('PRAGMA table_info(stats_comments)')}
+            if columns.get('game_id'):
+                db.execute('CREATE TABLE stats_comments_fixed (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT, training_id TEXT, player_id INTEGER NOT NULL, text TEXT NOT NULL, author_name TEXT NOT NULL, author_number INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL)')
+                db.execute('INSERT INTO stats_comments_fixed(id,game_id,training_id,player_id,text,author_name,author_number,created,updated) SELECT id,game_id,training_id,player_id,text,author_name,author_number,created,updated FROM stats_comments')
+                db.execute('DROP TABLE stats_comments')
+                db.execute('ALTER TABLE stats_comments_fixed RENAME TO stats_comments')
             db.execute("INSERT OR IGNORE INTO metadata VALUES ('stats_revision', 1)")
 
     def connect(self):
@@ -147,6 +175,19 @@ class StatsStore:
                 'created': row['created'], 'updated': row['updated'], 'events': [self.event(e) for e in events],
                 'comments': [self.comment(c) for c in comments]}
 
+    def training(self, db, row):
+        games = [self.game(db, r) for r in db.execute('SELECT * FROM stats_games WHERE training_id=? AND deleted=0 ORDER BY created DESC, rowid DESC', (row['id'],))]
+        comments = db.execute('SELECT c.*, p.name AS p_name, p.number AS p_number FROM stats_comments c LEFT JOIN stats_players p ON p.id=c.player_id WHERE c.training_id=? ORDER BY c.created, c.id', (row['id'],))
+        drills = []
+        for drill_id in json.loads(row['drills'] or '[]'):
+            found = db.execute('SELECT document FROM tactics WHERE id=?', (drill_id,)).fetchone()
+            name = json.loads(found['document']).get('name') if found else None
+            drills.append({'id': drill_id, 'name': name or '已删除的 Drill'})
+        return {'id': row['id'], 'name': row['name'], 'warmup': row['warmup'],
+                'attendees': json.loads(row['attendees'] or '[]'), 'drills': drills,
+                'created': row['created'], 'updated': row['updated'],
+                'games': games, 'comments': [self.comment(c) for c in comments]}
+
     def snapshot(self, known_revision=None):
         db = self.connect()
         try:
@@ -155,8 +196,9 @@ class StatsStore:
             if known_revision == revision:
                 return {'unchanged': True, 'revision': revision}
             players = [self.player(r) for r in db.execute('SELECT * FROM stats_players ORDER BY number, id')]
-            games = [self.game(db, r) for r in db.execute('SELECT * FROM stats_games WHERE deleted=0 ORDER BY created DESC, rowid DESC')]
-            return {'players': players, 'games': games, 'revision': revision}
+            games = [self.game(db, r) for r in db.execute('SELECT * FROM stats_games WHERE deleted=0 AND training_id IS NULL ORDER BY created DESC, rowid DESC')]
+            trainings = [self.training(db, r) for r in db.execute('SELECT * FROM stats_trainings WHERE deleted=0 ORDER BY created DESC, rowid DESC')]
+            return {'players': players, 'games': games, 'trainings': trainings, 'revision': revision}
         finally:
             db.commit()
             db.close()
@@ -205,11 +247,17 @@ class StatsStore:
         name = text(raw.get('name'), 100, '比赛名称')
         opponent = text(raw.get('opponent', ''), 100, '对手名称', required=False)
         video = video_link(raw.get('video', ''))
+        training_id = raw.get('trainingId')
+        if training_id is not None and (not isinstance(training_id, str) or not GAME_ID.fullmatch(training_id)):
+            raise StatsError(400, '训练编号无效。')
         with self.transaction() as db:
             if db.execute('SELECT count(*) FROM stats_games WHERE deleted=0').fetchone()[0] >= MAX_GAMES:
                 raise StatsError(400, f'最多保存 {MAX_GAMES} 场比赛，请先删除旧记录。')
+            if training_id is not None:
+                if not db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (training_id,)).fetchone():
+                    raise StatsError(404, '这场训练不存在或已删除。')
             id_, stamp = str(uuid.uuid4()), self.now()
-            db.execute("INSERT INTO stats_games(id,name,opponent,video,status,created,updated) VALUES (?,?,?,?,'live',?,?)", (id_, name, opponent, video, stamp, stamp))
+            db.execute("INSERT INTO stats_games(id,name,opponent,video,training_id,status,created,updated) VALUES (?,?,?,?,?,'live',?,?)", (id_, name, opponent, video, training_id, stamp, stamp))
             row = db.execute('SELECT * FROM stats_games WHERE id=?', (id_,)).fetchone()
             return {'game': self.game(db, row), 'revision': self.revision(db, True)}
 
@@ -226,32 +274,104 @@ class StatsStore:
             row = db.execute('SELECT * FROM stats_games WHERE id=?', (game_id,)).fetchone()
             return {'game': self.game(db, row), 'revision': self.revision(db, True)}
 
-    def add_comment(self, game_id, player_id, raw):
-        body = text((raw or {}).get('text'), MAX_COMMENT, '赛后总结')
+    def add_comment(self, player_id, raw, game_id=None, training_id=None):
+        body = text((raw or {}).get('text'), MAX_COMMENT, '总结')
         with self.transaction() as db:
-            if not db.execute('SELECT 1 FROM stats_games WHERE id=? AND deleted=0', (game_id,)).fetchone():
-                raise StatsError(404, '这场比赛不存在或已删除。')
+            if game_id is not None:
+                if not db.execute('SELECT 1 FROM stats_games WHERE id=? AND deleted=0', (game_id,)).fetchone():
+                    raise StatsError(404, '这场比赛不存在或已删除。')
+            elif not db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (training_id,)).fetchone():
+                raise StatsError(404, '这次训练不存在或已删除。')
             row = db.execute('SELECT * FROM stats_players WHERE id=?', (player_id,)).fetchone()
             if not row:
                 raise StatsError(401, '名单里已没有这名队员，请重新登录。')
             stamp = self.now()
-            existing = db.execute('SELECT id FROM stats_comments WHERE game_id=? AND player_id=?', (game_id, player_id)).fetchone()
+            existing = db.execute('SELECT id FROM stats_comments WHERE game_id IS ? AND training_id IS ? AND player_id=?', (game_id, training_id, player_id)).fetchone()
             if existing:
                 db.execute('UPDATE stats_comments SET text=?, updated=?, author_name=?, author_number=? WHERE id=?', (body, stamp, row['name'], row['number'], existing['id']))
             else:
-                db.execute('INSERT INTO stats_comments(game_id,player_id,text,author_name,author_number,created,updated) VALUES (?,?,?,?,?,?,?)', (game_id, player_id, body, row['name'], row['number'], stamp, stamp))
-            db.execute('UPDATE stats_games SET updated=? WHERE id=?', (stamp, game_id))
+                db.execute('INSERT INTO stats_comments(game_id,training_id,player_id,text,author_name,author_number,created,updated) VALUES (?,?,?,?,?,?,?,?)', (game_id, training_id, player_id, body, row['name'], row['number'], stamp, stamp))
+            if game_id is not None:
+                db.execute('UPDATE stats_games SET updated=? WHERE id=?', (stamp, game_id))
+            else:
+                db.execute('UPDATE stats_trainings SET updated=? WHERE id=?', (stamp, training_id))
             comment = {'player': player_id, 'text': body, 'at': stamp, 'name': row['name'], 'number': row['number']}
             return {'comment': comment, 'revision': self.revision(db, True)}
 
-    def delete_comment(self, game_id, player_id):
+    def delete_comment(self, player_id, game_id=None, training_id=None):
         with self.transaction() as db:
-            if not db.execute('SELECT 1 FROM stats_games WHERE id=? AND deleted=0', (game_id,)).fetchone():
-                raise StatsError(404, '这场比赛不存在或已删除。')
-            cursor = db.execute('DELETE FROM stats_comments WHERE game_id=? AND player_id=?', (game_id, player_id))
+            if game_id is not None:
+                if not db.execute('SELECT 1 FROM stats_games WHERE id=? AND deleted=0', (game_id,)).fetchone():
+                    raise StatsError(404, '这场比赛不存在或已删除。')
+            elif not db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (training_id,)).fetchone():
+                raise StatsError(404, '这次训练不存在或已删除。')
+            cursor = db.execute('DELETE FROM stats_comments WHERE game_id IS ? AND training_id IS ? AND player_id=?', (game_id, training_id, player_id))
             if not cursor.rowcount:
                 raise StatsError(404, '你还没有写过总结。')
             return {'deleted': True, 'revision': self.revision(db, True)}
+
+    def training_updates(self, db, raw):
+        if not isinstance(raw, dict):
+            raise StatsError(400, '训练信息格式无效。')
+        sets = {}
+        if 'name' in raw:
+            sets['name'] = text(raw['name'], 100, '训练名称')
+        if 'warmup' in raw:
+            sets['warmup'] = text(raw['warmup'], MAX_WARMUP, '热身计划', required=False)
+        if 'attendees' in raw:
+            attendees = id_values(raw, 'attendees', 0, MAX_PLAYERS, '出勤队员')
+            for pid in attendees:
+                if not db.execute('SELECT 1 FROM stats_players WHERE id=?', (pid,)).fetchone():
+                    raise StatsError(400, '出勤名单里有队员不在名单中，请刷新后重试。')
+            sets['attendees'] = json.dumps(attendees)
+        if 'drills' in raw:
+            values = raw.get('drills')
+            if not isinstance(values, list) or len(values) > MAX_DRILLS:
+                raise StatsError(400, f'Drill 数量无效（最多 {MAX_DRILLS} 个）。')
+            drills = []
+            for value in values:
+                if not isinstance(value, str) or not TACTIC_ID.fullmatch(value):
+                    raise StatsError(400, 'Drill 编号无效。')
+                if value in drills:
+                    raise StatsError(400, 'Drill 重复。')
+                drills.append(value)
+            for drill_id in drills:
+                if not db.execute('SELECT 1 FROM tactics WHERE id=? AND deleted=0', (drill_id,)).fetchone():
+                    raise StatsError(400, '训练库里已没有这个 Drill，请刷新后重试。')
+            sets['drills'] = json.dumps(drills)
+        if not sets:
+            raise StatsError(400, '没有要修改的内容。')
+        return sets
+
+    def add_training(self, raw):
+        if not isinstance(raw, dict):
+            raise StatsError(400, '训练信息格式无效。')
+        name = text(raw.get('name'), 100, '训练名称')
+        with self.transaction() as db:
+            if db.execute('SELECT count(*) FROM stats_trainings WHERE deleted=0').fetchone()[0] >= MAX_TRAININGS:
+                raise StatsError(400, f'最多保存 {MAX_TRAININGS} 次训练，请先删除旧记录。')
+            id_, stamp = str(uuid.uuid4()), self.now()
+            db.execute("INSERT INTO stats_trainings(id,name,warmup,attendees,drills,created,updated) VALUES (?,?,'','[]','[]',?,?)", (id_, name, stamp, stamp))
+            row = db.execute('SELECT * FROM stats_trainings WHERE id=?', (id_,)).fetchone()
+            return {'training': self.training(db, row), 'revision': self.revision(db, True)}
+
+    def update_training(self, training_id, raw):
+        with self.transaction() as db:
+            if not db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (training_id,)).fetchone():
+                raise StatsError(404, '这次训练不存在或已删除。')
+            sets = self.training_updates(db, raw)
+            assignments = ', '.join(key + '=?' for key in sets)
+            db.execute(f'UPDATE stats_trainings SET {assignments}, updated=? WHERE id=?', (*sets.values(), self.now(), training_id))
+            row = db.execute('SELECT * FROM stats_trainings WHERE id=?', (training_id,)).fetchone()
+            return {'training': self.training(db, row), 'revision': self.revision(db, True)}
+
+    def delete_training(self, training_id):
+        with self.transaction() as db:
+            if not db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (training_id,)).fetchone():
+                raise StatsError(404, '这次训练不存在或已删除。')
+            # Soft delete keeps warmup plans, attendance and scrimmage history recoverable.
+            db.execute('UPDATE stats_trainings SET deleted=1, updated=? WHERE id=?', (self.now(), training_id))
+            return {'deleted': training_id, 'revision': self.revision(db, True)}
 
     def players_by_name(self, name):
         db = self.connect()
@@ -354,6 +474,14 @@ class StatsStore:
                 return self.delete_player(int(segments[1]))
         if segments == ['games'] and method == 'POST':
             return self.add_game(data)
+        if segments == ['trainings'] and method == 'POST':
+            return self.add_training(data)
+        if len(segments) >= 2 and segments[0] == 'trainings' and GAME_ID.fullmatch(segments[1]):
+            training_id, rest = segments[1], segments[2:]
+            if rest == [] and method == 'PUT':
+                return self.update_training(training_id, data)
+            if rest == [] and method == 'DELETE':
+                return self.delete_training(training_id)
         if len(segments) >= 2 and segments[0] == 'games' and GAME_ID.fullmatch(segments[1]):
             game_id, rest = segments[1], segments[2:]
             if rest == [] and method == 'PUT':
