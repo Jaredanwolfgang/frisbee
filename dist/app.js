@@ -128,7 +128,8 @@ function svgField(frame,{mini=false,hero=false,interactive=false,markers=[]}={})
 function routeHandle(frame){const r=frame.routes.find(r=>r.id===selectedRoute&&r.kind==='pass');if(!r)return '';const p=frame.players.find(p=>p.id===r.player),b=RouteGeometry.middle(p,r);return `<g data-curve-handle="${esc(r.id)}" tabindex="0" role="button" aria-label="传盘弧度点，拖动或用方向键调整" transform="translate(${b.x},${b.y})"><circle r="12" fill="transparent" stroke="transparent" stroke-width="24" vector-effect="non-scaling-stroke"/><circle r="12" fill="#fff" stroke="#e8ba60" stroke-width="3"/><path d="M-4 2 Q0 -5 4 2" fill="none" stroke="#805d27" stroke-width="2"/></g>`;}
 function pathD(p,r){return RouteGeometry.path(p,r);}
 function render(){
- const rules=kindFilter==='rules';$$('[data-mode]').forEach(b=>{const active=(b.dataset.mode==='rules')===rules;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});$('.filterbar').hidden=rules;$('.top-actions').hidden=rules;document.title=rules?'WFDF 规则 · Tiga':'Tiga战术库';document.body.classList.toggle('rules-mode',rules);$('#rules-panel').hidden=!rules;$('#rules-filters').hidden=!rules;$('#rules-header-actions').hidden=!rules;$('#cards').hidden=rules;$('#tactic-filters').hidden=rules;$('#search').placeholder=rules?'搜索规则：走步、Pick、18.2.1…':'搜索战术、Drill、标签或执行要点';$('#search').setAttribute('aria-label',rules?'搜索 WFDF 规则':'搜索战术与 Drill');
+ const rules=kindFilter==='rules',statsMode=kindFilter==='stats',mode=statsMode?'stats':rules?'rules':'tactics';$$('[data-mode]').forEach(b=>{const active=b.dataset.mode===mode;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});$('.filterbar').hidden=rules||statsMode;$('.top-actions').hidden=rules||statsMode;document.title=statsMode?'技术统计 · Tiga':rules?'WFDF 规则 · Tiga':'Tiga战术库';document.body.classList.toggle('rules-mode',rules);document.body.classList.toggle('stats-mode',statsMode);$('#rules-panel').hidden=!rules;$('#rules-filters').hidden=!rules;$('#rules-header-actions').hidden=!rules;$('#stats-panel').hidden=!statsMode;$('#cards').hidden=rules||statsMode;$('#tactic-filters').hidden=rules||statsMode;$('#search').placeholder=rules?'搜索规则：走步、Pick、18.2.1…':'搜索战术、Drill、标签或执行要点';$('#search').setAttribute('aria-label',rules?'搜索 WFDF 规则':'搜索战术与 Drill');
+ if(statsMode){$('#list-title').textContent='';$('#list-count').textContent='';$('#footer-count').textContent='技术统计';$('footer>span:last-child').textContent='服务器共享';StatsUI.render();return;}
  if(rules){$$('#kind-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.kind==='rules'));renderRules();return;}
  $$('#kind-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.kind===kindFilter));
  $('footer>span:last-child').textContent='服务器共享';
@@ -285,7 +286,7 @@ $('#migrate-local').onclick=()=>requestEdit(async()=>{const pending=migrationCan
 $('#retry-sync').onclick=()=>loadLibrary();
 $('#access-btn').onclick=async()=>{if(!canEdit){requestEdit();return;}try{await api('logout',{method:'POST',body:'{}'});canEdit=false;permissions();render();toast('编辑已关闭，仍可查看和分享。');}catch(error){toast(error.message);}};
 $('#editor-unlock-btn').onclick=()=>requestEdit();
-$('#auth-form').onsubmit=async e=>{e.preventDefault();$('#auth-submit').disabled=true;$('#auth-error').textContent='';try{await api('login',{method:'POST',body:JSON.stringify({password:$('#edit-password').value})});canEdit=true;$('#auth-dialog').close();$('#edit-password').value='';await loadLibrary({quiet:true});if(draft)renderBoard();const action=pendingAuthAction;pendingAuthAction=null;await action?.();toast('编辑已解锁，保存后会同步给队友。');}catch(error){$('#auth-error').textContent=error.message;}finally{$('#auth-submit').disabled=false;}};
+$('#auth-form').onsubmit=async e=>{e.preventDefault();$('#auth-submit').disabled=true;$('#auth-error').textContent='';try{await api('login',{method:'POST',body:JSON.stringify({password:$('#edit-password').value})});canEdit=true;$('#auth-dialog').close();$('#edit-password').value='';await loadLibrary({quiet:true});if(draft)renderBoard();if(kindFilter==='stats')render();const action=pendingAuthAction;pendingAuthAction=null;await action?.();toast('编辑已解锁，保存后会同步给队友。');}catch(error){$('#auth-error').textContent=error.message;}finally{$('#auth-submit').disabled=false;}};
 $('#auth-cancel').onclick=()=>{$('#auth-dialog').close();pendingAuthAction=null;};
 async function copyText(value){
  try{if(navigator.clipboard?.writeText){await Promise.race([navigator.clipboard.writeText(value),new Promise((_,reject)=>setTimeout(()=>reject(Error('copy timeout')),1200))]);return true;}}catch{}
@@ -305,12 +306,14 @@ function closeInspector(){document.activeElement?.blur();$('.editor-shell').clas
 $('#inspector-close').onclick=closeInspector;
 $('#inspector-toggle').onclick=()=>{const open=$('.editor-shell').classList.toggle('inspector-open');$('#fullscreen-host').inert=open&&MobileUI.isPhone();$('#inspector-toggle').setAttribute('aria-expanded',String(open));if(open)$('#inspector-close').focus({preventScroll:true});};
 window.addEventListener('hashchange',()=>{
+ if(location.hash==='#stats'){if($('#editor').open){if(dirty||saving)return;closeEditor();window.history.replaceState(window.history.state,'','#stats');}if(kindFilter!=='stats')switchMode('stats');return;}
  const id=new URLSearchParams(location.hash.slice(1)).get('tactic');
  if(id&&loaded&&id!==draft?.id){if(dirty||saving){toast('请先保存或关闭当前编辑，再打开分享链接。');return;}openTactic(id);}
  if(location.hash==='#rules'||location.hash.startsWith('#rule=')){const targetHash=location.hash;if($('#editor').open){if(dirty||saving)return;closeEditor();window.history.replaceState(window.history.state,'',targetHash);}showRulesLink();}
 });
-let rulesData=null,rulesVisuals=[],rulesVisualsError=false,rulesLoading=null,rulesError='',rulesLimit=8,rulesBilingual=false,focusedRuleKey=null,activeRuleVisuals=[];const modeQueries={tactics:'',rules:''};let lastTacticKind='all';
-function switchMode(mode){closeMenus();const wasRules=kindFilter==='rules';modeQueries[wasRules?'rules':'tactics']=search;if(!wasRules)lastTacticKind=kindFilter;kindFilter=mode==='rules'?'rules':lastTacticKind;search=modeQueries[mode];$('#search').value=search;if(mode==='rules')window.history.replaceState(window.history.state,'','#rules');else window.history.replaceState(window.history.state,'',location.pathname+location.search);render();}
+let rulesData=null,rulesVisuals=[],rulesVisualsError=false,rulesLoading=null,rulesError='',rulesLimit=8,rulesBilingual=false,focusedRuleKey=null,activeRuleVisuals=[];const modeQueries={tactics:'',rules:'',stats:''};let lastTacticKind='all';
+function currentMode(){return kindFilter==='rules'?'rules':kindFilter==='stats'?'stats':'tactics';}
+function switchMode(mode){closeMenus();const was=currentMode();if(was!==mode)modeQueries[was]=search;if(was==='tactics')lastTacticKind=kindFilter;kindFilter=mode==='rules'?'rules':mode==='stats'?'stats':lastTacticKind;search=modeQueries[mode]||'';$('#search').value=search;if(mode==='rules')window.history.replaceState(window.history.state,'','#rules');else if(mode==='stats')window.history.replaceState(window.history.state,'','#stats');else window.history.replaceState(window.history.state,'',location.pathname+location.search);render();}
 $$('[data-mode]').forEach(b=>bindTap(b,()=>switchMode(b.dataset.mode)));
 function highlightRule(text){
  const query=search.trim();if(query.length<2||query.length>60||!text)return esc(text||'');
@@ -381,7 +384,8 @@ document.addEventListener('click',async e=>{
  const copy=e.target.closest('[data-copy-rule]');if(copy){const url=new URL('.',location.href);url.hash='rule='+encodeURIComponent(copy.dataset.copyRule);if(await copyText(url.href))toast('已复制规则条款链接。');else{$('#share-url').value=url.href;$('#share-copy-status').textContent='可长按链接手动复制。';$('#share-dialog').showModal();}}
 });
 creationUI=initFrisbeeAI({requestEdit,toast,prepareCreation:()=>{setCreateKind(kindFilter==='tactic'?'tactic':'drill');$('#create-name').value='';},drawFrame:(frame,markers)=>svgField(frame,{mini:true,markers}),onDraft:tactic=>requestEdit(()=>{if(!validTactic(tactic)){toast('AI 草稿格式无效，请重新生成。');return;}draft=clone(tactic);openDraft();checkpoint();permissions();})});
-if(location.hash==='#rules'||location.hash.startsWith('#rule='))showRulesLink();
+StatsUI.init({api,toast,requestEdit,canEdit:()=>canEdit,onUnauthorized:()=>{canEdit=false;permissions();},syncCanEdit:v=>{if(canEdit!==v){canEdit=v;permissions();}}});
+if(location.hash==='#rules'||location.hash.startsWith('#rule='))showRulesLink();else if(location.hash==='#stats')kindFilter='stats';
 window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
 restoreLibraryCache();render();syncStatus();loadLibrary();
 setInterval(()=>{if(!document.hidden&&!saving&&!dirty)loadLibrary({quiet:true});},20000);

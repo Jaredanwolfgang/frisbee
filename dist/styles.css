@@ -103,3 +103,244 @@ html:has(#editor[open]),body:has(#editor[open]){overflow:hidden}#inspector-close
 
 /* Hold-to-delete feedback stays on the field, without changing board dimensions. */
 #tactic-svg{-webkit-touch-callout:none}#route-hold-progress{pointer-events:none}#route-hold-progress circle{fill:none;stroke-width:3;vector-effect:non-scaling-stroke}#route-hold-progress .hold-track{stroke:#f7e8ce;opacity:.8}#route-hold-progress .hold-meter{stroke:#de8e60;stroke-linecap:round}#disc[data-disc]{cursor:pointer}#disc[data-disc]:focus-visible>ellipse{stroke:#f2bd68;stroke-width:4}.formation-settings{border:1px solid #dce5d3;border-radius:8px;background:#f8faf4;padding:10px 12px;margin:8px 0 18px!important}.formation-settings>summary{margin:0!important;min-height:32px;line-height:32px;color:#5c794e!important;font-size:12px!important}.formation-settings>label{margin:10px 0!important}.formation-buttons{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.formation-buttons button{display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center;min-height:57px;padding:8px 4px;background:#fff;border:1px solid #dae4d0;border-radius:6px;font-size:12px;color:#537549}.formation-buttons button small{font-size:10px;color:#95a585}.formation-buttons button:disabled{opacity:.4;cursor:default}#formation-hint{font-size:10px;line-height:1.8;color:#8b9b7d;margin:10px 0 0}@media(max-width:600px){.formation-settings{margin:10px 0 22px!important;padding:10px 12px}.formation-settings>summary{font-size:15px!important;min-height:44px;line-height:44px}.formation-buttons button{font-size:15px;min-height:64px}.formation-buttons button small{font-size:12px}#formation-hint{font-size:12px}}
+
+/* 技术统计 */
+body.stats-mode .search,body.stats-mode .list-heading,body.stats-mode #empty,body.stats-mode #cards{display:none}
+body.stats-mode .library{padding-top:0}
+#stats-panel{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.stats-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px 16px;min-width:0}
+.stats-toolbar-text{display:flex;flex-direction:column;gap:3px;min-width:0}
+.stats-toolbar-text strong{font-size:15px}
+.stats-toolbar-text .muted{font-size:11px}
+.stats-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.stats-toolbar-actions .quiet-btn{border:1px solid var(--line);border-radius:6px;background:#fff;color:#57704f;min-height:38px;padding:6px 12px;font-size:12px}
+.stats-toolbar-actions .primary{margin:0;min-height:38px;font-size:13px}
+.stats-section{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px 16px;min-width:0}
+.stats-section-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.stats-section-head h3{margin:0;font-size:14px;color:var(--ink)}
+.stats-section-head .muted{font-size:11px}
+.stats-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.stats-table{width:100%;border-collapse:collapse;font-size:13px;min-width:420px}
+.stats-table th,.stats-table td{padding:8px 9px;text-align:right;border-bottom:1px solid #edf2e7;white-space:nowrap;vertical-align:middle}
+.stats-table thead th{font-size:11px;color:#7f9272;font-weight:600;border-bottom:1px solid var(--line);padding-top:2px}
+.stats-table thead button{border:0;background:none;font:inherit;color:inherit;padding:4px 2px;min-height:28px;white-space:nowrap}
+.stats-table thead button:hover{color:var(--green)}
+.stats-table tbody th{text-align:left;font-weight:600;color:var(--ink)}
+.stats-table thead th:first-child{text-align:left}
+.stats-table tbody tr:last-child th,.stats-table tbody tr:last-child td{border-bottom:0}
+.stats-table td b{font-weight:650;font-size:14px}
+.stats-table td small{display:block;font-size:10px;color:#9aa98d;font-weight:400;line-height:1.2}
+.stats-number{display:inline-block;min-width:28px;margin-right:6px;color:#6f8a5e;font-weight:650;font-size:12px}
+.stats-empty{color:#8b9b7d;font-size:12px;margin:6px 0 0;line-height:1.6}
+.stats-games{display:grid;gap:8px}
+.stats-game-card{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:#fbfdf9;border:1px solid var(--line);border-radius:8px;padding:11px 13px;min-height:56px;color:var(--ink)}
+.stats-game-card:hover{border-color:#b9ccae}
+.stats-game-card-main{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.stats-game-card-main strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stats-game-card-main span{font-size:11px;color:#8b9b7d}
+.stats-game-card-side{text-align:center;flex-shrink:0;min-width:40px}
+.stats-game-card-side b{font-size:19px;display:block;line-height:1;color:var(--green)}
+.stats-game-card-side small{font-size:10px;color:#8b9b7d}
+.stats-badge{font-size:10px;padding:3px 7px;border-radius:10px;flex-shrink:0;line-height:1.3}
+.stats-badge.live{color:#8a5b18;background:#f8ecd2}
+.stats-badge.finished{color:#658154;background:#eef3e7}
+.stats-recorder{background:#f4f8ef;border:1px solid #dde7d3;border-radius:10px;padding:13px}
+.stats-score-row{display:flex;align-items:center;gap:14px;margin-bottom:11px}
+.stats-score{display:flex;flex-direction:column;align-items:center;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 14px;min-width:64px}
+.stats-score span{font-size:10px;color:#8b9b7d}
+.stats-score strong{font-size:26px;line-height:1.1;color:var(--green)}
+.stats-score-meta{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+#stats-event-count{font-size:11px;color:#8b9b7d}
+.stats-hint{font-size:12px;color:#4c6444;line-height:1.5}
+.stats-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:11px}
+.stats-chip{display:inline-flex;align-items:center;border:1.5px solid #cfdec2;background:#fff;border-radius:20px;padding:8px 12px;min-height:40px;font-size:13px;color:var(--ink)}
+.stats-chip .stats-number{margin-right:3px;min-width:0}
+.stats-chip i{font-style:normal;font-size:10px;color:#fff;background:#5e8752;border-radius:8px;padding:2px 6px;margin-left:6px;line-height:1.3}
+.stats-chip.is-thrower{border-color:#5e8752;background:#eaf3df}
+.stats-chip.is-thrower i{background:#3f6a3c}
+.stats-chip.is-receiver{border-color:#7d9fb3;background:#e9f1f5}
+.stats-chip.is-receiver i{background:#57808f}
+.stats-chip:disabled{opacity:.55}
+.stats-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.rec-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1.5px solid var(--line);border-radius:9px;background:#fff;padding:10px 4px;min-height:66px;color:var(--ink)}
+.rec-btn strong{font-size:14px}
+.rec-btn small{font-size:10px;color:#8b9b7d;font-weight:400;line-height:1.3}
+.rec-btn:disabled{opacity:.45}
+.rec-pass:not(:disabled){border-color:#9dbd8a;background:#f2f8ea}
+.rec-pass:not(:disabled) strong{color:#3f6a3c}
+.rec-goal:not(:disabled){border-color:#caa64e;background:#fdf6e0}
+.rec-goal:not(:disabled) strong{color:#8a6414}
+.rec-turn:not(:disabled){border-color:#d8b09a;background:#fdf3ec}
+.rec-turn:not(:disabled) strong{color:#a05f3d}
+.rec-defense:not(:disabled){border-color:#9fb3c4;background:#eff4f8}
+.rec-defense:not(:disabled) strong{color:#4a6b82}
+.stats-undo-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.stats-undo-row .quiet-btn{border:1px solid var(--line);border-radius:6px;background:#fff;min-height:36px;padding:6px 12px;font-size:12px;color:#57704f}
+.stats-event-log{list-style:none;margin:0;padding:0}
+.stats-event-log li{display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid #eef3e8;font-size:13px}
+.stats-event-log li:last-child{border-bottom:0}
+.stats-event-log .stats-seq{flex-shrink:0;min-width:22px;text-align:right;color:#a4b394;font-size:11px}
+.stats-event-log .stats-desc{flex:1;min-width:0}
+.stats-event-log .stats-desc i{font-style:normal;color:#8b9b7d;padding:0 2px}
+.stats-event-log .stats-desc em{font-style:normal;font-size:11px;padding:2px 7px;border-radius:8px;margin-left:7px;background:#eef3e7;color:#658154;white-space:nowrap}
+.stats-event-log .stats-desc em.goal{background:#f8ecd2;color:#8a5b18}
+.stats-event-log .stats-desc em.turn{background:#f8e2d6;color:#a05f3d}
+.stats-event-log .stats-desc em.d{background:#e3ecf3;color:#4a6b82}
+.stats-event-log time{flex-shrink:0;font-size:11px;color:#a4b394}
+.stats-players-content{width:min(500px,92vw)}
+.stats-players-content header h2{margin:0;font-size:17px}
+.stats-player-form{display:grid;grid-template-columns:1fr 100px auto;gap:10px;align-items:end;margin:14px 0 6px}
+.stats-player-form label{font-size:11px;color:#7f9272;gap:5px}
+.stats-player-form input{border:1px solid var(--line);border-radius:6px;padding:9px 10px;min-height:38px;background:#fff}
+.stats-player-form-actions{display:flex;gap:8px;align-items:end}
+.stats-player-form-actions .primary{margin:0;min-height:38px;white-space:nowrap}
+.stats-player-form-actions .quiet-btn{min-height:38px;font-size:12px}
+.stats-form-note{margin:0 0 12px;font-size:11px;line-height:1.6}
+.stats-players-list{display:grid;gap:6px;max-height:46dvh;overflow:auto}
+.stats-player-row{display:flex;align-items:center;gap:10px;border:1px solid #edf2e7;border-radius:8px;padding:7px 10px;background:#fbfdf9}
+.stats-player-row strong{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:13px}
+.stats-player-row .quiet-btn{font-size:12px;min-height:32px;padding:4px 9px}
+.stats-player-row.is-editing{border-color:#9dbd8a;background:#f2f8ea}
+.stats-new-game-form{padding:24px;width:min(430px,92vw);display:grid;gap:12px}
+.stats-new-game-form h2{margin:0;font-size:18px}
+.stats-new-game-form .muted{margin:0;font-size:12px}
+.stats-new-game-form label{font-size:11px;color:#7f9272;gap:5px}
+.stats-new-game-form input{border:1px solid var(--line);border-radius:6px;padding:9px 10px;min-height:38px;background:#fff}
+.stats-new-game-form .auth-actions{margin-top:6px}
+#stats-game-dialog{width:min(780px,94vw)}
+.stats-game-shell{display:flex;flex-direction:column;max-height:92dvh}
+.stats-game-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:#fff;flex-shrink:0}
+.stats-game-heading{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.stats-game-heading h2{margin:0;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stats-game-heading span{font-size:11px;color:#8b9b7d}
+.stats-game-head-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
+.stats-game-head-actions .quiet-btn{border:1px solid var(--line);border-radius:6px;background:#fff;color:#57704f;min-height:36px;padding:5px 11px;font-size:12px}
+.stats-game-body{overflow:auto;padding:14px 16px 20px;display:grid;gap:14px}
+@media(max-width:850px){.stats-table{min-width:400px}}
+@media(max-width:600px){
+ #stats-panel{gap:14px}
+ .stats-toolbar{padding:12px 14px}
+ .stats-toolbar-actions{width:100%}
+ .stats-toolbar-actions .primary{flex:1}
+ .stats-section{padding:12px 13px}
+ .stats-table{font-size:12px;min-width:340px}
+ .stats-table th,.stats-table td{padding:7px 6px}
+ .stats-actions{grid-template-columns:repeat(2,1fr)}
+ .rec-btn{min-height:62px}
+ .rec-btn strong{font-size:15px}
+ .stats-chip{min-height:44px;font-size:14px;padding:8px 13px}
+ .stats-player-form{grid-template-columns:1fr 90px}
+ .stats-player-form-actions{grid-column:1/-1;justify-content:flex-end}
+ .stats-player-form input,.stats-new-game-form input{font-size:16px}
+ .stats-players-list{max-height:none}
+ #stats-players-dialog,#stats-game-dialog{position:fixed;inset:0;width:100%;max-width:100%;height:100dvh;max-height:100dvh;border:0;border-radius:0;margin:0;overflow:auto}
+ #stats-players-dialog .help-content{padding:0 16px 24px}
+ #stats-players-dialog header{position:sticky;top:0;min-height:60px;margin:0 -16px 14px;padding:8px 16px;border-bottom:1px solid #e0e7d8;background:#fff;display:flex;z-index:2}
+ .stats-players-content{width:100%}
+ .stats-game-shell{max-height:none;min-height:100dvh}
+ .stats-game-head{position:sticky;top:0;z-index:2;padding:10px 14px}
+ .stats-game-head-actions .quiet-btn{font-size:11px;padding:5px 8px}
+ .stats-game-body{padding:12px 14px 24px}
+ .stats-new-game-form{width:100%;padding:22px 18px}
+}
+
+/* 技术统计：性别、每一分上场阵容 */
+.stats-gender-group{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;min-height:38px}
+.stats-gender-group button{border:0;background:#fff;color:#84957a;padding:7px 13px;font-size:13px;min-height:38px}
+.stats-gender-group button+button{border-left:1px solid var(--line)}
+.stats-gender-group button[aria-pressed="true"]{background:#e8f0df;color:#315e3f;font-weight:650}
+.stats-player-form{grid-template-columns:1fr 84px auto auto}
+.stats-gender{font-size:10px;padding:2px 7px;border-radius:9px;flex-shrink:0;line-height:1.4}
+.stats-gender.m{color:#4a6b82;background:#e3ecf3}
+.stats-gender.f{color:#a05f3d;background:#f8e6dc}
+.stats-g{font-weight:400;font-size:11px;margin-left:3px}
+.stats-g.g-male{color:#57808f}
+.stats-g.g-female{color:#b06a5a}
+.stats-chip .stats-g{font-size:10px}
+.stats-point-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px dashed #c4d5b6;border-radius:8px;padding:8px 11px;margin-bottom:10px;flex-wrap:wrap}
+.stats-point-info{font-size:12px;color:#4c6444;line-height:1.5;min-width:0}
+.stats-point-info b{color:#315e3f}
+.stats-point-bar .quiet-btn{border:1px solid var(--line);border-radius:6px;background:#fff;color:#57704f;min-height:34px;padding:5px 11px;font-size:12px;flex-shrink:0}
+.stats-point-setup{background:#eef5e6;border:1px solid #cddcbf;border-radius:9px;padding:11px;margin-bottom:10px;display:grid;gap:9px}
+.stats-point-start{display:inline-flex;border:1px solid #b9ccae;border-radius:7px;overflow:hidden;align-self:start}
+.stats-point-start button{border:0;background:#fff;color:#84957a;padding:9px 15px;font-size:13px;min-height:40px}
+.stats-point-start button+button{border-left:1px solid #d8e2d0}
+.stats-point-start button[aria-pressed="true"]{background:#315e3f;color:#fff;font-weight:650}
+.stats-point-setup>small{font-size:11px;color:#62765a}
+.stats-point-actions{display:flex;gap:8px}
+.stats-point-actions .primary{margin:0;min-height:38px}
+.stats-point-actions .quiet-btn{border:1px solid var(--line);border-radius:6px;background:#fff;color:#57704f;min-height:38px;padding:6px 12px;font-size:12px}
+.stats-chip.is-line{border-color:#7a9a5a;background:#e2efd2}
+.stats-chip.is-line i{background:#5e8752}
+.stats-event-log .stats-desc em.point{display:inline-block;background:#e8f0df;color:#3f6a3c;max-width:100%;white-space:normal;margin-left:0;line-height:1.7}
+.stats-event-log li.is-point{background:#f6faf1;border-radius:6px;padding-left:6px;padding-right:6px}
+@media(max-width:600px){
+ .stats-player-form{grid-template-columns:1fr 90px}
+ .stats-gender-group{justify-self:start}
+ .stats-gender-group button{font-size:15px;min-height:44px;padding:8px 16px}
+ .stats-player-form-actions{grid-column:1/-1;justify-content:flex-end}
+ .stats-point-bar{padding:9px 10px}
+ .stats-point-bar .quiet-btn{min-height:40px;font-size:13px}
+ .stats-point-start button{font-size:15px;min-height:44px;padding:9px 18px}
+ .stats-point-actions .primary{flex:1;min-height:44px}
+ .stats-point-actions .quiet-btn{min-height:44px}
+}
+
+/* 技术统计：队员登录、赛后总结、比赛录像链接 */
+.stats-me{font-size:12px;color:#4c6444}
+.stats-me b{color:#315e3f}
+#stats-game-video-link{font-size:12px;color:#4a6b82;text-decoration:none;line-height:1.5;align-self:start}
+#stats-game-video-link:hover{text-decoration:underline}
+.stats-comment-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.stats-comment-actions .primary{margin:0;min-height:36px;font-size:12px}
+.stats-comment-actions .quiet-btn{border:1px solid var(--line);border-radius:6px;background:#fff;min-height:36px;padding:5px 11px;font-size:12px}
+#stats-comment-text{border:1px solid var(--line);border-radius:7px;padding:9px 10px;background:#fff;width:100%;resize:vertical;min-height:64px}
+.stats-comments{display:grid;gap:8px;margin-top:10px}
+.stats-comment{border:1px solid #edf2e7;border-radius:8px;padding:10px 12px;background:#fbfdf9}
+.stats-comment header{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.stats-comment header b{font-size:13px}
+.stats-comment header i{font-style:normal;font-size:10px;background:#e8f0df;color:#3f6a3c;border-radius:8px;padding:1px 6px}
+.stats-comment header time{margin-left:auto;font-size:11px;color:#a4b394}
+.stats-comment p{margin:0;font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.stats-login-error{margin:0;font-size:12px;color:#a05f3d;min-height:1em}
+@media(max-width:600px){
+ #stats-comment-text{font-size:16px}
+ .stats-comment-actions .primary{min-height:44px}
+ .stats-comment-actions .quiet-btn{min-height:44px}
+ .stats-me{font-size:11px}
+}
+
+/* 技术统计：逐分分组记录 */
+.stats-event-log{display:grid;gap:7px}
+.stats-point-group{border:1px solid #e4ebdc;border-radius:8px;background:#fbfdf9;overflow:hidden}
+.stats-point-group[open]{border-color:#c9dab9}
+.stats-point-group>summary{display:flex;align-items:center;gap:8px;padding:10px 12px;min-height:44px;cursor:pointer;list-style:none;font-size:13px}
+.stats-point-group>summary::-webkit-details-marker{display:none}
+.stats-point-group>summary::after{content:'▾';margin-left:auto;color:#a4b394;font-size:11px}
+.stats-point-group[open]>summary::after{content:'▴'}
+.stats-point-group.loose>summary{color:#8b9b7d}
+.stats-point-no{display:inline-block;min-width:26px;text-align:center;background:#eef3e7;color:#658154;border-radius:6px;font-size:11px;font-weight:650;padding:2px 0}
+.stats-point-title{font-weight:650;color:var(--ink)}
+.stats-point-meta{margin-left:auto;font-size:11px;color:#8b9b7d;white-space:nowrap}
+.stats-point-group>summary .stats-point-meta{margin-right:2px}
+.stats-point-group>summary::after{margin-left:0}
+.stats-point-group em{font-style:normal;font-size:11px;padding:2px 7px;border-radius:8px;white-space:nowrap}
+.stats-point-group em.us{background:#e8f0df;color:#3f6a3c;font-weight:650}
+.stats-point-group em.them{background:#f8e2d6;color:#a05f3d}
+.stats-point-group em.livebit{background:#f8ecd2;color:#8a5b18}
+.stats-point-body{border-top:1px dashed #e0e8d4;padding:10px 12px;display:grid;gap:0}
+.stats-point-line{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:#4c6444;background:#f4f8ef;border-radius:6px;padding:7px 10px;margin-bottom:8px}
+.stats-point-line b{color:#7f9272;font-weight:600;font-size:11px;margin-right:2px}
+.stats-event-row{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid #eef3e8;font-size:13px}
+.stats-event-row:last-child{border-bottom:0}
+.stats-event-row .stats-desc{flex:1;min-width:0}
+.stats-event-row .stats-desc i{font-style:normal;color:#8b9b7d;padding:0 2px}
+.stats-event-row .stats-desc em{font-style:normal;font-size:11px;padding:2px 7px;border-radius:8px;margin-left:7px;background:#eef3e7;color:#658154;white-space:nowrap}
+.stats-event-row .stats-desc em.goal{background:#f8ecd2;color:#8a5b18}
+.stats-event-row .stats-desc em.turn{background:#f8e2d6;color:#a05f3d}
+.stats-event-row .stats-desc em.d{background:#e3ecf3;color:#4a6b82}
+.stats-event-row time{flex-shrink:0;font-size:11px;color:#a4b394}
+@media(max-width:600px){
+ .stats-point-group>summary{padding:10px;font-size:14px}
+ .stats-point-meta{display:none}
+}

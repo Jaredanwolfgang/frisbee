@@ -13,12 +13,13 @@ spec = importlib.util.spec_from_file_location('frisbee_api', ROOT / 'server/app.
 api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
 store = api.Store(ROOT / 'data/dev.sqlite3', json.loads((ROOT / 'server/seed.json').read_text()))
+stats_store = api.STATS_MODULE.StatsStore(ROOT / 'data/dev.sqlite3')
 preview_port = int(os.getenv('FRISBEE_PREVIEW_PORT', '4175'))
 ai_service = None
 if os.getenv('AI_API_KEY'):
     ai_client = api.AI_MODULE.DeepSeekClient(os.environ['AI_API_KEY'], os.getenv('AI_BASE_URL', 'https://api.deepseek.com'), os.getenv('AI_RULES_MODEL', 'deepseek-flash'), os.getenv('AI_TACTIC_MODEL', 'deepseek-v4-pro'))
     ai_service = api.AI_MODULE.AIService(ROOT/'dist/wfdf', ai_client, api.tactic)
-backend = ThreadingHTTPServer(('127.0.0.1', 0), api.make_handler(store, 'frisbee-local-development-key', '/frisbee/', False, f'http://127.0.0.1:{preview_port}', ai_service))
+backend = ThreadingHTTPServer(('127.0.0.1', 0), api.make_handler(store, 'frisbee-local-development-key', '/frisbee/', False, f'http://127.0.0.1:{preview_port}', ai_service, stats_store))
 
 
 class Preview(SimpleHTTPRequestHandler):

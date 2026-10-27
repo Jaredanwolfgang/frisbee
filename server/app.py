@@ -19,6 +19,9 @@ import uuid
 AI_SPEC = importlib.util.spec_from_file_location('frisbee_ai', Path(__file__).with_name('ai.py'))
 AI_MODULE = importlib.util.module_from_spec(AI_SPEC)
 AI_SPEC.loader.exec_module(AI_MODULE)
+STATS_SPEC = importlib.util.spec_from_file_location('frisbee_stats', Path(__file__).with_name('stats.py'))
+STATS_MODULE = importlib.util.module_from_spec(STATS_SPEC)
+STATS_SPEC.loader.exec_module(STATS_MODULE)
 
 MAX_BODY = 5 * 1024 * 1024
 MAX_PLAYERS = 14
@@ -279,7 +282,7 @@ class Store:
         return {'added': added, 'copied': copied, 'skipped': skipped, 'revision': revision}
 
 
-def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_origin='https://jaredan.site', ai_service=None):
+def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_origin='https://jaredan.site', ai_service=None, stats_store=None):
     if len(edit_key) < 24:
         raise ValueError('EDITOR_KEY must contain at least 24 characters')
     auth_attempts, auth_lock = {}, threading.Lock()
@@ -392,10 +395,88 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
                 ai_service.release_rules(prepared)
                 self.close_connection = True
 
+        def player_identity(self):
+            try:
+                cookie = SimpleCookie(self.headers.get('Cookie', ''))
+                value = cookie['frisbee_player'].value
+                pid, stamp, sig = value.split('.', 2)
+                age = time.time() - int(stamp)
+                expected = hmac.new(secret, ('player:' + pid + ':' + stamp).encode(), hashlib.sha256).hexdigest()
+                return int(pid) if 0 <= age <= 30 * 86400 and hmac.compare_digest(sig, expected) else None
+            except (KeyError, ValueError, CookieError):
+                return None
+
+        def stats_login(self):
+            origin = self.headers.get('Origin')
+            if self.headers.get('Sec-Fetch-Site') == 'cross-site' or (origin and origin != public_origin):
+                raise APIError(403, '请求来源无效。')
+            data = self.body()
+            name = data.get('name')
+            if not isinstance(name, str) or not name.strip():
+                raise APIError(400, '请输入名单里的盘名。')
+            matches = stats_store.players_by_name(name.strip())
+            if not matches:
+                raise APIError(404, '名单里没有这个盘名，请核对或先让管理员添加队员。')
+            if len(matches) > 1:
+                raise APIError(409, '名单里有重名盘名，请让管理员调整后重试。')
+            pid, stamp = str(matches[0]['id']), str(int(time.time()))
+            sig = hmac.new(secret, ('player:' + pid + ':' + stamp).encode(), hashlib.sha256).hexdigest()
+            cookie = f'frisbee_player={pid}.{stamp}.{sig}; Path={cookie_path}; Max-Age=2592000; HttpOnly; SameSite=Strict'
+            if secure:
+                cookie += '; Secure'
+            return self.send(200, {'me': matches[0]}, cookie)
+
+        def stats_logout(self):
+            cookie = f'frisbee_player=; Path={cookie_path}; Max-Age=0; HttpOnly; SameSite=Strict' + ('; Secure' if secure else '')
+            return self.send(200, {'me': None}, cookie)
+
+        def stats_dispatch(self, path):
+            if stats_store is None:
+                raise APIError(503, '技术统计暂未启用。')
+            if path == '/api/stats':
+                if self.command != 'GET':
+                    raise APIError(404, '统计接口不存在。')
+                known = parse_qs(urlparse(self.path).query).get('revision', [''])[0]
+                if known and not re.fullmatch(r'[0-9]{1,16}', known):
+                    raise APIError(400, '同步版本无效。')
+                pid = self.player_identity()
+                return self.send(200, {**stats_store.snapshot(int(known) if known else None), 'canEdit': self.authorized(), 'me': stats_store.player_brief(pid) if pid else None})
+            segments = [unquote(s) for s in path[len('/api/stats/'):].split('/') if s]
+            if segments == ['login'] and self.command == 'POST':
+                return self.stats_login()
+            if segments == ['logout'] and self.command == 'POST':
+                return self.stats_logout()
+            if len(segments) == 3 and segments[0] == 'games' and segments[2] == 'comments' and STATS_MODULE.GAME_ID.fullmatch(segments[1]):
+                if self.command not in ('POST', 'DELETE'):
+                    raise APIError(404, '统计接口不存在。')
+                self.require_same_origin()
+                pid = self.player_identity()
+                if pid is None:
+                    raise APIError(401, '请先用盘名登录，再写赛后总结。')
+                has_body = self.headers.get('Content-Length', '0').strip() not in ('', '0')
+                data = self.body() if self.command == 'POST' else {}
+                try:
+                    if self.command == 'POST':
+                        return self.send(200, stats_store.add_comment(segments[1], pid, data))
+                    return self.send(200, stats_store.delete_comment(segments[1], pid))
+                except STATS_MODULE.StatsError as error:
+                    raise APIError(error.status, error.message) from None
+            if self.command not in ('POST', 'PUT', 'DELETE'):
+                raise APIError(404, '统计接口不存在。')
+            self.require_editor()
+            has_body = self.headers.get('Content-Length', '0').strip() not in ('', '0')
+            data = self.body() if self.command != 'DELETE' or has_body else {}
+            try:
+                return self.send(200, stats_store.dispatch(self.command, segments, data))
+            except STATS_MODULE.StatsError as error:
+                raise APIError(error.status, error.message) from None
+
         def dispatch(self):
             path = urlparse(self.path).path.rstrip('/')
             if path.startswith('/api/ai/'):
                 return self.ai_dispatch(path)
+            if path == '/api/stats' or path.startswith('/api/stats/'):
+                return self.stats_dispatch(path)
             if self.command == 'GET' and path == '/api/health':
                 with store.transaction() as db:
                     db.execute('SELECT 1')
@@ -479,6 +560,7 @@ if __name__ == '__main__':
     seed_path = Path(__file__).with_name('seed.json')
     seeds = json.loads(seed_path.read_text())
     store = Store(os.getenv('DB_PATH', '/data/playbook.sqlite3'), seeds)
+    stats_store = STATS_MODULE.StatsStore(os.getenv('DB_PATH', '/data/playbook.sqlite3'))
     ai_service = None
     if os.getenv('AI_API_KEY'):
         client = AI_MODULE.DeepSeekClient(os.environ['AI_API_KEY'], os.getenv('AI_BASE_URL', 'https://api.deepseek.com'),
@@ -488,7 +570,7 @@ if __name__ == '__main__':
     handler = make_handler(store, os.environ['EDITOR_KEY'],
                            os.getenv('COOKIE_PATH', '/frisbee/'),
                            os.getenv('COOKIE_SECURE', '1') != '0',
-                           os.getenv('PUBLIC_ORIGIN', 'https://jaredan.site'), ai_service)
+                           os.getenv('PUBLIC_ORIGIN', 'https://jaredan.site'), ai_service, stats_store)
     server = ThreadingHTTPServer(('0.0.0.0', int(os.getenv('PORT', '8080'))), handler)
     print('Frisbee API ready', flush=True)
     server.serve_forever()
