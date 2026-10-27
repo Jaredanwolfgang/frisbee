@@ -22,8 +22,8 @@ class APITest(unittest.TestCase):
         self.store = API.Store(self.path, SEEDS)
         self.start()
 
-    def start(self):
-        handler = API.make_handler(self.store, KEY, '/', False, 'http://test.local')
+    def start(self, key=KEY, password=None):
+        handler = API.make_handler(self.store, key, '/', False, 'http://test.local', editor_password=password)
         handler.log_message = lambda *args: None
         self.server = API.ThreadingHTTPServer(('127.0.0.1', 0), handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -156,6 +156,32 @@ class APITest(unittest.TestCase):
         self.assertEqual(self.request('PUT', '/api/tactics/team-custom', {'tactic': self.custom(), 'baseVersion': 0}, cookie=cookie, extra={'Sec-Fetch-Site': 'cross-site'})[0], 403)
         self.assertEqual(self.request('POST', '/api/logout', {}, cookie=cookie)[0], 200)
         self.assertFalse(self.request('GET', '/api/tactics')[1]['canEdit'])
+
+    def test_separate_entry_code_and_cookie_key_rotation(self):
+        old_cookie = self.request('POST', '/api/login', {'password': KEY})[2]['Set-Cookie'].split(';')[0]
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join()
+        entry_code = 'test-team-code'
+        signing_key = 'rotated-test-cookie-signing-key-123456'
+        self.start(key=signing_key, password=entry_code)
+        for old_or_wrong in [KEY, signing_key, 'wrong']:
+            self.assertEqual(self.request('POST', '/api/login', {'password': old_or_wrong})[0], 401)
+        self.assertFalse(self.request('GET', '/api/tactics', auth=True)[1]['canEdit'])
+        self.assertFalse(self.request('GET', '/api/tactics', cookie=old_cookie)[1]['canEdit'])
+        code, _, headers = self.request('POST', '/api/login', {'password': entry_code})
+        self.assertEqual(code, 200)
+        cookie = headers['Set-Cookie'].split(';')[0]
+        self.assertTrue(self.request('GET', '/api/tactics', cookie=cookie)[1]['canEdit'])
+        self.assertTrue(self.request('GET', '/api/tactics', extra={'Authorization': 'Bearer '+entry_code})[1]['canEdit'])
+        self.assertEqual(self.request('POST', '/api/login', {'password': entry_code}, extra={'Origin': 'https://another.site'})[0], 403)
+        stamp = cookie.split('=', 1)[1].split('.', 1)[0]
+        weak_sig = API.hmac.new(entry_code.encode(), stamp.encode(), API.hashlib.sha256).hexdigest()
+        self.assertFalse(self.request('GET', '/api/tactics', cookie='frisbee_editor='+stamp+'.'+weak_sig)[1]['canEdit'])
+        with self.assertRaises(ValueError):
+            API.make_handler(self.store, 'short', editor_password=entry_code)
+        with self.assertRaises(ValueError):
+            API.make_handler(self.store, signing_key, editor_password='short')
 
     def test_stale_edits_do_not_overwrite(self):
         payload = {'tactic': self.custom(), 'baseVersion': 0}

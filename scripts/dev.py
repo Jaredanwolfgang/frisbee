@@ -12,8 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('frisbee_api', ROOT / 'server/app.py')
 api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
-store = api.Store(ROOT / 'data/dev.sqlite3', json.loads((ROOT / 'server/seed.json').read_text()))
-stats_store = api.STATS_MODULE.StatsStore(ROOT / 'data/dev.sqlite3')
+# UI checks can use an isolated database without replacing local team records.
+preview_db = Path(os.getenv('FRISBEE_PREVIEW_DB', str(ROOT / 'data/dev.sqlite3')))
+store = api.Store(preview_db, json.loads((ROOT / 'server/seed.json').read_text()))
+stats_store = api.STATS_MODULE.StatsStore(preview_db)
 preview_port = int(os.getenv('FRISBEE_PREVIEW_PORT', '4175'))
 ai_service = None
 if os.getenv('AI_API_KEY'):

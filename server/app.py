@@ -282,11 +282,15 @@ class Store:
         return {'added': added, 'copied': copied, 'skipped': skipped, 'revision': revision}
 
 
-def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_origin='https://jaredan.site', ai_service=None, stats_store=None):
+def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_origin='https://jaredan.site', ai_service=None, stats_store=None, editor_password=None):
     if len(edit_key) < 24:
         raise ValueError('EDITOR_KEY must contain at least 24 characters')
+    if editor_password is not None and len(editor_password) < 8:
+        raise ValueError('EDITOR_PASSWORD must contain at least 8 characters')
     auth_attempts, auth_lock = {}, threading.Lock()
+    # Keep cookie signatures on a strong server key, independently of the team's entry code.
     secret = edit_key.encode()
+    login_secret = (editor_password if editor_password is not None else edit_key).encode()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format_, *args):
@@ -324,7 +328,7 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
 
         def authorized(self):
             auth = self.headers.get('Authorization', '')
-            if auth.startswith('Bearer ') and hmac.compare_digest(auth[7:].encode(), secret):
+            if auth.startswith('Bearer ') and hmac.compare_digest(auth[7:].encode(), login_secret):
                 return True
             try:
                 cookie = SimpleCookie(self.headers.get('Cookie', ''))
@@ -504,7 +508,7 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
                                 del auth_attempts[k]
                 data = self.body()
                 password = data.get('password')
-                if not isinstance(password, str) or not hmac.compare_digest(password.encode(), secret):
+                if not isinstance(password, str) or not hmac.compare_digest(password.encode(), login_secret):
                     raise APIError(401, '编辑口令不正确。')
                 with auth_lock:
                     auth_attempts.pop(ip, None)
@@ -570,7 +574,8 @@ if __name__ == '__main__':
     handler = make_handler(store, os.environ['EDITOR_KEY'],
                            os.getenv('COOKIE_PATH', '/frisbee/'),
                            os.getenv('COOKIE_SECURE', '1') != '0',
-                           os.getenv('PUBLIC_ORIGIN', 'https://jaredan.site'), ai_service, stats_store)
+                           os.getenv('PUBLIC_ORIGIN', 'https://jaredan.site'), ai_service, stats_store,
+                           editor_password=os.getenv('EDITOR_PASSWORD') or None)
     server = ThreadingHTTPServer(('0.0.0.0', int(os.getenv('PORT', '8080'))), handler)
     print('Frisbee API ready', flush=True)
     server.serve_forever()

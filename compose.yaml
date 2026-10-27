@@ -9,6 +9,7 @@ services:
     command: ["python", "-u", "app.py"]
     environment:
       EDITOR_KEY: ${EDITOR_KEY:?Set EDITOR_KEY in .env}
+      EDITOR_PASSWORD: ${EDITOR_PASSWORD:-}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://jaredan.site}
       COOKIE_PATH: ${COOKIE_PATH:-/frisbee/}
       DB_PATH: /data/playbook.sqlite3
