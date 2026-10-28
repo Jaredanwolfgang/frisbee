@@ -120,3 +120,6 @@
  #training-pane-attendance>.stats-section-head,#training-pane-attendance>.stats-undo-row{flex:none}
  #training-pane-attendance #training-attendance-chips{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;align-content:start;padding:3px}
 }
+
+/* Player identity belongs to the team workspace; editor access remains shared. */
+body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{display:none}

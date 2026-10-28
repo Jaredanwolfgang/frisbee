@@ -16,3 +16,8 @@ const practice=M.personal(data,p,today,true);
 assert.equal(practice.finished.length,1);assert.equal(practice.totals.assists,1);assert.equal(practice.totals.goals,0);
 assert.equal(M.personal(data,{id:9},today).finished.length,0);
 console.log('PASS: personal participation, finished-game totals, practice isolation, zero denominators, and attendance excluding future/cancelled/planned/pre-join sessions.');
+
+const dated=[{id:'unknown',created:999},{id:'older',heldOn:'2026-09-01',created:900},{id:'newer',heldOn:'2026-10-20',created:100}];
+assert.deepEqual(M.gamesByDate(dated).map(g=>g.id),['newer','older','unknown']);
+assert.deepEqual(dated.map(g=>g.id),['unknown','older','newer'],'sorting must not mutate API records');
+console.log('PASS: game chronology uses actual match dates, leaves unknown dates last and preserves input order.');

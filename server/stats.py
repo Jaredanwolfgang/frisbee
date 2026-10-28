@@ -66,6 +66,13 @@ def video_link(value):
     return value
 
 
+def game_date(value):
+    try:
+        return TEAM.calendar_date(value, '比赛日期')
+    except ValueError as error:
+        raise StatsError(400, str(error)) from None
+
+
 def id_values(raw, key, low, high, label):
     values = raw.get(key)
     if not isinstance(values, list) or not low <= len(values) <= high:
@@ -120,6 +127,7 @@ class StatsStore:
                 "ALTER TABLE stats_players ADD COLUMN joined_on TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE stats_players ADD COLUMN avatar_digest TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE stats_trainings ADD COLUMN held_on TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE stats_games ADD COLUMN held_on TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE stats_trainings ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'",
             ]
             for statement in additions:
@@ -195,12 +203,12 @@ class StatsStore:
     def game(self, db, row):
         events = db.execute('SELECT * FROM stats_events WHERE game_id=? ORDER BY seq', (row['id'],))
         comments = db.execute('SELECT c.*, p.name AS p_name, p.number AS p_number FROM stats_comments c LEFT JOIN stats_players p ON p.id=c.player_id WHERE c.game_id=? ORDER BY c.created, c.id', (row['id'],))
-        return {'id': row['id'], 'name': row['name'], 'opponent': row['opponent'], 'video': row['video'], 'status': row['status'],
+        return {'id': row['id'], 'name': row['name'], 'opponent': row['opponent'], 'video': row['video'], 'status': row['status'], 'heldOn': row['held_on'],
                 'created': row['created'], 'updated': row['updated'], 'events': [self.event(e) for e in events],
                 'comments': [self.comment(c) for c in comments]}
 
     def training(self, db, row):
-        games = [self.game(db, r) for r in db.execute('SELECT * FROM stats_games WHERE training_id=? AND deleted=0 ORDER BY created DESC, rowid DESC', (row['id'],))]
+        games = [self.game(db, r) for r in db.execute('SELECT * FROM stats_games WHERE training_id=? AND deleted=0 ORDER BY held_on DESC, created DESC, rowid DESC', (row['id'],))]
         comments = db.execute('SELECT c.*, p.name AS p_name, p.number AS p_number FROM stats_comments c LEFT JOIN stats_players p ON p.id=c.player_id WHERE c.training_id=? ORDER BY c.created, c.id', (row['id'],))
         drills = []
         for drill_id in json.loads(row['drills'] or '[]'):
@@ -220,7 +228,7 @@ class StatsStore:
             if known_revision == revision:
                 return {'unchanged': True, 'revision': revision}
             players = [self.player(r) for r in db.execute('SELECT * FROM stats_players ORDER BY number, id')]
-            games = [self.game(db, r) for r in db.execute('SELECT * FROM stats_games WHERE deleted=0 AND training_id IS NULL ORDER BY created DESC, rowid DESC')]
+            games = [self.game(db, r) for r in db.execute('SELECT * FROM stats_games WHERE deleted=0 AND training_id IS NULL ORDER BY held_on DESC, created DESC, rowid DESC')]
             trainings = [self.training(db, r) for r in db.execute('SELECT * FROM stats_trainings WHERE deleted=0 ORDER BY created DESC, rowid DESC')]
             return {'players': players, 'games': games, 'trainings': trainings, 'revision': revision}
         finally:
@@ -294,6 +302,7 @@ class StatsStore:
         name = text(raw.get('name'), 100, '比赛名称')
         opponent = text(raw.get('opponent', ''), 100, '对手名称', required=False)
         video = video_link(raw.get('video', ''))
+        held_on = game_date(raw['heldOn']) if 'heldOn' in raw else ''
         training_id = raw.get('trainingId')
         if training_id is not None and (not isinstance(training_id, str) or not GAME_ID.fullmatch(training_id)):
             raise StatsError(400, '训练编号无效。')
@@ -304,20 +313,29 @@ class StatsStore:
                 if not db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (training_id,)).fetchone():
                     raise StatsError(404, '这场训练不存在或已删除。')
             id_, stamp = str(uuid.uuid4()), self.now()
-            db.execute("INSERT INTO stats_games(id,name,opponent,video,training_id,status,created,updated) VALUES (?,?,?,?,?,'live',?,?)", (id_, name, opponent, video, training_id, stamp, stamp))
+            db.execute("INSERT INTO stats_games(id,name,opponent,video,held_on,training_id,status,created,updated) VALUES (?,?,?,?,?,?,'live',?,?)", (id_, name, opponent, video, held_on, training_id, stamp, stamp))
             row = db.execute('SELECT * FROM stats_games WHERE id=?', (id_,)).fetchone()
             return {'game': self.game(db, row), 'revision': self.revision(db, True)}
 
     def update_game(self, game_id, raw):
         if not isinstance(raw, dict):
             raise StatsError(400, '比赛信息格式无效。')
-        name = text(raw.get('name'), 100, '比赛名称')
-        opponent = text(raw.get('opponent', ''), 100, '对手名称', required=False)
-        video = video_link(raw.get('video', ''))
+        updates = {}
+        if 'name' in raw:
+            updates['name'] = text(raw['name'], 100, '比赛名称')
+        if 'opponent' in raw:
+            updates['opponent'] = text(raw['opponent'], 100, '对手名称', required=False)
+        if 'video' in raw:
+            updates['video'] = video_link(raw['video'])
+        if 'heldOn' in raw:
+            updates['held_on'] = game_date(raw['heldOn'])
+        if not updates:
+            raise StatsError(400, '没有要修改的内容。')
         with self.transaction() as db:
             if not db.execute('SELECT 1 FROM stats_games WHERE id=? AND deleted=0', (game_id,)).fetchone():
                 raise StatsError(404, '这场比赛不存在或已删除。')
-            db.execute('UPDATE stats_games SET name=?, opponent=?, video=?, updated=? WHERE id=?', (name, opponent, video, self.now(), game_id))
+            assignments = ', '.join(key+'=?' for key in updates)
+            db.execute('UPDATE stats_games SET '+assignments+', updated=? WHERE id=?', (*updates.values(), self.now(), game_id))
             row = db.execute('SELECT * FROM stats_games WHERE id=?', (game_id,)).fetchone()
             return {'game': self.game(db, row), 'revision': self.revision(db, True)}
 

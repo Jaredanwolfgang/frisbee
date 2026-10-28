@@ -1,6 +1,7 @@
 import http.client
 import importlib.util
 import json
+import sqlite3
 from pathlib import Path
 import tempfile
 import threading
@@ -179,6 +180,69 @@ class StatsAPITest(unittest.TestCase):
         self.assertEqual(self.request('PUT', '/api/stats/games/missing', {'name': 'x'})[0], 404)
         listed = self.request('GET', '/api/stats', auth=False)[1]['games']
         self.assertEqual((listed[0]['name'], listed[0]['opponent']), ('正式队内赛', '海豚队'))
+
+    def test_game_dates_are_independent_validated_and_preserve_records(self):
+        a, b = self.player('疾风', 7), self.player('芒果', 3, 'female')
+        raw = {'name':'补录比赛', 'opponent':'海豚队', 'video':'https://example.com/match', 'heldOn':'2024-02-29'}
+        code, result = self.request('POST', '/api/stats/games', raw)
+        self.assertEqual(code, 200, result)
+        game = result['game']
+        gid = game['id']
+        self.assertEqual(game['heldOn'], '2024-02-29')
+        self.event(gid, 'goal', a, b)
+        cookie = self.login('疾风')
+        self.assertEqual(self.request('POST', f'/api/stats/games/{gid}/comments', {'text':'保留这条心得'}, auth=False, extra={'Cookie':cookie})[0], 200)
+        self.request('POST', f'/api/stats/games/{gid}/status', {'status':'finished'})
+        for bad in ['', None, False, 20261027, '2026-02-29', '2026-13-01', '20261027', '2026-1-01']:
+            self.assertEqual(self.request('POST', '/api/stats/games', {**raw,'heldOn':bad})[0], 400, bad)
+            self.assertEqual(self.request('PUT', f'/api/stats/games/{gid}', {'heldOn':bad})[0], 400, bad)
+        self.assertEqual(self.request('PUT', f'/api/stats/games/{gid}', {'heldOn':'2026-10-25'}, auth=False, extra={'Cookie':cookie})[0], 401)
+        self.assertEqual(self.request('PUT', f'/api/stats/games/{gid}', {'heldOn':'2026-10-25'}, extra={'Origin':'https://evil.example'})[0], 403)
+        code, result = self.request('PUT', f'/api/stats/games/{gid}', {'heldOn':'2026-10-25'})
+        self.assertEqual(code, 200, result)
+        changed = result['game']
+        self.assertEqual(changed['heldOn'], '2026-10-25')
+        for key in ('id','name','opponent','video','created'):
+            self.assertEqual(changed[key], game[key])
+        self.assertEqual(changed['status'], 'finished')
+        self.assertEqual(changed['events'][0]['kind'], 'goal')
+        self.assertEqual(changed['comments'][0]['text'], '保留这条心得')
+        self.assertEqual(self.request('PUT', f'/api/stats/games/{gid}', {})[0], 400)
+        # Public reads and process restarts retain the explicitly selected date.
+        self.assertEqual(self.request('GET', '/api/stats', auth=False)[1]['games'][0], changed)
+        reopened = API.STATS_MODULE.StatsStore(self.path)
+        self.assertEqual(reopened.snapshot()['games'][0], changed)
+        # Older clients may omit the date; that means unknown, never the creation day.
+        undated = self.request('POST', '/api/stats/games', {'name':'尚未补日期'})[1]['game']
+        self.assertEqual(undated['heldOn'], '')
+        older = self.request('POST', '/api/stats/games', {**raw,'heldOn':'2024-02-29'})[1]['game']
+        self.assertEqual([g['id'] for g in self.stats.snapshot()['games']], [gid, older['id'], undated['id']])
+
+    def test_legacy_game_date_migration_does_not_guess_or_replace_creation_time(self):
+        path = self.path.parent/'legacy-game.sqlite3'
+        API.Store(path, SEEDS)
+        with sqlite3.connect(path) as db:
+            db.execute("CREATE TABLE stats_games (id TEXT PRIMARY KEY,name TEXT NOT NULL,opponent TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'live',created INTEGER NOT NULL,updated INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0)")
+            db.execute("INSERT INTO stats_games VALUES ('old-match','历史比赛','海豚队','finished',1700000000000,1700000000000,0)")
+        migrated = API.STATS_MODULE.StatsStore(path)
+        game = migrated.snapshot()['games'][0]
+        self.assertEqual((game['heldOn'],game['created']), ('',1700000000000))
+        migrated.update_game('old-match', {'heldOn':'2023-09-03'})
+        again = API.STATS_MODULE.StatsStore(path).snapshot()['games'][0]
+        self.assertEqual((again['heldOn'],again['created'],again['name'],again['status']), ('2023-09-03',1700000000000,'历史比赛','finished'))
+        with migrated.connect() as db:
+            self.assertEqual(db.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
+
+    def test_scrimmage_date_can_be_edited_independently_of_training(self):
+        tid = self.request('POST', '/api/stats/trainings', {'name':'周末训练','heldOn':'2026-10-24'})[1]['training']['id']
+        code, result = self.request('POST', '/api/stats/games', {'name':'训练赛','trainingId':tid,'heldOn':'2026-10-24'})
+        self.assertEqual(code, 200)
+        gid = result['game']['id']
+        self.assertEqual(self.request('PUT', f'/api/stats/games/{gid}', {'heldOn':'2026-10-25'})[0], 200)
+        snapshot = self.request('GET', '/api/stats', auth=False)[1]
+        self.assertEqual(snapshot['games'], [])
+        self.assertEqual(snapshot['trainings'][0]['heldOn'], '2026-10-24')
+        self.assertEqual(snapshot['trainings'][0]['games'][0]['heldOn'], '2026-10-25')
 
     def test_revision_poll_restart_and_soft_deleted_games(self):
         thrower, receiver = self.player('疾风', 7), self.player('芒果', 3, 'female')
