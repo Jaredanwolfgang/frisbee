@@ -10,12 +10,27 @@ const StatsUI=(()=>{
  let openGameId=null,sel={thrower:null,receiver:null},sort={key:'goals',dir:1},editingId=null,formGender='male';
  let pointMode=false,pointSel=new Set(),pointStart='offense',editingGameId=null;
  let openTrainingId=null,attendSel=new Set(),attendDirty=false,scrimmageTrainingId=null;
- let gamePane='record',chipQuery='',showAllPlayers=false,teamHub=null;
+ let trainingPane='plan',gamePane='record',chipQuery='',showAllPlayers=false,teamHub=null;
  const commentDrafts=new Map(),draftKey=g=>me&&g?me.id+':'+g.id:null;
  const metricGroups={attack:['goals','assists','passes'],defense:['turnovers','steals'],line:['points','oPoints','dPoints'],all:STATS.map(([k])=>k)};
  const clearChipSearch=()=>{chipQuery='';$('#stats-chip-search').value='';};
  function focusStatsForm(dialog,field){const title=$(dialog+' h2');if(MobileUI.isPhone()){title?.focus({preventScroll:true});}else $(field).focus();}
- function syncGamePane(){const body=$('.stats-game-body');body.dataset.pane=gamePane;$$('[data-stats-tab]').forEach(b=>{const selected=b.dataset.statsTab===gamePane;b.setAttribute('aria-selected',String(selected));b.tabIndex=selected?0:-1;});}
+ function syncGamePane(){const body=$('#stats-game-dialog .stats-game-body');body.dataset.pane=gamePane;$$('[data-stats-pane]').forEach(panel=>panel.hidden=panel.dataset.statsPane!==gamePane);$$('[data-stats-tab]').forEach(b=>{const selected=b.dataset.statsTab===gamePane;b.setAttribute('aria-selected',String(selected));b.tabIndex=selected?0:-1;});}
+ function syncTrainingPane(){
+  $('#training-body').dataset.trainingView=trainingPane;
+  $$('[data-training-pane]').forEach(panel=>panel.hidden=panel.dataset.trainingPane!==trainingPane);
+  $$('[data-training-tab]').forEach(button=>{const selected=button.dataset.trainingTab===trainingPane;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;});
+ }
+ function bindViewTabs(nav,selector,key,select){
+  const buttons=$$(selector);
+  buttons.forEach(button=>bindTap(button,()=>select(button.dataset[key])));
+  $(nav).addEventListener('keydown',event=>{const index=buttons.indexOf(document.activeElement);if(index<0||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;select(buttons[next].dataset[key]);buttons[next].focus();});
+ }
+ const trainingStatus={planned:'计划中',completed:'已完成',cancelled:'已取消'};
+ function activityCard({attribute,id,name,status,label,heldOn,meta,count,unit}){
+  return '<button type="button" class="stats-game-card" '+attribute+'="'+esc(id)+'"><span class="stats-badge '+esc(status)+'">'+esc(label)+'</span><span class="stats-game-card-main"><strong>'+esc(name)+'</strong><span class="team-activity-date"><time datetime="'+esc(heldOn)+'">'+esc(heldOn)+'</time></span><span class="team-activity-meta">'+esc(meta)+'</span></span><span class="stats-game-card-side"><b>'+count+'</b><small>'+esc(unit)+'</small></span><span class="row-arrow" aria-hidden="true">›</span></button>';
+ }
+ function gameCard(g){return activityCard({attribute:'data-stats-game',id:g.id,name:g.name,status:g.status,label:g.status==='live'?'进行中':'已结束',heldOn:date(g.created),meta:(g.opponent?'vs '+g.opponent+' · ':'')+g.events.length+' 条记录',count:g.events.filter(e=>e.kind==='goal').length,unit:'得分'});}
  function metricView(target,value){const select=$('#stats-'+target+'-view'),table=$('#'+(target==='average'?'stats-averages':'stats-boxscore'));select.value=metricGroups[value]?value:'attack';table.closest('.stats-table-wrap').dataset.statsView=select.value;document.querySelector('[data-scroll-for="'+table.id+'"]').hidden=select.value!=='all';if(target==='average'&&!metricGroups[select.value].includes(sort.key)&&sort.key!=='name'&&sort.key!=='attendance'){sort={key:metricGroups[select.value][0],dir:1};renderAverages();}}
  const pad=n=>String(n).padStart(2,'0');
  const date=ms=>{const d=new Date(ms||Date.now());return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
@@ -70,10 +85,7 @@ const StatsUI=(()=>{
   const live=data.games.filter(g=>g.status==='live').length;
   $('#stats-games-note').textContent=data.games.length?(data.games.length+' 场'+(live?' · '+live+' 场进行中':'')):'';
   empty.hidden=!!data.games.length;
-  box.innerHTML=data.games.map(g=>{
-   const goals=g.events.filter(e=>e.kind==='goal').length;
-   return '<button type="button" class="stats-game-card" data-stats-game="'+esc(g.id)+'"><span class="stats-badge '+g.status+'">'+(g.status==='live'?'进行中':'已结束')+'</span><span class="stats-game-card-main"><strong>'+esc(g.name)+'</strong><span>'+esc(date(g.created))+(g.opponent?' · vs '+esc(g.opponent):'')+' · '+g.events.length+' 条记录</span></span><span class="stats-game-card-side"><b>'+goals+'</b><small>得分</small></span><span class="row-arrow">›</span></button>';
-  }).join('');
+  box.innerHTML=data.games.map(gameCard).join('');
  }
  const findGameContainer=id=>{
   const g=data.games.find(g=>g.id===id);
@@ -220,11 +232,11 @@ const StatsUI=(()=>{
   $('#trainings-new').disabled=!loaded&&!error;$('#trainings-new').hidden=!canEdit();
   const box=$('#trainings-list'),empty=$('#trainings-empty');
   empty.hidden=!!data.trainings.length;
-  box.innerHTML=data.trainings.map(t=>'<button type="button" class="stats-game-card" data-training-card="'+esc(t.id)+'"><span class="stats-badge finished">训练</span><span class="stats-game-card-main"><strong>'+esc(t.name)+'</strong><span>'+esc(t.heldOn)+' · '+({planned:'计划中',completed:'已完成',cancelled:'已取消'}[t.status]||'')+' · 出勤 '+t.attendees.length+' 人 · '+t.drills.length+' 个 Drill · '+t.games.length+' 场训练赛'+(t.comments.length?' · '+t.comments.length+' 条总结':'')+'</span></span><span class="row-arrow">›</span></button>').join('');
+  box.innerHTML=data.trainings.map(t=>activityCard({attribute:'data-training-card',id:t.id,name:t.name,status:t.status,label:trainingStatus[t.status]||'训练',heldOn:t.heldOn,meta:t.drills.length+' 个 Drill · '+t.games.length+' 场训练赛'+(t.comments.length?' · '+t.comments.length+' 条总结':''),count:t.attendees.length,unit:'出勤'})).join('');
  }
  function renderAttendance(t,editable){
   const note=$('#training-attendance-note');
-  note.textContent=!data.players.length?'先在技术统计里添加队员':editable?'点选本次出勤的队员，保存后计入出勤率':'查看模式 · 出勤由编辑者记录';
+  note.textContent=!data.players.length?'先在盘队中心添加队员':editable?'点选本次出勤的队员，保存后计入出勤率':'查看模式 · 出勤由编辑者记录';
   $('#training-attendance-chips').innerHTML=data.players.length?data.players.map(p=>{
    const on=attendSel.has(p.id);
    return '<button type="button" class="stats-chip'+(on?' is-line':'')+'" data-attend-chip="'+p.id+'" aria-pressed="'+on+'"'+(editable?'':' disabled')+'><span class="stats-number">#'+p.number+'</span><span class="stats-chip-name">'+esc(p.name)+'</span>'+genderMark(p)+(on?'<i>出勤</i>':'')+'</button>';
@@ -245,10 +257,7 @@ const StatsUI=(()=>{
   $('#training-drill-add').hidden=!canEdit();$('#training-drill-add').disabled=busy;
  }
  function renderTrainingGames(t){
-  $('#training-games').innerHTML=t.games.length?t.games.map(g=>{
-   const goals=g.events.filter(e=>e.kind==='goal').length;
-   return '<button type="button" class="stats-game-card" data-stats-game="'+esc(g.id)+'"><span class="stats-badge '+g.status+'">'+(g.status==='live'?'进行中':'已结束')+'</span><span class="stats-game-card-main"><strong>'+esc(g.name)+'</strong><span>'+esc(date(g.created))+(g.opponent?' · vs '+esc(g.opponent):'')+' · '+g.events.length+' 条记录</span></span><span class="stats-game-card-side"><b>'+goals+'</b><small>得分</small></span><span class="row-arrow">›</span></button>';
-  }).join(''):'<p class="stats-empty">还没有训练赛。点「添加训练赛」记录队内对抗。</p>';
+  $('#training-games').innerHTML=t.games.length?t.games.map(gameCard).join(''):'<p class="stats-empty">还没有训练赛。点「添加训练赛」记录队内对抗。</p>';
   $('#training-game-add').hidden=!canEdit();$('#training-game-add').disabled=busy;
  }
  function renderTrainingComments(t){
@@ -265,14 +274,14 @@ const StatsUI=(()=>{
   if(!t){openTrainingId=null;if(dlg.open){dlg.close();deps.toast('这次训练已被删除。');}return;}
   const editable=canEdit()&&!busy;
   $('#training-title').textContent=t.name;
-  $('#training-sub').textContent=t.heldOn+' · '+({planned:'计划中',completed:'已完成',cancelled:'已取消'}[t.status]||'')+' · 出勤 '+t.attendees.length+' / '+data.players.length+' 人 · '+t.games.length+' 场训练赛';
-  $('#training-unlock').hidden=canEdit();$('#training-more').hidden=!canEdit();
+  $('#training-sub').textContent=t.heldOn+' · '+(trainingStatus[t.status]||'')+' · 出勤 '+t.attendees.length+' / '+data.players.length+' 人 · '+t.games.length+' 场训练赛';
+  $('#training-unlock').hidden=canEdit();$('#training-more').hidden=!canEdit();$('#team-training-date-edit').hidden=!canEdit();syncTrainingPane();
   renderAttendance(t,editable);renderWarmup(t);renderDrills(t);renderTrainingGames(t);renderTrainingComments(t);
  }
  function openTraining(id){
   const t=data.trainings.find(t=>t.id===id);
   if(!t)return;
-  openTrainingId=id;attendSel=new Set(t.attendees);attendDirty=false;
+  openTrainingId=id;trainingPane='plan';attendSel=new Set(t.attendees);attendDirty=false;
   $('#training-warmup').value=t.warmup;
   renderTraining();
   $('#training-dialog').showModal();
@@ -398,8 +407,8 @@ const StatsUI=(()=>{
 
  function init(deps_){
   deps=deps_;
-  $$('.stats-game-tabs [data-stats-tab]').forEach(b=>bindTap(b,()=>{gamePane=b.dataset.statsTab;syncGamePane();$('.stats-game-body').scrollTop=0;}));
-  $('.stats-game-tabs').addEventListener('keydown',event=>{const buttons=$$('[data-stats-tab]'),index=buttons.indexOf(document.activeElement);if(index<0||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;gamePane=buttons[next].dataset.statsTab;syncGamePane();buttons[next].focus();$('.stats-game-body').scrollTop=0;});
+  bindViewTabs('#stats-game-dialog .stats-game-tabs','[data-stats-tab]','statsTab',pane=>{gamePane=pane;syncGamePane();$('#stats-game-dialog .stats-game-body').scrollTop=0;});
+  bindViewTabs('#training-dialog .stats-game-tabs','[data-training-tab]','trainingTab',pane=>{trainingPane=pane;syncTrainingPane();$('#training-body').scrollTop=0;});
   if(window.ResizeObserver)new ResizeObserver(fitAverageViewport).observe($('#stats-averages'));else window.addEventListener('resize',fitAverageViewport);
   $('#stats-average-view').onchange=event=>metricView('average',event.target.value);
   $('#stats-box-view').onchange=event=>metricView('box',event.target.value);
@@ -646,7 +655,7 @@ const StatsUI=(()=>{
     if(p)mutate('stats/players/'+p.id,{method:'DELETE'},r=>{data.players=data.players.filter(x=>x.id!==r.deleted);deps.toast('已删除 #'+p.number+' '+p.name);});
    }
   });
-  teamHub=TeamHub.init({api:deps.api,toast:deps.toast,canEdit,refresh,getState:()=>({data,me,loaded,error,busy}),login:()=>$('#stats-comment-login').click(),toggleEdit:deps.toggleEdit,openTeam:deps.openTeam,currentTraining,openTraining,openReview:id=>{openGame(id);gamePane='comments';syncGamePane();},openTrainingReview:id=>{openTraining(id);$('#training-comment-text').focus();$('#training-comment-form').scrollIntoView({block:'start'});}});
+  teamHub=TeamHub.init({api:deps.api,toast:deps.toast,canEdit,refresh,getState:()=>({data,me,loaded,error,busy}),login:()=>$('#stats-comment-login').click(),toggleEdit:deps.toggleEdit,openTeam:deps.openTeam,currentTraining,openTraining,openReview:id=>{openGame(id);gamePane='comments';syncGamePane();},openTrainingReview:id=>{openTraining(id);trainingPane='comments';syncTrainingPane();}});
   refresh();
   timer=setInterval(()=>{if(active()&&!document.hidden&&!busy)refresh();},8000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&active())refresh();});

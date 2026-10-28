@@ -65,3 +65,58 @@
 @media(max-width:600px){.stats-drill-row>.quiet-btn{min-height:44px;padding:8px 10px;font-size:13px}.stats-drill-row>strong{font-size:14px}.stats-drill-row>small{font-size:13px;color:#7d8f70}.topbar .top-actions .primary,.topbar .top-actions .more-menu>summary{min-height:44px}}
 @media(max-width:600px){#help .help-close{order:-1;min-height:44px;font-size:14px;border:0;background:none;padding:7px 4px;flex:none}}
 @media(max-width:360px){#stats-averages th:first-child{width:76px}#stats-averages .stats-table-name{max-width:58px}#stats-averages td b{font-size:15px}}
+
+/* Training and matches share the same activity cards and detail navigation. */
+.stats-game-card{flex-wrap:nowrap;min-height:100px;padding:16px;gap:14px;background:#fff;border-radius:12px}
+.stats-game-card-main{flex:1 1 0;gap:3px}
+.stats-game-card-main strong{font-size:16px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+.stats-game-card-main span{font-size:12px;line-height:1.6}
+.stats-game-card-main .team-activity-date{color:var(--ink)}
+.stats-game-card-main .team-activity-meta{color:var(--muted)}
+.stats-game-card-side{min-width:42px;text-align:center;flex:none}
+.stats-badge{padding:5px 8px;min-width:48px;text-align:center}
+.stats-badge.planned{background:#edf3fa;color:#4a6c8e}
+.stats-badge.completed{background:#e8f1e2;color:#547447}
+.stats-badge.cancelled{background:#f0f0ec;color:#85887e}
+#stats-game-dialog,#training-dialog{width:min(780px,94vw);padding:0;overflow:hidden}
+#stats-game-dialog .stats-game-shell,#training-dialog .stats-game-shell{height:min(760px,90dvh);min-height:0}
+.stats-game-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-bottom:1px solid var(--line);padding:0 16px;background:#fff;flex:none}
+.stats-game-tabs button{font:inherit;font-size:14px;min-height:48px;padding:10px 4px;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:#7d9075;white-space:nowrap}
+.stats-game-tabs button[aria-selected="true"]{color:#3d693d;border-bottom-color:#64874f;font-weight:650}
+.stats-game-body{flex:1;min-height:0;align-content:start;background:#f7f9f3;overscroll-behavior:contain}
+.stats-game-body>[hidden]{display:none!important}
+.team-training-plan{display:grid;gap:14px;min-width:0}
+.stats-game-head>.icon-btn{flex:none;min-width:40px;min-height:44px;border:0;background:none}
+.stats-game-head .more-menu>summary{min-height:44px;min-width:36px;display:grid;place-items:center;padding:4px;font-size:18px}
+.stats-game-head .more-menu>div{top:48px;min-width:180px}
+.stats-game-head .more-menu button{min-height:44px;font-size:14px}
+.stats-game-head-actions .quiet-btn{min-height:44px}
+#training-pane-attendance #training-attendance-chips{max-height:none;overflow:visible}
+@media(max-width:600px){
+ .stats-game-card{min-height:100px;padding:13px 11px;gap:9px}
+ .stats-game-card-main strong{font-size:15px}
+ .stats-game-card-main span{font-size:12px}
+ .stats-game-card-side{min-width:32px}
+ .stats-badge{font-size:10px;padding:5px 6px;min-width:44px}
+ #stats-game-dialog,#training-dialog{width:100%;max-width:100%;height:100dvh;max-height:100dvh;overflow:hidden}
+ #stats-game-dialog .stats-game-shell,#training-dialog .stats-game-shell{height:100%;min-height:0;max-height:none}
+ .stats-game-head{position:relative;min-height:72px;gap:6px;padding:max(8px,env(safe-area-inset-top)) 10px 8px}
+ .stats-game-heading h2{font-size:16px;line-height:1.5}
+ .stats-game-heading span{font-size:11px}
+ .stats-game-head-actions .quiet-btn{font-size:12px;padding:6px}
+ .stats-game-tabs{padding:0 8px}
+ .stats-game-tabs button{font-size:13px}
+ #training-body{display:block;padding:14px 12px max(16px,env(safe-area-inset-bottom));overflow:auto}
+ #training-dialog .stats-section-head{align-items:flex-start;gap:6px}
+ #training-dialog .stats-section-head .muted{font-size:12px;line-height:1.7}
+ #training-dialog .stats-section-head h3{font-size:15px}
+ #training-pane-attendance .stats-chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ #training-pane-attendance .stats-chip{width:100%;min-width:0;min-height:52px}
+}
+@media(max-width:360px){.stats-game-card{gap:6px}.stats-game-card-main span{font-size:11px}.stats-game-head-actions .quiet-btn{font-size:11px}.stats-game-heading h2{font-size:15px}}
+@media(max-width:600px){
+ #training-body[data-training-view="attendance"]{display:flex;overflow:hidden}
+ #training-pane-attendance{display:flex;flex-direction:column;flex:1;min-height:0}
+ #training-pane-attendance>.stats-section-head,#training-pane-attendance>.stats-undo-row{flex:none}
+ #training-pane-attendance #training-attendance-chips{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;align-content:start;padding:3px}
+}
