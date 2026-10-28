@@ -47,10 +47,11 @@ const StatsUI=(()=>{
   $('#stats-logout').hidden=!me;
   $('#stats-name-options').innerHTML=data.players.map(p=>'<option value="'+esc(p.name)+'">').join('');
  }
+ function fitAverageViewport(){const table=$('#stats-averages'),wrap=$('#team-averages-scroll'),rows=[...table.querySelectorAll('tbody tr')];$('#team-averages-hint').hidden=rows.length<=6;if(!rows.length){wrap.style.removeProperty('--team-table-height');return;}const bottom=rows[Math.min(6,rows.length)-1].getBoundingClientRect().bottom,top=table.getBoundingClientRect().top;if(bottom>top)wrap.style.setProperty('--team-table-height',Math.ceil(bottom-top)+'px');}
  function renderAverages(){
-  const {totals,games}=seasonTotals(),table=$('#stats-averages'),empty=$('#stats-averages-empty');
+  const {totals,games}=seasonTotals(),table=$('#stats-averages'),empty=$('#stats-averages-empty'),wrap=$('#team-averages-scroll'),scroll={top:wrap.scrollTop,left:wrap.scrollLeft};
   $('#stats-average-note').textContent=games?'按 '+games+' 场已结束比赛平均 · 小字为总计':'结束后计入场均';
-  if(!data.players.length){table.innerHTML='';empty.hidden=false;empty.textContent='还没有队员。点「管理队员」添加盘名、号码和性别。';return;}
+  if(!data.players.length){table.innerHTML='';fitAverageViewport();empty.hidden=false;empty.textContent='还没有队员。点「管理队员」添加盘名、号码和性别。';return;}
   empty.hidden=true;
   const trainings=data.trainings||[],today=localDate(),totalTrainings=trainings.filter(t=>TeamMetrics.eligible(t,null,today)).length;
   const attend=p=>{const a=TeamMetrics.attendance(trainings,p,today);return a.total?{n:a.present,r:a.present/a.total,total:a.total}:null;};
@@ -62,6 +63,7 @@ const StatsUI=(()=>{
   const attendCell=p=>{const a=attend(p);return '<td><b>'+(a?Math.round(a.r*100)+'%':'—')+'</b><small>'+(a?a.n+'/'+a.total:'—')+'</small></td>';};
   table.innerHTML='<thead><tr>'+[['name','队员'],...STATS].map(([k,t])=>'<th'+(k==='name'?'':' data-stat="'+k+'"')+'><button type="button" data-stats-sort="'+k+'">'+t+(sort.key===k?(sort.dir>0?' ↓':' ↑'):'')+'</button></th>').join('')+'<th><button type="button" data-stats-sort="attendance">出勤率'+(sort.key==='attendance'?(sort.dir>0?' ↓':' ↑'):'')+'</button></th></tr></thead><tbody>'+
    rows.map(({p,t})=>'<tr><th scope="row"><span class="stats-number">#'+p.number+'</span><span class="stats-table-name" title="'+esc(p.name)+'">'+esc(p.name)+'</span>'+genderMark(p)+'</th>'+STATS.map(([k])=>'<td data-stat="'+k+'"><b>'+avg(t[k])+'</b><small>'+t[k]+'</small></td>').join('')+attendCell(p)+'</tr>').join('')+'</tbody>';
+  fitAverageViewport();wrap.scrollTop=scroll.top;wrap.scrollLeft=scroll.left;
  }
  function renderGames(){
   const box=$('#stats-games'),empty=$('#stats-games-empty');
@@ -398,6 +400,7 @@ const StatsUI=(()=>{
   deps=deps_;
   $$('.stats-game-tabs [data-stats-tab]').forEach(b=>bindTap(b,()=>{gamePane=b.dataset.statsTab;syncGamePane();$('.stats-game-body').scrollTop=0;}));
   $('.stats-game-tabs').addEventListener('keydown',event=>{const buttons=$$('[data-stats-tab]'),index=buttons.indexOf(document.activeElement);if(index<0||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;gamePane=buttons[next].dataset.statsTab;syncGamePane();buttons[next].focus();$('.stats-game-body').scrollTop=0;});
+  if(window.ResizeObserver)new ResizeObserver(fitAverageViewport).observe($('#stats-averages'));else window.addEventListener('resize',fitAverageViewport);
   $('#stats-average-view').onchange=event=>metricView('average',event.target.value);
   $('#stats-box-view').onchange=event=>metricView('box',event.target.value);
   $('#stats-chip-search').oninput=event=>{chipQuery=event.target.value.trim().toLowerCase();const g=currentGame();renderChips(!!g&&canEdit()&&g.status==='live'&&!busy);};

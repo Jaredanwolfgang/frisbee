@@ -25,6 +25,11 @@ backend = ThreadingHTTPServer(('127.0.0.1', 0), api.make_handler(store, 'frisbee
 
 
 class Preview(SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # Preview source must never reuse a stale script or stylesheet after edits.
+        self.send_header('Cache-Control', 'no-store')
+        super().end_headers()
+
     def proxy(self):
         size = int(self.headers.get('Content-Length', 0))
         conn = http.client.HTTPConnection('127.0.0.1', backend.server_port, timeout=150)
@@ -64,6 +69,8 @@ class Preview(SimpleHTTPRequestHandler):
             self.end_headers()
             return
         if self.path.startswith('/frisbee/'):
+            if 'If-Modified-Since' in self.headers:
+                del self.headers['If-Modified-Since']
             self.path = self.path[len('/frisbee'):]
             return super().do_GET()
         self.send_error(404)
