@@ -123,3 +123,17 @@
 
 /* Player identity belongs to the team workspace; editor access remains shared. */
 body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{display:none}
+
+/* Keep header controls together at the right, in their keyboard focus order. */
+.topbar>.header-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex:none;margin-left:auto}
+.header-actions .team-account-actions{margin-left:0}
+.topbar .header-actions .top-actions,.topbar .header-actions #rules-header-actions{order:initial;width:auto;margin:0}
+.header-actions>#new-btn{min-height:44px;padding:9px 12px;font-size:13px;white-space:nowrap}
+.header-actions .top-actions>.more-menu>summary{height:44px;min-width:42px;display:grid;place-items:center;padding:4px 8px}
+@media(max-width:600px){
+ .topbar .workspace-nav{flex:1 1 194px}
+ .topbar>.header-actions{gap:7px}
+ .topbar .header-actions .top-actions{gap:0}
+ .header-actions .team-account-actions{gap:3px}
+ .header-actions .top-actions>.more-menu>summary{min-width:38px}
+}
