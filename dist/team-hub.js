@@ -40,7 +40,7 @@ const TeamHub=(()=>{
     html+=panel('我的近期比赛',m.games.slice(0,4).map(gameButton).join('')||empty('还没有本人的参赛记录。'));
    }else{
     const finished=data.games.filter(g=>g.status==='finished'),completed=data.trainings.filter(t=>TeamMetrics.eligible(t,null,today())),goals=finished.reduce((n,g)=>n+g.events.filter(e=>e.kind==='goal').length,0);
-    html='<div class="team-metrics">'+card('队员',data.players.length,'一起奔跑的伙伴')+card('正式比赛',finished.length,'已结束的比赛')+card('训练',completed.length,'已完成的训练')+card('进球',goals,'正式比赛累计')+'</div>';
+    html='<div class="team-metrics">'+card('队员',data.players.length,'一起奔跑的伙伴')+card('正式比赛',finished.length,'已结束的比赛')+card('训练',completed.length,'已完成的训练')+card('得分',goals,'正式比赛累计')+'</div>';
     if(d.canEdit())html+='<div class="team-admin-note"><span>管理模式已开启</span><button type="button" class="quiet-btn" data-team-create="game">＋ 比赛</button><button type="button" class="quiet-btn" data-team-create="training">＋ 训练</button><button type="button" class="quiet-btn" data-team-create="player">＋ 队员</button></div>';
     const upcoming=data.trainings.filter(t=>t.status==='planned').sort((a,b)=>a.heldOn.localeCompare(b.heldOn));
     html+='<div class="team-dashboard-grid">'+panel('训练安排',upcoming.slice(0,3).map(t=>trainingButton(t)).join('')||empty('暂无待进行的训练。'),'<button type="button" class="team-link" data-team-goto="trainings">全部训练 ↗</button>')+panel('近期比赛',TeamMetrics.gamesByDate(data.games).slice(0,3).map(gameButton).join('')||empty('暂无比赛记录。'),'<button type="button" class="team-link" data-team-goto="games">全部比赛 ↗</button>')+'</div>';
