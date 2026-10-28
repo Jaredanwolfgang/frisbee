@@ -41,7 +41,7 @@ def is_number(v):
 
 def point(p):
     if not isinstance(p, dict) or not is_number(p.get('x')) or not is_number(p.get('y')):
-        raise APIError(400, '球员或路线坐标无效。')
+        raise APIError(400, '队员或路线坐标无效。')
     if not (20 <= p['x'] <= 980 and 20 <= p['y'] <= 540):
         raise APIError(400, '坐标超出场地范围。')
     return {'x': p['x'], 'y': p['y']}
@@ -106,20 +106,20 @@ def tactic(raw):
         out['catalogRevision'] = raw['catalogRevision']
     for f in frames:
         if not isinstance(f, dict) or not isinstance(f.get('players'), list) or not 1 <= len(f['players']) <= MAX_PLAYERS:
-            raise APIError(400, '球员列表无效。')
+            raise APIError(400, '队员列表无效。')
         if out['kind'] == 'drill' and len(f['players']) > 7:
-            raise APIError(400, 'Drill 演示总人数最多 7 人（含防守球员）。')
+            raise APIError(400, 'Drill 演示总人数最多 7 人（含防守队员）。')
         players, ids = [], set()
         for p in f['players']:
             if not isinstance(p, dict) or type(p.get('id')) is not int or not 1 <= p['id'] <= 999999 or p['id'] in ids:
-                raise APIError(400, '球员编号无效或重复。')
+                raise APIError(400, '队员编号无效或重复。')
             if not isinstance(p.get('team'), str) or p['team'] not in {'offense', 'defense'}:
                 raise APIError(400, '攻守分组无效。')
             ids.add(p['id'])
             player = {'id': p['id'], 'team': p['team'], **point(p)}
             if 'number' in p:
                 if type(p['number']) is not int or not 1 <= p['number'] <= 7:
-                    raise APIError(400, '球员显示编号无效。')
+                    raise APIError(400, '队员显示编号无效。')
                 player['number'] = p['number']
             players.append(player)
         if any(sum(p['team'] == team for p in players) > 7 for team in ['offense', 'defense']):
@@ -131,7 +131,7 @@ def tactic(raw):
             if not isinstance(r, dict) or not isinstance(r.get('id'), str) or not ROUTE_ID.fullmatch(r['id']):
                 raise APIError(400, '路线编号无效。')
             if type(r.get('player')) is not int or r['player'] not in ids or not isinstance(r.get('kind'), str) or r['kind'] not in {'run', 'pass'}:
-                raise APIError(400, '路线球员或类型无效。')
+                raise APIError(400, '路线队员或类型无效。')
             via = r.get('points')
             if not isinstance(via, list) or len(via) > 12:
                 raise APIError(400, '路线中间点无效。')

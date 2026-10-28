@@ -137,3 +137,18 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
  .header-actions .team-account-actions{gap:3px}
  .header-actions .top-actions>.more-menu>summary{min-width:38px}
 }
+
+/* Reviews use the card's width instead of the browser's narrow textarea default. */
+.stats-review-form{display:grid;gap:12px;width:100%;min-width:0;margin:12px 0 0}
+.stats-review-form>textarea,#stats-comment-text,#training-comment-text{display:block;box-sizing:border-box;width:100%;max-width:100%;min-height:132px;resize:vertical;padding:12px 14px;line-height:1.7}
+.stats-review-form>.stats-comment-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:0;flex-wrap:wrap}
+.stats-review-form>.stats-comment-actions>button{flex:none;min-height:44px;min-width:120px}
+#stats-comments,#training-comments{margin-top:20px}
+.stats-point-group em.unrecorded{color:#798475;background:#f0f3ed}
+@media(max-width:600px){
+ .stats-review-form{gap:10px}
+ .stats-review-form>textarea,#stats-comment-text,#training-comment-text{min-height:152px;resize:vertical}
+ .stats-review-form>.stats-comment-actions>button{min-width:0;flex:1}
+}
+/* Leave enough label space for the full Ultimate defensive-statistics wording. */
+.stats-metric-control select{width:174px;max-width:174px}

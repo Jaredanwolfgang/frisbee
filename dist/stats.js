@@ -3,7 +3,7 @@
 const StatsUI=(()=>{
  const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const STATS=[['goals','得分'],['assists','助攻'],['passes','传盘'],['turnovers','失误'],['steals','抢断'],['points','上场'],['oPoints','进攻'],['dPoints','防守']];
+ const STATS=[['goals','得分'],['assists','助攻'],['passes','传盘完成'],['turnovers','失误'],['steals','防守成功'],['points','上场分数'],['oPoints','进攻开'],['dPoints','防守开']];
  const ZERO={goals:0,assists:0,passes:0,turnovers:0,steals:0,points:0,oPoints:0,dPoints:0};
  const GENDER_MARK={male:'♂',female:'♀'};
  let deps=null,data={players:[],games:[],trainings:[]},revision=-1,loaded=false,error='',inflight=null,busy=false,me=null;
@@ -140,7 +140,7 @@ const StatsUI=(()=>{
   $('#rec-turn').disabled=!editable||!t;$('#rec-defense').disabled=!editable||!t||r;
   $('#rec-undo').disabled=!editable||!g.events.length;$('#rec-clear').disabled=!t;
   $('#rec-turn-note').textContent=pair?'记在接盘人（掉盘）':'记在持盘人（传丢）';
-  $('#stats-recorder-hint').textContent=!canEdit()?'开启编辑后可记录':g.status!=='live'?'比赛已结束；在「比赛操作」中点「重新开始」可继续记录':pointMode?'选择上场队员和进攻 / 防守开，确认后开始记录这一分':!t?'点一名队员作为持盘人；记 D 抢断也先点防守队员':!r?playerName(sel.thrower)+'：再点接盘人，或直接记失误 / D':playerName(sel.thrower)+' → '+playerName(sel.receiver)+'：记传盘、得分，或接盘失误';
+  $('#stats-recorder-hint').textContent=!canEdit()?'开启编辑后可记录':g.status!=='live'?'比赛已结束；在「比赛操作」中点「重新开始」可继续记录':pointMode?'选择上场队员和进攻 / 防守开，确认后开始记录这一分':!t?'点一名队员作为持盘人；记 D 防守成功也先点防守队员':!r?playerName(sel.thrower)+'：再点接盘人，或直接记失误 / D':playerName(sel.thrower)+' → '+playerName(sel.receiver)+'：记传盘、得分，或接盘失误';
  }
  function renderBoxScore(g){
   const totals=gameTotals(g),table=$('#stats-boxscore'),empty=$('#stats-boxscore-empty');
@@ -156,14 +156,14 @@ const StatsUI=(()=>{
   if(e.kind==='pass')return esc(playerName(e.from))+' <i>→</i> '+esc(playerName(e.to))+'<em>传盘</em>';
   if(e.kind==='goal')return esc(playerName(e.from))+' <i>→</i> '+esc(playerName(e.to))+'<em class="goal">得分</em>';
   if(e.kind==='turnover')return e.to!=null?esc(playerName(e.from))+' <i>→</i> '+esc(playerName(e.to))+'<em class="turn">掉盘失误</em>':esc(playerName(e.from))+'<em class="turn">传丢失误</em>';
-  return esc(playerName(e.from))+'<em class="d">D 抢断</em>';
+  return esc(playerName(e.from))+'<em class="d">D 防守成功</em>';
  }
  function describePlain(e,pointNumber){
   if(e.kind==='point')return '第 '+pointNumber+' 分阵容（'+(e.start==='defense'?'防守开':'进攻开')+'，'+(e.line||[]).length+' 人）';
   if(e.kind==='pass')return playerName(e.from)+' → '+playerName(e.to)+' 传盘';
   if(e.kind==='goal')return playerName(e.from)+' → '+playerName(e.to)+' 得分';
   if(e.kind==='turnover')return e.to!=null?playerName(e.to)+' 掉盘失误':playerName(e.from)+' 传丢失误';
-  return playerName(e.from)+' D 抢断';
+  return playerName(e.from)+' D 防守成功';
  }
  const pointOrdinal=(g,seq)=>g.events.filter(e=>e.kind==='point'&&e.seq<=seq).length;
  const eventRow=e=>'<div class="stats-event-row"><span class="stats-desc">'+describe(e)+'</span><time>'+clock(e.at)+'</time></div>';
@@ -182,11 +182,11 @@ const StatsUI=(()=>{
   groups.forEach((grp,i)=>{
    const n=i+1,hasGoal=grp.events.some(e=>e.kind==='goal'),isLast=i===groups.length-1;
    const live=!hasGoal&&isLast&&g.status==='live';
-   const result=hasGoal?'<em class="us">我方得分</em>':live?'<em class="livebit">进行中</em>':'<em class="them">对方得分</em>';
+   const result=hasGoal?'<em class="us">我方得分</em>':live?'<em class="livebit">进行中</em>':'<em class="unrecorded">未记录结果</em>';
    const start=grp.point.start==='defense'?'防守开':'进攻开';
    const key=String(grp.point.seq),open=expanded.has(key)?expanded.get(key):live;
-   html+='<details class="stats-point-group" data-point-key="'+key+'"'+(open?' open':'')+'><summary><span class="stats-point-no">'+pad(n)+'</span><span class="stats-point-title">第 '+n+' 分</span>'+result+'<span class="stats-point-meta">'+start+' · '+grp.point.line.length+' 人 · '+grp.events.length+' 手</span></summary>'
-    +'<div class="stats-point-body"><div class="stats-point-line"><b>上场</b>'+(grp.point.line.map(id=>esc(playerName(id))).join('、')||'未记录')+'<b>开球</b>'+start+'</div>'
+   html+='<details class="stats-point-group" data-point-key="'+key+'"'+(open?' open':'')+'><summary><span class="stats-point-no">'+pad(n)+'</span><span class="stats-point-title">第 '+n+' 分</span>'+result+'<span class="stats-point-meta">'+start+' · '+grp.point.line.length+' 人 · '+grp.events.length+' 条记录</span></summary>'
+    +'<div class="stats-point-body"><div class="stats-point-line"><b>上场</b>'+(grp.point.line.map(id=>esc(playerName(id))).join('、')||'未记录')+'<b>本分起始</b>'+start+'</div>'
     +(grp.events.length?grp.events.map(eventRow).join(''):'<p class="stats-empty">这一分没有记录传递。</p>')+'</div></details>';
   });
   box.innerHTML=html;

@@ -68,10 +68,10 @@ def compile_plan(plan, kind, offense, defense):
     players, ids = [], set()
     for raw in raw_players:
         if not isinstance(raw, dict) or type(raw.get('id')) is not int or not 1 <= raw['id'] <= 14 or raw['id'] in ids or raw.get('team') not in ('offense', 'defense'):
-            raise AIError(422, 'AI 草稿的球员角色无效，请重试。')
+            raise AIError(422, 'AI 草稿的队员角色无效，请重试。')
         ids.add(raw['id'])
         if raw['id'] > offense+defense or raw['team'] != ('offense' if raw['id'] <= offense else 'defense'):
-            raise AIError(422, 'AI 草稿的球员编号与攻防角色不一致。')
+            raise AIError(422, 'AI 草稿的队员编号与攻防角色不一致。')
         players.append({'id': raw['id'], 'team': raw['team'], **coordinates(raw)})
     if sum(p['team'] == 'offense' for p in players) != offense:
         raise AIError(422, 'AI 草稿的进攻、防守分工与设置不一致。')
@@ -83,7 +83,7 @@ def compile_plan(plan, kind, offense, defense):
     holder = plan.get('disc_holder')
     attack = {p['id'] for p in players if p['team'] == 'offense'}
     if type(holder) is not int or holder not in attack:
-        raise AIError(422, 'AI 草稿必须明确一名进攻球员为持盘人。')
+        raise AIError(422, 'AI 草稿必须明确一名进攻队员为持盘人。')
     steps = plan.get('steps')
     if not isinstance(steps, list) or not 1 <= len(steps) <= 11:
         raise AIError(422, '请描述 1–11 个连续的传跑步骤。')
@@ -105,7 +105,7 @@ def compile_plan(plan, kind, offense, defense):
         endings, moved = {}, set()
         for move in moves:
             if not isinstance(move, dict) or type(move.get('player')) is not int or move['player'] not in ids or move['player'] in moved:
-                raise AIError(422, 'AI 草稿出现不存在或重复的跑动球员。')
+                raise AIError(422, 'AI 草稿出现不存在或重复的跑动队员。')
             moved.add(move['player'])
             end = coordinates(move)
             via = move.get('via', [])
@@ -174,7 +174,7 @@ def formal_outline(raw, kind, offense, defense):
     if not isinstance(roles, list) or len(roles) != len(expected) or any(not isinstance(r,dict) for r in roles):
         raise AIError(422, '整理出的角色人数不符，请检查人数后重试。')
     if any(not isinstance(r.get('label'),str) for r in roles) or set(r['label'] for r in roles) != set(expected):
-        raise AIError(422, '整理出的球员编号有重复或缺失，请重试。')
+        raise AIError(422, '整理出的队员编号有重复或缺失，请重试。')
     descriptions = {r['label']:bounded_text(r.get('description'),250,'角色说明') for r in roles}
     def texts(key, limit, size):
         values = raw.get(key, [])
@@ -530,7 +530,7 @@ class AIService:
                   '遵守用户选择的人数与类型。对描述中不明确的持盘人、传跑顺序或循环终点，不可猜测，'
                   '返回 {"status":"clarify","questions":["需要确认的问题"]}；人数与描述冲突也先澄清。'
                   '关键战术动作不可放进 assumptions 猜测；assumptions 只允许说明坐标比例、未指定的左右方向等展示约定。'
-                  '明确描述才返回 ready。球员 id 稳定、唯一，进攻 team=offense、防守 team=defense。'
+                  '明确描述才返回 ready。队员 id 稳定、唯一，进攻 team=offense、防守 team=defense。'
                   '进攻编号必须是1到offense，防守编号必须是offense+1到offense+defense，不得重复或从1重新编号。'
                   '战术 category 只能是进攻战术、防守战术或端区战术；Drill 固定基础训练。'
                   'steps 只描述从起始站位之后的1–11步，每步至多一条传盘，每人至多一条跑线；没传盘写 pass=null。'
@@ -539,7 +539,7 @@ class AIService:
                   '每次出盘者必须是当前持盘者，接盘者必须是另一进攻人；接盘后盘权换给接盘者。'
                   '同一步的路线同时播放；先传后跑、先接再传必须拆步。出盘人同一步不跑，不能画成带盘跑动。接盘和换位需连续衔接，不能瞬移、自动复位或隐含循环。'
                   '角标是固定地点，全步骤共用，不计入人数。未要求角标可返回空数组。'
-                  '球员图标约40坐标单位宽；同队球员起始和每步结束时都要至少相距50，队列间距建议60。回队尾不能落在静止队友的位置。'
+                  '队员图标约40坐标单位宽；同队队员起始和每步结束时都要至少相距50，队列间距建议60。回队尾不能落在静止队友的位置。'
                   '拉开点与回切接盘点必须是不同的位置，先拉到接盘点外侧远端，再折返接盘；不要直接拉开到接盘点后画零长度回切。每条跑线必须有实际位移，原地等待不得创建moves。'
                   '已确认队列轮换时，须画出等待者在队列内前移的动作，再让出盘者回到空出的队尾；不能叠在一起，也不能省略已确认的前移。'
                   '画队列前先给每组安排固定、间隔至少60的队首/第二/第三槽位；每步按确认的队列顺序分配到这些槽位。拉开或持盘接盘者已经离队，不占等待槽位。不能一直使用同一个队尾坐标却不移动原来的等候者。'

@@ -57,7 +57,7 @@ const Roster = (() => {
     return t;
   }
   function remove(tactic, id) {
-    if (tactic.frames.some(f => f.players.length === 1 && f.players[0].id === id)) throw new Error('至少保留一名球员。');
+    if (tactic.frames.some(f => f.players.length === 1 && f.players[0].id === id)) throw new Error('至少保留一名队员。');
     const t = copy(tactic);
     for (const f of t.frames) cleanup(f,new Set([id]));
     if (t.roles) delete t.roles[id];

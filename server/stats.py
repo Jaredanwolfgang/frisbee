@@ -557,7 +557,7 @@ class StatsStore:
             elif kind == 'turnover':
                 to_id = player_id(raw.get('to')) if raw.get('to') is not None else None
             elif raw.get('to') is not None:
-                raise StatsError(400, '抢断只需要记录防守队员。')
+                raise StatsError(400, '防守成功只需要记录防守队员。')
             if to_id == from_id:
                 raise StatsError(400, '传盘人和接盘人不能是同一人。')
         with self.transaction() as db:

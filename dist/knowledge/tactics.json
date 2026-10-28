@@ -1,20 +1,22 @@
 {
-  "version": "2026-10-26.1",
+  "version": "2026-10-27.1",
   "title": "Tiga 飞盘战术术语库",
   "note": "教练术语与本系统绘图约定，不是 WFDF 规则；不同球队用法可能不同，以教练确认的含义为准。",
   "conventions": [
     "场地长边为 x 轴，进攻从左向右（+x），宽度为 y 轴。队员口述的左/右必须说明是面向进攻方向还是画面方向。",
-    "角色、区域、动作分开记录；Handler/Cutter 不自动产生跑线，Deep/Middle 不自动确定球员编号。",
+    "角色、区域、动作分开记录；Handler/Cutter 不自动产生跑线，Deep/Middle 不自动确定队员编号。",
     "Open/Break 依赖逼防和场地参照，不能直接等同画面上/下。没说清时询问，或提出上/下的展示约定供确认。",
     "Cut in 相对当前持盘人；Go Deep 相对进攻方向；Swing/Cross Field 主要利用宽度。不要把所有术语都画成长边前进。",
     "编号 O1…On / D1…Dn 在整个对话中固定。先传后跑、接盘后再传拆步，盘权随传盘更新。",
-    "没有指定的精确距离、曲率不是必要缺项，可采用示意比例并明确说明；不得猜测关键接盘人、传跑先后或循环轮换。"
+    "没有指定的精确距离、曲率不是必要缺项，可采用示意比例并明确说明；不得猜测关键接盘人、传跑先后或循环轮换。",
+    "中文说明统一使用队员、持盘、传盘、接盘、得分、开盘、攻防转换。拦截指防守队员接住对方传盘，与仅拍落传盘区分；不要把所有防守成功都称为拦截。"
   ],
   "sources": [
     {"id":"usau","title":"USA Ultimate · Skills, Strategy & Drills","url":"https://usaultimate.org/wp-content/uploads/2020/09/Skills-and-Drills-manual_revised2019.pdf"},
     {"id":"mzu","title":"Mile Zero Ultimate · Ultimate Glossary","url":"https://www.milezeroultimate.com/?page_id=2303"},
     {"id":"cts","title":"Catch the Spirit · Ultimate Glossary","url":"https://www.catchthespirit.co.uk/ultimate/ultimate-glossary"},
-    {"id":"vision","title":"Ultiworld · Strategies To Improve Field Vision","url":"https://ultiworld.com/2016/04/26/tuesday-tips-intuition-increase-field-vision/"}
+    {"id":"vision","title":"Ultiworld · Strategies To Improve Field Vision","url":"https://ultiworld.com/2016/04/26/tuesday-tips-intuition-increase-field-vision/"},
+    {"id":"wfdf-definitions","title":"WFDF Rules · Definitions","url":"https://rules.wfdf.sport/definitions/"}
   ],
   "entries": [
     {"id":"handler","term":"Handler","zh":"控盘手","category":"角色","aliases":["handlers","控盘","后场","控盘手"],"meaning":"主要负责组织持盘和接应回传的角色。","diagram":"通常在盘附近或后方；角色本身不代表必须站在固定点或自动向前跑。","clarify":"有多名 Handler 时，确认谁起始持盘、谁接应。","example":"O1 持盘，O2 是接应 Handler。","sources":["usau","cts"]},
@@ -30,7 +32,7 @@
     {"id":"cross-field","term":"Cross Field","zh":"跨场 / 大横向转移","category":"动作","aliases":["cross-field","crossfield","跨场","跨场传盘","大横传"],"meaning":"把盘或跑动转移到场地另一侧，具体是传盘还是横切取决于动词。","diagram":"主要利用宽度改变 y；不把 Cross Field 自动画成沿 x 的长传。","clarify":"是 O1 跨场传给 O2，还是 O2 横切到另一侧？","example":"O1 Cross-field pass 给另一侧 O3。","sources":["usau","cts"]},
     {"id":"reset","term":"Reset / Dump","zh":"接应 / 回传","category":"动作","aliases":["reset","dump","回传","重置","救盘"],"meaning":"通过盘附近或后方的安全接应延续进攻。","diagram":"接应点可在侧后方，回传通常减小 x；必须明确新的持盘人。","clarify":"谁来接应？回传后是停下，还是继续 Swing？","example":"O1 Dump 给 O2，O2 再 Swing 给 O3。","sources":["usau","vision"]},
     {"id":"clear","term":"Clear out","zh":"清空 / 让线","category":"动作","aliases":["clear","clear out","clear-out","清空","让线","清线"],"meaning":"离开接盘通道，为下一位队员留出空间。","diagram":"给清空者单独画路线，目的地与下一位的接盘通道分开。","clarify":"确认清空后到哪里，是否回队尾；不自动假设轮换。","example":"O2 没接到盘，清空到外侧，O3 再 Cut in。","sources":["vision"]},
-    {"id":"force","term":"Force / Mark","zh":"逼防 / 防盘","category":"防守","aliases":["force","mark","marker","逼防","防盘","逼正手","逼反手"],"meaning":"防盘人限制某侧的出盘，让进攻更多使用另一侧。","diagram":"防盘位置与 Open/Break 一起确定；正反手还涉及出盘手惯用手，不直接翻译成屏幕左右。","clarify":"逼哪侧？按场地哪一侧作为 Open？是否要展示防守人？","example":"D1 防 O1，允许画面下方出盘，上方是 Break。","sources":["mzu","cts"]},
+    {"id":"force","term":"Force / Mark","zh":"逼防 / 防盘","category":"防守","aliases":["force","mark","marker","逼防","防盘","逼正手","逼反手"],"meaning":"Force 指逼防的方向或策略；Mark 指对持盘人的防守。Marker 是负责防盘、可按规则读秒的防守队员。防盘人通过限制一侧出盘，让进攻更多使用另一侧；这几个词相关，但不能完全等同。","diagram":"防盘位置与 Open/Break 一起确定；正反手还涉及出盘手惯用手，不直接翻译成屏幕左右。","clarify":"逼哪侧？按场地哪一侧作为 Open？是否要展示防守人？","example":"D1 防 O1，允许画面下方出盘，上方是 Break。","sources":["mzu","cts","wfdf-definitions"]},
     {"id":"vertical","term":"Vertical stack","zh":"竖排","category":"阵型","aliases":["vertical","vert stack","vertical stack","竖排","纵列"],"meaning":"跑位队员沿进攻纵深排成纵列，利用两侧通道切入。","diagram":"纵列主要沿 x 展开；Handler 在盘附近，列内队员留出图标间距。","clarify":"确认 Handler 数量、切入顺序及 Open/Break 框架。","example":"两个 Handler、五个 Cutter 竖排，尾部先切。","sources":["usau","vision"]},
     {"id":"horizontal","term":"Horizontal stack","zh":"横排","category":"阵型","aliases":["horizontal","horizontal stack","ho stack","横排"],"meaning":"跑位队员横向分布，结合纵深切入与接应配合。","diagram":"Cutter 横向沿 y 拉开，动作仍可沿 x 进深；不能把横排的名称理解为所有跑线横着走。","clarify":"确认 Handler/Cutter 数量与谁先发起切入。","example":"三个 Handler、四个 Cutter 横排，中间 Cutter 发起。","sources":["vision"]}
   ]

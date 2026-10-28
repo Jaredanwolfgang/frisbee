@@ -27,7 +27,7 @@ function buildCoreCatalog({route,advance}) {
    ['第二传：O7 → O6',[p(7,610,420),r(6,610,420),r(13,640,390)],'O7 向 O6 完成衔接传盘，D6 到位防守新持盘人。若本步窗口被封，实际执行应回传重置，不必强行完成示意传盘。']
   ]),
   sequence({id:'basic-horizontal',name:'横排基础 · 一短一长配合',english:'HORIZONTAL STACK · 3–4',category:'进攻战术',level:'基础',tags:['横排 3–4','双人配合','切入时机'],summary:'3 名控盘手 + 4 名横向切入手，以一短一长制造第一接盘窗口。',formation:'横排 3–4：O1–O3 控盘；O4–O7 沿场地宽度展开，与进攻方向垂直。',roles:manRoles,setup:'进攻向右。O1 居中持盘，O2、O3 分居两侧支援；O4–O7 沿上下方向横向展开。O5 与 O6 为本次发起配合的一组，外侧 O4、O7 保持宽度。'},hoO,hoD,[
-   ['O5 回切，O6 拉深',[r(5,390,215),r(6,755,345),r(12,425,230),r(13,790,350)],'O5 向盘回切，O6 同时向深处拉开；D5、D6 分别跟随。两名中路切入手反向移动，外侧球员不挤入中间的第一窗口。'],
+   ['O5 回切，O6 拉深',[r(5,390,215),r(6,755,345),r(12,425,230),r(13,790,350)],'O5 向盘回切，O6 同时向深处拉开；D5、D6 分别跟随。两名中路切入手反向移动，外侧队员不挤入中间的第一窗口。'],
    ['第一传：O1 → O5',[p(1,355,215),r(5,355,215),r(12,385,185)],'O1 在短传窗口打开时向 O5 的预计接盘点传盘，O5 继续向盘移动完成接盘；D5 跟进建立新的持盘防守。长传也是选择，本例演示短传后的衔接。'],
    ['O6 变向成为下一选择',[r(6,610,340),r(13,645,355),r(1,300,290),r(8,330,275)],'短传完成后，O6 从深处变向回切，D6 跟随；O1 调整到 O5 后方提供重置。外侧 O4、O7 继续拉开宽度，避免所有人一起向盘跑。'],
    ['第二传：O5 → O6',[p(5,570,340),r(6,570,340),r(13,600,310)],'O5 向 O6 的接盘位置推进。若防守抢先封住通道，优先使用后方控盘手；队员应根据真实防守阅读局面，而不是机械跑完路线。']
@@ -78,7 +78,7 @@ function buildPendulumDrill({route,advance}){
  for(const [name,notes,routes] of [
   ['O2 切左侧接盘','O2 从中间变向切向左接盘位；O1 留在右侧，把盘传给移动中的 O2。接盘后 O2 站稳持盘，O1 再回中间。',[route(2,'run',left.x,left.y,[{x:420,y:250}]),route(1,'pass',left.x,left.y)]],
   ['O1 回中间','O2 在左接盘位持盘等候；O1 出盘后跑回中间角标，不带盘跑动。',[route(1,'run',middle.x,middle.y,[{x:650,y:280}])]],
-  ['O1 切右侧接盘','O1 从中间变向切向右接盘位，接 O2 的回盘。此时球员位置和盘权回到第一步：O1 右侧持盘、O2 左侧无盘。O2 下一轮继续回中间，再切左侧。',[route(1,'run',right.x,right.y,[{x:580,y:250}]),route(2,'pass',right.x,right.y)]]
+  ['O1 切右侧接盘','O1 从中间变向切向右接盘位，接 O2 的回盘。此时队员位置和盘权回到第一步：O1 右侧持盘、O2 左侧无盘。O2 下一轮继续回中间，再切左侧。',[route(1,'run',right.x,right.y,[{x:580,y:250}]),route(2,'pass',right.x,right.y)]]
  ]){const next=advance(frames[frames.length-1]);if(next.players.some(p=>p.x===next.disc.x&&p.y===next.disc.y))next.disc.x+=22;next.name=name;next.notes=notes;next.routes=routes;frames.push(next);}
  return {id:'drill-pendulum',name:'二人钟摆',english:'TWO-PERSON PENDULUM',kind:'drill',loop:true,category:'基础训练',level:'基础',tags:['双人','钟摆','角标','循环'],summary:'传盘后回中间角标，再切向另一侧接盘；O1、O2 左右交替，4 步首尾衔接连续练习。',formation:'从 O2 回盘给 O1 后开始：O2 回中间 → 切左接 O1 传盘 → O1 回中间 → 切右接 O2 回盘。',markers:[{id:'pendulum-left',...left,label:'左接盘位'},{id:'pendulum-right',...right,label:'右接盘位'},{id:'pendulum-middle',...middle,label:'中间回位'}],frames,example:true,updated:1700000000000};
 }
