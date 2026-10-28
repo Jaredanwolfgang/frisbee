@@ -10,4 +10,4 @@
 - Keep mobile landscape/fullscreen, offensive and defensive player roles, and step playback working.
 - Run `python3 -m unittest discover -s tests` and `node scripts/verify-catalog.cjs` before deploying changes that affect storage or the tactic model.
 
-- Drill demonstrations support 1–7 total players, including defenders. Ordinary tactics support at most 7 players per side. Do not reintroduce favorites, user accounts, or a marketing hero. Keep mobile quick creation and search prominent.
+- Drill demonstrations support 1–7 total players, including defenders. Ordinary tactics support at most 7 players per side. Do not reintroduce favorites, public self-registration, or a marketing hero. Team members use administrator-managed roster identities with personal passcodes; keep player and editor sessions separate. Keep mobile quick creation and search prominent.

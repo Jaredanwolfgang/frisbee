@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict');
+const M=require('../dist/team-metrics.js');
+const p={id:1,joinedOn:'2026-10-01'},today='2026-10-27';
+const training=(id,day,status,attendees)=>({id,heldOn:day,status,attendees,games:[],comments:[]});
+const trainings=[training('old','2026-09-30','completed',[1]),training('yes','2026-10-10','completed',[1]),training('no','2026-10-12','completed',[]),training('future','2026-11-01','completed',[]),training('planned','2026-10-13','planned',[]),training('cancelled','2026-10-14','cancelled',[])];
+assert.deepEqual([M.attendance(trainings,p,today).present,M.attendance(trainings,p,today).total,M.attendance(trainings,p,today).rate],[1,2,50]);
+assert.equal(M.attendance([],p,today).rate,null);
+const game=(status,events)=>({status,events});
+const games=[game('finished',[{kind:'point',line:[1,2],start:'offense'},{kind:'pass',from:1,to:2},{kind:'goal',from:2,to:1},{kind:'turnover',from:2,to:1},{kind:'defense',from:1}]),game('finished',[{kind:'goal',from:3,to:4}]),game('live',[{kind:'goal',from:1,to:2}])];
+trainings[0].games=[game('finished',[{kind:'goal',from:1,to:2}])];
+const data={games,trainings};
+const personal=M.personal(data,p,today);
+assert.equal(personal.games.length,2);assert.equal(personal.finished.length,1);
+assert.deepEqual(personal.totals,{goals:1,assists:0,passes:1,turnovers:1,steals:1,points:1,oPoints:1,dPoints:0});
+const practice=M.personal(data,p,today,true);
+assert.equal(practice.finished.length,1);assert.equal(practice.totals.assists,1);assert.equal(practice.totals.goals,0);
+assert.equal(M.personal(data,{id:9},today).finished.length,0);
+console.log('PASS: personal participation, finished-game totals, practice isolation, zero denominators, and attendance excluding future/cancelled/planned/pre-join sessions.');

@@ -1,6 +1,9 @@
 services:
   frisbee-api:
-    image: python:3.12-alpine
+    image: frisbee-api:${APP_VERSION:-dev}
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     container_name: frisbee-api
     restart: unless-stopped
     user: "65534:65534"

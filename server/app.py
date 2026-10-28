@@ -1,4 +1,4 @@
-"""Shared Frisbee playbook API. Python stdlib + SQLite; no third-party packages."""
+"""Shared Frisbee playbook API. Python stdlib + SQLite; Pillow normalizes avatar uploads."""
 from contextlib import contextmanager
 from http.cookies import SimpleCookie, CookieError
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -403,10 +403,10 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
             try:
                 cookie = SimpleCookie(self.headers.get('Cookie', ''))
                 value = cookie['frisbee_player'].value
-                pid, stamp, sig = value.split('.', 2)
+                pid, version, stamp, sig = value.split('.')
                 age = time.time() - int(stamp)
-                expected = hmac.new(secret, ('player:' + pid + ':' + stamp).encode(), hashlib.sha256).hexdigest()
-                return int(pid) if 0 <= age <= 30 * 86400 and hmac.compare_digest(sig, expected) else None
+                expected = hmac.new(secret, ('player-v2:' + pid + ':' + version + ':' + stamp).encode(), hashlib.sha256).hexdigest()
+                return int(pid) if 0 <= age <= 30 * 86400 and hmac.compare_digest(sig, expected) and stats_store.identity_version(int(pid)) == int(version) else None
             except (KeyError, ValueError, CookieError):
                 return None
 
@@ -418,17 +418,29 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
             name = data.get('name')
             if not isinstance(name, str) or not name.strip():
                 raise APIError(400, '请输入名单里的盘名。')
-            matches = stats_store.players_by_name(name.strip())
-            if not matches:
-                raise APIError(404, '名单里没有这个盘名，请核对或先让管理员添加队员。')
-            if len(matches) > 1:
-                raise APIError(409, '名单里有重名盘名，请让管理员调整后重试。')
-            pid, stamp = str(matches[0]['id']), str(int(time.time()))
-            sig = hmac.new(secret, ('player:' + pid + ':' + stamp).encode(), hashlib.sha256).hexdigest()
-            cookie = f'frisbee_player={pid}.{stamp}.{sig}; Path={cookie_path}; Max-Age=2592000; HttpOnly; SameSite=Strict'
+            ip = 'player:' + self.headers.get('X-Real-IP', self.client_address[0])
+            with auth_lock:
+                now = time.time()
+                recent = [t for t in auth_attempts.get(ip, []) if now-t < 600]
+                if len(recent) >= 8:
+                    raise APIError(429, '尝试次数较多，请 10 分钟后再试。')
+                auth_attempts[ip] = recent + [now]
+                if len(auth_attempts) > 4096:
+                    for key in list(auth_attempts):
+                        if all(now-t >= 600 for t in auth_attempts[key]):
+                            del auth_attempts[key]
+            try:
+                player, version_number = stats_store.authenticate(name, data.get('password'))
+            except STATS_MODULE.StatsError as error:
+                raise APIError(error.status, error.message) from None
+            with auth_lock:
+                auth_attempts.pop(ip, None)
+            pid, version, stamp = str(player['id']), str(version_number), str(int(time.time()))
+            sig = hmac.new(secret, ('player-v2:' + pid + ':' + version + ':' + stamp).encode(), hashlib.sha256).hexdigest()
+            cookie = f'frisbee_player={pid}.{version}.{stamp}.{sig}; Path={cookie_path}; Max-Age=2592000; HttpOnly; SameSite=Strict'
             if secure:
                 cookie += '; Secure'
-            return self.send(200, {'me': matches[0]}, cookie)
+            return self.send(200, {'me': player}, cookie)
 
         def stats_logout(self):
             cookie = f'frisbee_player=; Path={cookie_path}; Max-Age=0; HttpOnly; SameSite=Strict' + ('; Secure' if secure else '')
@@ -449,7 +461,33 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
             if segments == ['login'] and self.command == 'POST':
                 return self.stats_login()
             if segments == ['logout'] and self.command == 'POST':
+                self.require_same_origin()
                 return self.stats_logout()
+            if len(segments) == 3 and segments[0] == 'avatars' and self.command == 'GET' and re.fullmatch(r'[0-9]{1,10}',segments[1]) and re.fullmatch(r'[a-f0-9]{24}',segments[2]):
+                try:
+                    image = stats_store.avatar(int(segments[1]),segments[2])
+                except STATS_MODULE.StatsError as error:
+                    raise APIError(error.status,error.message) from None
+                self.send_response(200)
+                self.send_header('Content-Type','image/jpeg')
+                self.send_header('Content-Length',str(len(image)))
+                self.send_header('Cache-Control','public, max-age=31536000, immutable')
+                self.send_header('X-Content-Type-Options','nosniff')
+                self.send_header('Content-Security-Policy',"default-src 'none'")
+                self.end_headers()
+                self.wfile.write(image)
+                return
+            if segments == ['me'] and self.command == 'PUT':
+                self.require_same_origin()
+                pid = self.player_identity()
+                if pid is None:
+                    raise APIError(401,'请先登录自己的队员身份。')
+                try:
+                    result = stats_store.update_self(pid,self.body())
+                except STATS_MODULE.StatsError as error:
+                    raise APIError(error.status,error.message) from None
+                return self.send(200,result)
+
             if len(segments) == 3 and segments[0] in ('games', 'trainings') and segments[2] == 'comments' and STATS_MODULE.GAME_ID.fullmatch(segments[1]):
                 if self.command not in ('POST', 'DELETE'):
                     raise APIError(404, '统计接口不存在。')

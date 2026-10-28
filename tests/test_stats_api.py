@@ -53,7 +53,10 @@ class StatsAPITest(unittest.TestCase):
         return status, data
 
     def login(self, name):
-        code, data, headers = self.exchange('POST', '/api/stats/login', {'name': name}, auth=False)
+        player = next(p for p in self.stats.snapshot()['players'] if p['name'] == name)
+        if not player['loginReady']:
+            self.request('PUT', '/api/stats/players/'+str(player['id']), {**player,'password':'fixture-player-password'})
+        code, data, headers = self.exchange('POST', '/api/stats/login', {'name': name,'password':'fixture-player-password'}, auth=False)
         self.assertEqual(code, 200, data)
         return headers.get('Set-Cookie', '').split(';')[0]
 
@@ -225,7 +228,7 @@ class StatsAPITest(unittest.TestCase):
         self.assertEqual(self.exchange('POST', f'/api/stats/games/{game}/comments', {'text': '不错'}, auth=False)[0], 401)
         self.assertEqual(self.exchange('POST', f'/api/stats/games/{game}/comments', {'text': '不错'}, extra={'Origin': 'https://evil.example'})[0], 403)
         self.assertEqual(self.request('POST', f'/api/stats/games/{game}/comments', {'text': '不错'})[0], 401)
-        self.assertEqual(self.exchange('POST', '/api/stats/login', {'name': '不存在'}, auth=False)[0], 404)
+        self.assertEqual(self.exchange('POST', '/api/stats/login', {'name': '不存在'}, auth=False)[0], 401)
         self.assertEqual(self.exchange('POST', '/api/stats/login', {'name': '   '}, auth=False)[0], 400)
         self.assertEqual(self.exchange('POST', '/api/stats/login', {'name': '疾风'}, auth=False, extra={'Origin': 'https://evil.example'})[0], 403)
         duplicate = self.player('疾风', 8)

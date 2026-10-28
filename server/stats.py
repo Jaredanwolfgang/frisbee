@@ -1,11 +1,18 @@
-"""Team roster and live game statistics. Python stdlib + SQLite; no third-party packages."""
+"""Team roster and live game statistics. Python stdlib + SQLite; Pillow normalizes avatar uploads."""
 from contextlib import contextmanager
 from pathlib import Path
 import json
+import hashlib
+import importlib.util
+from datetime import datetime, timezone
 import re
 import sqlite3
 import time
 import uuid
+
+TEAM_SPEC = importlib.util.spec_from_file_location('frisbee_team', Path(__file__).with_name('team.py'))
+TEAM = importlib.util.module_from_spec(TEAM_SPEC)
+TEAM_SPEC.loader.exec_module(TEAM)
 
 MAX_PLAYERS = 40
 MAX_GAMES = 300
@@ -107,6 +114,21 @@ class StatsStore:
                     db.execute(statement)
                 except sqlite3.OperationalError:
                     pass
+            additions = [
+                "ALTER TABLE stats_players ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE stats_players ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 1",
+                "ALTER TABLE stats_players ADD COLUMN joined_on TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE stats_players ADD COLUMN avatar_digest TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE stats_trainings ADD COLUMN held_on TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE stats_trainings ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'",
+            ]
+            for statement in additions:
+                try:
+                    db.execute(statement)
+                except sqlite3.OperationalError:
+                    pass
+            db.execute("UPDATE stats_trainings SET held_on=strftime('%Y-%m-%d',created/1000,'unixepoch') WHERE held_on=''")
+            db.execute('CREATE TABLE IF NOT EXISTS stats_avatars (player_id INTEGER PRIMARY KEY, digest TEXT NOT NULL, image BLOB NOT NULL)')
             # Databases created before training reviews declare game_id NOT NULL;
             # rebuild the table so training comments can leave game_id empty.
             columns = {r['name']: r['notnull'] for r in db.execute('PRAGMA table_info(stats_comments)')}
@@ -149,7 +171,9 @@ class StatsStore:
 
     @staticmethod
     def player(row):
-        return {'id': row['id'], 'name': row['name'], 'number': row['number'], 'gender': row['gender'], 'updated': row['updated']}
+        return {'id': row['id'], 'name': row['name'], 'number': row['number'], 'gender': row['gender'], 'updated': row['updated'],
+                'joinedOn': row['joined_on'], 'loginReady': bool(row['password_hash']),
+                'avatar': ('api/stats/avatars/'+str(row['id'])+'/'+row['avatar_digest']) if row['avatar_digest'] else ''}
 
     @staticmethod
     def event(row):
@@ -184,7 +208,7 @@ class StatsStore:
             name = json.loads(found['document']).get('name') if found else None
             drills.append({'id': drill_id, 'name': name or '已删除的 Drill'})
         return {'id': row['id'], 'name': row['name'], 'warmup': row['warmup'],
-                'attendees': json.loads(row['attendees'] or '[]'), 'drills': drills,
+                'attendees': json.loads(row['attendees'] or '[]'), 'drills': drills, 'heldOn': row['held_on'], 'status': row['status'],
                 'created': row['created'], 'updated': row['updated'],
                 'games': games, 'comments': [self.comment(c) for c in comments]}
 
@@ -207,23 +231,45 @@ class StatsStore:
         if db.execute('SELECT 1 FROM stats_players WHERE number=? AND id<>?', (number, exclude)).fetchone():
             raise StatsError(409, f'{number} 号已被其他队员使用。')
 
+    def player_access_fields(self, raw):
+        updates = {}
+        try:
+            if 'password' in raw and raw['password'] != '':
+                updates['password_hash'] = TEAM.password_hash(raw['password'])
+            if 'joinedOn' in raw:
+                updates['joined_on'] = TEAM.calendar_date(raw['joinedOn'], '入队日期') if raw['joinedOn'] else ''
+        except ValueError as error:
+            raise StatsError(400, str(error)) from None
+        return updates
+
+    def set_player_access(self, db, pid, updates):
+        if not updates:
+            return
+        if 'password_hash' in updates:
+            db.execute('UPDATE stats_players SET auth_version=auth_version+1 WHERE id=?', (pid,))
+        db.execute('UPDATE stats_players SET '+', '.join(key+'=?' for key in updates)+' WHERE id=?', (*updates.values(), pid))
+
     def add_player(self, raw):
         name, number, gender = player_fields(raw)
+        access = self.player_access_fields(raw)
         with self.transaction() as db:
             if db.execute('SELECT count(*) FROM stats_players').fetchone()[0] >= MAX_PLAYERS:
                 raise StatsError(400, f'名单最多 {MAX_PLAYERS} 人。')
             self.ensure_number_free(db, number)
             cursor = db.execute('INSERT INTO stats_players(name,number,gender,updated) VALUES (?,?,?,?)', (name, number, gender, self.now()))
+            self.set_player_access(db, cursor.lastrowid, access)
             row = db.execute('SELECT * FROM stats_players WHERE id=?', (cursor.lastrowid,)).fetchone()
             return {'player': self.player(row), 'revision': self.revision(db, True)}
 
     def update_player(self, id_, raw):
         name, number, gender = player_fields(raw)
+        access = self.player_access_fields(raw)
         with self.transaction() as db:
             if not db.execute('SELECT 1 FROM stats_players WHERE id=?', (id_,)).fetchone():
                 raise StatsError(404, '这名队员不存在。')
             self.ensure_number_free(db, number, id_)
             db.execute('UPDATE stats_players SET name=?, number=?, gender=?, updated=? WHERE id=?', (name, number, gender, self.now(), id_))
+            self.set_player_access(db, id_, access)
             row = db.execute('SELECT * FROM stats_players WHERE id=?', (id_,)).fetchone()
             return {'player': self.player(row), 'revision': self.revision(db, True)}
 
@@ -239,6 +285,7 @@ class StatsStore:
                 if id_ in json.loads(row['line'] or '[]'):
                     raise StatsError(409, '这名队员在未删除比赛的上场阵容里，不能删除；可先删除相关比赛，或修改盘名与号码。')
             db.execute('DELETE FROM stats_players WHERE id=?', (id_,))
+            db.execute('DELETE FROM stats_avatars WHERE player_id=?', (id_,))
             return {'deleted': id_, 'revision': self.revision(db, True)}
 
     def add_game(self, raw):
@@ -314,6 +361,15 @@ class StatsStore:
         if not isinstance(raw, dict):
             raise StatsError(400, '训练信息格式无效。')
         sets = {}
+        try:
+            if 'heldOn' in raw:
+                sets['held_on'] = TEAM.calendar_date(raw['heldOn'], '训练日期')
+        except ValueError as error:
+            raise StatsError(400, str(error)) from None
+        if 'status' in raw:
+            if raw['status'] not in ('planned', 'completed', 'cancelled'):
+                raise StatsError(400, '训练状态无效。')
+            sets['status'] = raw['status']
         if 'name' in raw:
             sets['name'] = text(raw['name'], 100, '训练名称')
         if 'warmup' in raw:
@@ -352,6 +408,11 @@ class StatsStore:
                 raise StatsError(400, f'最多保存 {MAX_TRAININGS} 次训练，请先删除旧记录。')
             id_, stamp = str(uuid.uuid4()), self.now()
             db.execute("INSERT INTO stats_trainings(id,name,warmup,attendees,drills,created,updated) VALUES (?,?,'','[]','[]',?,?)", (id_, name, stamp, stamp))
+            held_on = datetime.now(timezone.utc).date().isoformat()
+            db.execute('UPDATE stats_trainings SET held_on=?, status=? WHERE id=?', (held_on, 'planned', id_))
+            if 'heldOn' in raw or 'status' in raw:
+                updates = self.training_updates(db, {k:raw[k] for k in ('heldOn','status') if k in raw})
+                db.execute('UPDATE stats_trainings SET '+', '.join(k+'=?' for k in updates)+' WHERE id=?', (*updates.values(), id_))
             row = db.execute('SELECT * FROM stats_trainings WHERE id=?', (id_,)).fetchone()
             return {'training': self.training(db, row), 'revision': self.revision(db, True)}
 
@@ -373,6 +434,68 @@ class StatsStore:
             db.execute('UPDATE stats_trainings SET deleted=1, updated=? WHERE id=?', (self.now(), training_id))
             return {'deleted': training_id, 'revision': self.revision(db, True)}
 
+    def authenticate(self, identity, password):
+        if not isinstance(identity, str) or len(identity) > 24:
+            raise StatsError(400, '请输入盘名或号码。')
+        db = self.connect()
+        try:
+            identity = identity.strip().lstrip('#')
+            rows = list(db.execute('SELECT * FROM stats_players WHERE name=? OR CAST(number AS TEXT)=?', (identity, identity)))
+            if len(rows) > 1:
+                raise StatsError(409, '盘名有重名，请用唯一的队员号码登录。')
+            if not rows or not TEAM.password_matches(password, rows[0]['password_hash']):
+                raise StatsError(401, '盘名、号码或口令不正确；首次登录请让管理员设置个人口令。')
+            return self.player(rows[0]), rows[0]['auth_version']
+        finally:
+            db.close()
+
+    def identity_version(self, pid):
+        db = self.connect()
+        try:
+            row = db.execute('SELECT auth_version,password_hash FROM stats_players WHERE id=?', (pid,)).fetchone()
+            return row['auth_version'] if row and row['password_hash'] else None
+        finally:
+            db.close()
+
+    def update_self(self, pid, raw):
+        if not isinstance(raw, dict) or not raw or set(raw)-{'avatar','password','currentPassword'}:
+            raise StatsError(400, '只能更新自己的头像和口令。')
+        avatar = None
+        access = {}
+        try:
+            if 'avatar' in raw:
+                avatar = TEAM.avatar_jpeg(raw['avatar'])
+            if 'password' in raw:
+                access['password_hash'] = TEAM.password_hash(raw['password'])
+        except ValueError as error:
+            raise StatsError(400, str(error)) from None
+        if avatar is None and not access:
+            raise StatsError(400, '没有要更新的内容。')
+        with self.transaction() as db:
+            row = db.execute('SELECT * FROM stats_players WHERE id=?', (pid,)).fetchone()
+            if not row:
+                raise StatsError(401, '请重新登录。')
+            if access and not TEAM.password_matches(raw.get('currentPassword'), row['password_hash']):
+                raise StatsError(401, '当前队员口令不正确。')
+            if avatar is not None:
+                digest = hashlib.sha256(avatar).hexdigest()[:24]
+                db.execute('INSERT OR REPLACE INTO stats_avatars VALUES (?,?,?)', (pid, digest, avatar))
+                db.execute('UPDATE stats_players SET avatar_digest=? WHERE id=?', (digest,pid))
+            self.set_player_access(db, pid, access)
+            db.execute('UPDATE stats_players SET updated=? WHERE id=?', (self.now(),pid))
+            player = self.player(db.execute('SELECT * FROM stats_players WHERE id=?', (pid,)).fetchone())
+            return {'player':player, 'reauthenticate':bool(access), 'revision':self.revision(db,True)}
+
+    def avatar(self, pid, digest):
+        db = self.connect()
+        try:
+            row = db.execute('SELECT image FROM stats_avatars WHERE player_id=? AND digest=?', (pid,digest)).fetchone()
+            if not row:
+                raise StatsError(404, '头像不存在。')
+            return row['image']
+        finally:
+            db.close()
+
     def players_by_name(self, name):
         db = self.connect()
         try:
@@ -380,11 +503,11 @@ class StatsStore:
         finally:
             db.close()
 
-    def player_brief(self, player_id):
+    def player_brief(self, pid):
         db = self.connect()
         try:
-            row = db.execute('SELECT id,name,number FROM stats_players WHERE id=?', (player_id,)).fetchone()
-            return {'id': row['id'], 'name': row['name'], 'number': row['number']} if row else None
+            row = db.execute('SELECT * FROM stats_players WHERE id=?', (pid,)).fetchone()
+            return self.player(row) if row else None
         finally:
             db.close()
 

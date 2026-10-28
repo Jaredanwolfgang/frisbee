@@ -41,6 +41,8 @@ if source.exists():
 PY
 release="/root/frisbee/releases/$FRISBEE_REVISION"
 tar -xzf "$release/source.tar.gz" -C "$release"
+# Build dependencies before replacing live files; a failed build leaves the site intact.
+docker build -f "$release/Dockerfile.api" -t "frisbee-api:$FRISBEE_REVISION" "$release"
 python3 - "$release" <<'PY'
 from pathlib import Path
 import shutil
@@ -48,13 +50,13 @@ import sys
 release, target = Path(sys.argv[1]), Path('/root/frisbee')
 for name in ['dist', 'server', 'scripts', 'tests']:
     shutil.copytree(release / name, target / name, dirs_exist_ok=True)
-for name in ['compose.yaml', 'nginx.conf', 'README.md', 'AGENTS.md']:
+for name in ['compose.yaml', 'Dockerfile.api', '.dockerignore', 'requirements.txt', 'nginx.conf', 'README.md', 'AGENTS.md']:
     # Preserve the inode of Nginx's bind-mounted configuration file.
     shutil.copyfile(release / name, target / name)
 PY
 python3 -B scripts/prepare-assets.py dist
 python3 -B scripts/configure-ai-proxy.py
-APP_VERSION="$FRISBEE_REVISION" docker compose --env-file .env up -d --wait --wait-timeout 90
+APP_VERSION="$FRISBEE_REVISION" docker compose --env-file .env up -d --no-build --wait --wait-timeout 90
 docker exec frisbee-web nginx -t
 docker exec frisbee-web nginx -s reload
 printf '%s\n' "$FRISBEE_REVISION" > REVISION
