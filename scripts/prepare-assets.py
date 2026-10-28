@@ -24,7 +24,7 @@ def prepare(directory):
     for name in scripts:
         file=(root/name).resolve()
         if not file.is_relative_to(root) or file.suffix!='.js' or not file.is_file():raise ValueError('Invalid entry script')
-    files = sorted(p for p in root.rglob('*') if p.is_file() and 'assets' not in p.relative_to(root).parts and not any(part.startswith('.') for part in p.relative_to(root).parts) and p.suffix in {'.js','.css','.svg','.json','.png','.webp'})
+    files = sorted(p for p in root.rglob('*') if p.is_file() and 'assets' not in p.relative_to(root).parts and not any(part.startswith('.') for part in p.relative_to(root).parts) and p.suffix in {'.js','.css','.svg','.json','.png','.webp','.woff2','.txt'})
     digest = hashlib.sha256(Path(__file__).read_bytes())
     digest.update(json.dumps(scripts).encode())
     for file in files:
@@ -47,7 +47,7 @@ def prepare(directory):
         if parsed.scheme or parsed.netloc or original.startswith(('#','/')):return match.group(0)
         path = re.sub(r'^assets/[0-9a-f]{16}/','',parsed.path)
         file = (root/path).resolve()
-        if not file.is_relative_to(root) or not file.is_file() or file.suffix not in {'.js','.css','.svg'}:return match.group(0)
+        if not file.is_relative_to(root) or not file.is_file() or file.suffix not in {'.js','.css','.svg','.woff2'}:return match.group(0)
         return match.group(1)+'"assets/'+version+'/'+path+'"'
     html = re.sub(r'((?:src|href)=)"([^"]+)"', reference, html)
     first_script = True

@@ -1,0 +1,114 @@
+/* One type scale for the UI; field SVG labels and icon glyphs keep their geometry. */
+@font-face{font-family:Tiga;src:url('fonts/oxanium-latin-700.woff2') format('woff2');font-style:normal;font-weight:700;font-display:swap}
+:root{
+ --type-page:22px;--type-dialog:20px;--type-section:16px;--type-card:15px;
+ --type-body:14px;--type-reading:15px;--type-control:14px;--type-meta:12px;--type-caption:11px;
+}
+body{font-size:var(--type-body);line-height:1.5}
+.tiga-brand>span{font-family:Tiga,'Arial Black',sans-serif;font-size:26px;font-weight:700;line-height:1;letter-spacing:.025em;display:inline-block;transform:skewX(-6deg)}
+/* Text roles deliberately override the older, per-screen size declarations. */
+.team-page-heading h1,.team-personal-banner h2,#coach-intro h3{font-size:var(--type-page)!important;font-weight:650;line-height:1.35}
+.creation-header h2,.create-form h2,.help-content h2,#auth-form h2,.share-content h2,.delete-content h2,
+.stats-form-header h2,.stats-new-game-form h2,.stats-players-content header h2,#stats-players-dialog header h2,
+.ai-tactic-content h2,.ai-chat-shell h2,.ai-source-head h2,.visual-dialog-head h2,#drill-picker-title,#speed-dialog h2{
+ font-size:var(--type-dialog)!important;font-weight:650;line-height:1.4
+}
+.editor-head h2,.read-only .editor-head h2,.stats-game-heading h2,
+.stats-section-head h3,.team-card h2,.team-section-heading h2,.team-password-form h3,
+.creation-page #ai-plan-preview h4,.rule-card h3,.rule-section-title h3,.creation-preview-heading h3,#ai-plan-preview h3,#ai-review-title,
+#coach-knowledge-results h3,#ai-source-body h3{font-size:var(--type-section)!important;font-weight:650;line-height:1.5}
+.card h3,.stats-game-card-main strong,.team-feed-row strong,.team-written-review strong,
+.stats-player-row strong,.stats-drill-row strong,#team-roster-grid .team-player-card strong{
+ font-size:var(--type-card)!important;font-weight:600;line-height:1.5
+}
+.primary,.quiet-btn,.team-admin-btn,.team-user-btn,.team-user-menu button,.team-scope button,
+.team-nav button,.tabs button,.workspace-toggle,.workspace-option,.stats-game-tabs button,
+.more-menu button,.rule-shortcuts button,.rules-results-bar .quiet-btn,.creation-methods strong,
+.create-kind button,.stats-gender-group button,.stats-point-start button,.stats-comment-actions>button,
+#ai-chat-intro>button,.coach-example,.team-upload-btn,.formation-buttons button{
+ font-size:var(--type-control)!important;font-weight:500;line-height:1.4
+}
+label,.inspector label,.section-label,.stats-form-fields>label,.stats-player-form label,.team-password-form label,
+.creation-page .create-form>label,.creation-page .create-counts label,.creation-page #ai-tactic-form>label,
+.creation-page#ai-review-section>label,#coach-brief label{font-size:var(--type-body)!important;line-height:1.5}
+input,select,textarea{font-size:var(--type-body)!important;font-weight:400;line-height:1.5}
+#search,.search #search,#ai-description,#ai-formal-description,#ai-question{font-size:16px!important}
+/* Reading and conversations use the same readable size in either language. */
+#rules-panel .rule-copy p,#rules-panel .rule-copy p.rule-en,.rule-card p,.rule-context p,
+#rule-visual-dialog figcaption,.ai-answer,.ai-user p,.coach-message p,#ai-source-body p,
+#rules-sources .help-content p,#help .help-content p,#help .help-content li,
+#coach-knowledge-results article p,#coach-knowledge-results blockquote,.frame-notes-preview p,
+.stats-comment p,.team-written-review p,.creation-page .creation-step-notes{
+ font-size:var(--type-reading)!important;line-height:1.8
+}
+#ai-chat-intro p,#coach-intro p,.creation-lead,.share-content p,.delete-content p,#auth-form>p,
+.stats-form-fields>p,.stats-new-game-form .muted,.team-empty,.stats-empty,.team-pending-note,
+.team-profile-avatar p,.team-personal-banner p,.ai-lead,.ai-step-list,.ai-step-list p{
+ font-size:var(--type-body)!important;line-height:1.7
+}
+/* Secondary information has one size, instead of shrinking independently per view. */
+.tactic-overview,.card-meta,.card-desc,.list-heading,footer,.server-banner,.empty,.saved-indicator,.kind-chip,
+body small,.stats-game-heading span,.stats-game-card-main span,.stats-game-card-side small,.stats-badge,
+.stats-section-head .muted,.stats-form-note,.stats-scroll-note,.stats-hint,#stats-event-count,
+.stats-comment header time,.stats-comment header i,.stats-event-row time,.stats-event-row .stats-desc em,
+.stats-point-no,.stats-point-meta,.stats-point-line,.stats-point-line b,.stats-point-group em,
+.stats-g,.stats-gender,.stats-table td small,.stats-table thead th,.stats-table thead button,.stats-number,
+#team-roster-grid .team-player-card small,.team-credential,.team-login-ready,.team-scroll-hint,
+.team-page-heading p,.team-section-heading p,.team-metric>span,.team-metric>small,.team-link,
+.team-feed-row small,.team-caption,.team-written-review small,.team-attendance-score span,
+.team-personal-banner small,.team-profile-avatar p,#team-avatar-editor small,.team-admin-note,
+.creation-header small,.creation-progress>span,.creation-methods small,.creation-note,.creation-status,
+.creation-preview-heading>span,.creation-preview-controls span,.creation-drawing-notes,.creation-drawing-notes p,
+.creation-page #create-total,.coach-toolbar>span,.coach-message small,#coach-readiness,
+#coach-matched-terms>span,.coach-save-note,.coach-knowledge-note,#coach-knowledge-results h3 small,
+#coach-knowledge-results header>span,#coach-knowledge-results a,.ai-response-status,.ai-references>span,
+.ai-references>button,.ai-inline-cite,.ai-assumptions,.ai-plan-facts,.ai-frame-previews figcaption,
+.ai-chat-shell>header span,.rule-number,.rules-results-bar,.rule-section-title small,
+.rule-chapter-grid span,.visual-thumb>span,.visual-thumb>small,.visual-more,.rule-card header>span,
+.rule-card summary,.rule-links,#rule-visual-dialog footer,.sources,.toast,#auth-error,
+#team-avatar-status,#team-profile-status,.stats-login-error,#stats-game-date-note{
+ font-size:var(--type-meta)!important;line-height:1.6
+}
+/* Compact board controls need one shared size while leaving room for the field. */
+.tool-group button,.board-actions button,.timeline button,.timeline #inspector-toggle,
+#roster-slot>.selected-controls,#roster-slot>.selected-controls>button,#roster-slot>.selected-controls strong,
+.marker-controls label,.marker-controls small,.roster-heading,.roster-controls>small,.roster-total,
+.stepper label,.playback-title strong,.playback-title small,.playback #frame-counter,.playback .loop-play,
+.board-caption,.legend,.defense-details,.brief-heading,.brief-heading small,.assignment-grid>span,
+.formation-settings>summary,.formation-buttons button small,#formation-hint,.frame-notes-preview strong,
+.coach-toolbar button,#coach-revise,
+#coach-partial,.ai-gesture-row button{
+ font-size:var(--type-meta)!important;line-height:1.5
+}
+.stats-chip,.stats-point-info,.stats-event-row,.stats-point-group>summary,.stats-table tbody th{
+ font-size:var(--type-body)!important;line-height:1.5
+}
+.stats-chip i,.stats-chip .stats-number,.stats-chip .stats-g,.rec-btn small{font-size:var(--type-caption)!important;line-height:1.4}
+.rec-btn strong{font-size:var(--type-control)!important;line-height:1.5}
+.stats-table td b{font-size:16px!important;line-height:1.5;font-variant-numeric:tabular-nums}
+.team-metric>strong,.team-more-metrics strong,.team-attendance-score strong,.stats-score strong{
+ font-size:28px!important;line-height:1.25;font-variant-numeric:tabular-nums
+}
+.stats-game-card-side b{font-size:20px;line-height:1.4;font-variant-numeric:tabular-nums}
+.team-eyebrow,.coach-eyebrow,.workspace-menu-label{font-size:var(--type-caption)!important;line-height:1.6}
+@media(max-width:600px){
+ :root{--type-page:20px;--type-dialog:18px;--type-body:15px;--type-reading:16px}
+ input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px!important}
+ .tiga-brand>span{font-size:23px}
+ .topbar .workspace-nav{flex-basis:188px}
+ .workspace-toggle{font-size:13px!important}
+ .board-actions button,#editor.phone-viewing .board-column:not(.board-fullscreen) #fullscreen-btn{font-size:0!important}
+ .stats-game-heading span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4;overflow:hidden}
+ .stats-game-head{min-height:76px}
+ .stats-game-tabs button{font-size:13px!important}
+ .team-nav button{font-size:12px!important}
+ .stats-game-card{gap:8px}
+ .kind-chip{font-size:var(--type-caption)!important}
+ .card-meta{gap:5px 9px}
+ .card-desc{line-height:1.6}
+ .ai-chat-shell>header span{font-size:var(--type-meta)!important}
+}
+
+.creation-progress i{font-size:var(--type-caption)!important;line-height:1}
+.definition-row .rule-copy{font-size:var(--type-reading)!important;line-height:1.8}
+#ai-plan-preview>p{font-size:var(--type-body)!important;line-height:1.7}

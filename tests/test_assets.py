@@ -18,9 +18,10 @@ class AssetTest(unittest.TestCase):
    self.assertFalse((root/'assets'/first/'._app.js').exists())
    self.assertRegex(first,r'^[0-9a-f]{16}$')
    self.assertIn('data-assets-version="'+first+'"',html)
-   for name in ['styles.css','read-cache.js','app.js','ai-ui.js','mobile-ui.js','tiga-icon.svg']:
+   for name in ['styles.css','typography.css','fonts/oxanium-latin-700.woff2','read-cache.js','app.js','ai-ui.js','mobile-ui.js','tiga-icon.svg']:
     if not name.endswith('.js'):self.assertIn('assets/'+first+'/'+name,html)
     self.assertEqual((root/'assets'/first/name).read_bytes(),(root/name).read_bytes())
+   self.assertEqual((root/'assets'/first/'fonts/Oxanium-OFL.txt').read_bytes(),(root/'fonts/Oxanium-OFL.txt').read_bytes())
    self.assertEqual(html.count('<script src='),2)
    self.assertIn('assets/'+first+'/startup.js',html)
    self.assertLess(html.index('startup.js'),html.index('bundle.js'))
