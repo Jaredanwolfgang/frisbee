@@ -85,3 +85,22 @@ async function verifyStartup(){
  console.log('PASS: actual StatsUI/TeamHub startup, training discussion navigation, logged-in composer and player cleanup against index.html.');
 }
 verifyStartup().catch(error=>{console.error(error);process.exitCode=1;});
+
+// A delayed submission must not clear a different training's composer or replace its thread.
+async function verifyPendingNavigation(){
+ const iso=document.createElement('div');iso.id='pending-navigation';document.body.append(iso);
+ const a={id:'slow-a',games:[],comments:[]};
+ const b={id:'visible-b',games:[],comments:[{id:200,parentId:null,player:2,name:'B 队员',number:2,text:'B 训练的讨论',created:stamp,at:stamp,video:null}]};
+ let shown=a,release;
+ let pendingUI;
+ pendingUI=context.discussion.init({getMe:()=>({id:1}),canEdit:()=>false,toast(){},login(){},api:()=>new Promise(resolve=>release=resolve),refresh:async()=>pendingUI.render(iso,'trainings',shown,true)});
+ pendingUI.render(iso,'trainings',shown,true);iso.querySelector('[data-d="text"]').value='A 的发言';
+ const submission=iso.querySelector('[data-d="form"]').onsubmit({preventDefault(){}});
+ shown=b;pendingUI.render(iso,'trainings',shown,true);iso.querySelector('[data-d="text"]').value='B 里还没发出的草稿';
+ release({comments:[{id:100,parentId:null,player:1,name:'A 队员',number:1,text:'A 的发言',created:stamp,at:stamp,video:null}]});
+ await submission;
+ assert.equal(iso.querySelector('[data-d="text"]').value,'B 里还没发出的草稿');
+ assert(iso.querySelector('[data-message="200"]'));assert.equal(iso.querySelector('[data-message="100"]'),null);
+ console.log('PASS: a late submission response cannot overwrite another training discussion or clear its draft.');
+}
+verifyPendingNavigation().catch(error=>{console.error(error);process.exitCode=1;});
