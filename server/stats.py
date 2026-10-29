@@ -14,11 +14,16 @@ TEAM_SPEC = importlib.util.spec_from_file_location('frisbee_team', Path(__file__
 TEAM = importlib.util.module_from_spec(TEAM_SPEC)
 TEAM_SPEC.loader.exec_module(TEAM)
 
+VIDEO_SPEC = importlib.util.spec_from_file_location('frisbee_video', Path(__file__).with_name('video.py'))
+VIDEO = importlib.util.module_from_spec(VIDEO_SPEC)
+VIDEO_SPEC.loader.exec_module(VIDEO)
+
 MAX_PLAYERS = 40
 MAX_GAMES = 300
 MAX_EVENTS = 600
 MAX_LINE = 14
 MAX_COMMENT = 800
+MAX_DISCUSSION = 400
 MAX_TRAININGS = 200
 MAX_WARMUP = 2000
 MAX_DRILLS = 20
@@ -128,6 +133,7 @@ class StatsStore:
                 "ALTER TABLE stats_players ADD COLUMN avatar_digest TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE stats_trainings ADD COLUMN held_on TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE stats_games ADD COLUMN held_on TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE stats_games ADD COLUMN video_meta TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE stats_trainings ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'",
             ]
             for statement in additions:
@@ -140,11 +146,18 @@ class StatsStore:
             # Databases created before training reviews declare game_id NOT NULL;
             # rebuild the table so training comments can leave game_id empty.
             columns = {r['name']: r['notnull'] for r in db.execute('PRAGMA table_info(stats_comments)')}
-            if columns.get('game_id'):
+            unique_legacy = 'parent_id' not in columns and any(row['unique'] for row in db.execute('PRAGMA index_list(stats_comments)'))
+            if columns.get('game_id') or unique_legacy:
                 db.execute('CREATE TABLE stats_comments_fixed (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT, training_id TEXT, player_id INTEGER NOT NULL, text TEXT NOT NULL, author_name TEXT NOT NULL, author_number INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL)')
                 db.execute('INSERT INTO stats_comments_fixed(id,game_id,training_id,player_id,text,author_name,author_number,created,updated) SELECT id,game_id,training_id,player_id,text,author_name,author_number,created,updated FROM stats_comments')
                 db.execute('DROP TABLE stats_comments')
                 db.execute('ALTER TABLE stats_comments_fixed RENAME TO stats_comments')
+            for column in ["parent_id INTEGER", "deleted INTEGER NOT NULL DEFAULT 0", "is_discussion INTEGER NOT NULL DEFAULT 0", "video_game_id TEXT", "video_key TEXT", "video_second INTEGER", "video_page INTEGER"]:
+                try:
+                    db.execute('ALTER TABLE stats_comments ADD COLUMN '+column)
+                except sqlite3.OperationalError:
+                    pass
+            db.execute('CREATE INDEX IF NOT EXISTS stats_comments_context ON stats_comments(training_id,game_id,parent_id)')
             db.execute("INSERT OR IGNORE INTO metadata VALUES ('stats_revision', 1)")
 
     def connect(self):
@@ -195,21 +208,39 @@ class StatsStore:
         return out
 
     @staticmethod
-    def comment(row):
-        return {'player': row['player_id'], 'text': row['text'], 'at': row['updated'],
-                'name': row['p_name'] if row['p_name'] is not None else row['author_name'],
-                'number': row['p_number'] if row['p_number'] is not None else row['author_number']}
+    def video_meta(row):
+        try:
+            return json.loads(row['video_meta']) if row['video_meta'] else VIDEO.parse_video(row['video'])
+        except (ValueError, TypeError):
+            return None
+
+    def comment(self, db, row):
+        out = {'id':row['id'], 'parentId':row['parent_id'], 'player':row['player_id'],
+               'text':'' if row['deleted'] else row['text'], 'deleted':bool(row['deleted']),
+               'created':row['created'], 'at':row['updated'],
+               'name':row['p_name'] if row['p_name'] is not None else row['author_name'],
+               'number':row['p_number'] if row['p_number'] is not None else row['author_number'],
+               'avatar':('api/stats/avatars/'+str(row['player_id'])+'/'+row['p_avatar']) if row['p_avatar'] else '', 'video':None}
+        if row['video_game_id'] and not row['deleted']:
+            game = db.execute('SELECT * FROM stats_games WHERE id=? AND deleted=0', (row['video_game_id'],)).fetchone()
+            meta = self.video_meta(game) if game else None
+            out['video'] = {'gameId':row['video_game_id'], 'key':row['video_key'], 'seconds':row['video_second'],
+                            'page':row['video_page'], 'name':game['name'] if game else '已移除的视频',
+                            'available':bool(meta and meta['key']==row['video_key'])}
+        return out
+
+    def comments(self, db, game_id=None, training_id=None):
+        rows = db.execute('SELECT c.*, p.name AS p_name, p.number AS p_number, p.avatar_digest AS p_avatar FROM stats_comments c LEFT JOIN stats_players p ON p.id=c.player_id WHERE c.game_id IS ? AND c.training_id IS ? ORDER BY c.created,c.id', (game_id,training_id))
+        return [self.comment(db,row) for row in rows]
 
     def game(self, db, row):
         events = db.execute('SELECT * FROM stats_events WHERE game_id=? ORDER BY seq', (row['id'],))
-        comments = db.execute('SELECT c.*, p.name AS p_name, p.number AS p_number FROM stats_comments c LEFT JOIN stats_players p ON p.id=c.player_id WHERE c.game_id=? ORDER BY c.created, c.id', (row['id'],))
-        return {'id': row['id'], 'name': row['name'], 'opponent': row['opponent'], 'video': row['video'], 'status': row['status'], 'heldOn': row['held_on'],
+        return {'id': row['id'], 'name': row['name'], 'opponent': row['opponent'], 'video': row['video'], 'status': row['status'], 'heldOn': row['held_on'], 'videoMeta':self.video_meta(row),
                 'created': row['created'], 'updated': row['updated'], 'events': [self.event(e) for e in events],
-                'comments': [self.comment(c) for c in comments]}
+                'comments': self.comments(db, game_id=row['id'])}
 
     def training(self, db, row):
         games = [self.game(db, r) for r in db.execute('SELECT * FROM stats_games WHERE training_id=? AND deleted=0 ORDER BY held_on DESC, created DESC, rowid DESC', (row['id'],))]
-        comments = db.execute('SELECT c.*, p.name AS p_name, p.number AS p_number FROM stats_comments c LEFT JOIN stats_players p ON p.id=c.player_id WHERE c.training_id=? ORDER BY c.created, c.id', (row['id'],))
         drills = []
         for drill_id in json.loads(row['drills'] or '[]'):
             found = db.execute('SELECT document FROM tactics WHERE id=?', (drill_id,)).fetchone()
@@ -218,7 +249,7 @@ class StatsStore:
         return {'id': row['id'], 'name': row['name'], 'warmup': row['warmup'],
                 'attendees': json.loads(row['attendees'] or '[]'), 'drills': drills, 'heldOn': row['held_on'], 'status': row['status'],
                 'created': row['created'], 'updated': row['updated'],
-                'games': games, 'comments': [self.comment(c) for c in comments]}
+                'games': games, 'comments': self.comments(db, training_id=row['id'])}
 
     def snapshot(self, known_revision=None):
         db = self.connect()
@@ -302,6 +333,10 @@ class StatsStore:
         name = text(raw.get('name'), 100, '比赛名称')
         opponent = text(raw.get('opponent', ''), 100, '对手名称', required=False)
         video = video_link(raw.get('video', ''))
+        try:
+            meta = VIDEO.resolve_video(video) if video else None
+        except ValueError as error:
+            raise StatsError(400, str(error)) from None
         held_on = game_date(raw['heldOn']) if 'heldOn' in raw else ''
         training_id = raw.get('trainingId')
         if training_id is not None and (not isinstance(training_id, str) or not GAME_ID.fullmatch(training_id)):
@@ -313,7 +348,7 @@ class StatsStore:
                 if not db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (training_id,)).fetchone():
                     raise StatsError(404, '这场训练不存在或已删除。')
             id_, stamp = str(uuid.uuid4()), self.now()
-            db.execute("INSERT INTO stats_games(id,name,opponent,video,held_on,training_id,status,created,updated) VALUES (?,?,?,?,?,?,'live',?,?)", (id_, name, opponent, video, held_on, training_id, stamp, stamp))
+            db.execute("INSERT INTO stats_games(id,name,opponent,video,video_meta,held_on,training_id,status,created,updated) VALUES (?,?,?,?,?,?,?,'live',?,?)", (id_, name, opponent, video, json.dumps(meta) if meta else '', held_on, training_id, stamp, stamp))
             row = db.execute('SELECT * FROM stats_games WHERE id=?', (id_,)).fetchone()
             return {'game': self.game(db, row), 'revision': self.revision(db, True)}
 
@@ -327,6 +362,11 @@ class StatsStore:
             updates['opponent'] = text(raw['opponent'], 100, '对手名称', required=False)
         if 'video' in raw:
             updates['video'] = video_link(raw['video'])
+            try:
+                meta = VIDEO.resolve_video(updates['video']) if updates['video'] else None
+            except ValueError as error:
+                raise StatsError(400, str(error)) from None
+            updates['video_meta'] = json.dumps(meta) if meta else ''
         if 'heldOn' in raw:
             updates['held_on'] = game_date(raw['heldOn'])
         if not updates:
@@ -351,7 +391,7 @@ class StatsStore:
             if not row:
                 raise StatsError(401, '名单里已没有这名队员，请重新登录。')
             stamp = self.now()
-            existing = db.execute('SELECT id FROM stats_comments WHERE game_id IS ? AND training_id IS ? AND player_id=?', (game_id, training_id, player_id)).fetchone()
+            existing = db.execute('SELECT id FROM stats_comments WHERE game_id IS ? AND training_id IS ? AND player_id=? AND is_discussion=0 AND deleted=0', (game_id, training_id, player_id)).fetchone()
             if existing:
                 db.execute('UPDATE stats_comments SET text=?, updated=?, author_name=?, author_number=? WHERE id=?', (body, stamp, row['name'], row['number'], existing['id']))
             else:
@@ -370,10 +410,71 @@ class StatsStore:
                     raise StatsError(404, '这场比赛不存在或已删除。')
             elif not db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (training_id,)).fetchone():
                 raise StatsError(404, '这次训练不存在或已删除。')
-            cursor = db.execute('DELETE FROM stats_comments WHERE game_id IS ? AND training_id IS ? AND player_id=?', (game_id, training_id, player_id))
-            if not cursor.rowcount:
+            rows = db.execute('SELECT id FROM stats_comments WHERE game_id IS ? AND training_id IS ? AND player_id=? AND is_discussion=0 AND deleted=0', (game_id, training_id, player_id)).fetchall()
+            for row in rows:
+                if db.execute('SELECT 1 FROM stats_comments WHERE parent_id=?',(row['id'],)).fetchone():
+                    db.execute('UPDATE stats_comments SET deleted=1 WHERE id=?',(row['id'],))
+                else:
+                    db.execute('DELETE FROM stats_comments WHERE id=?',(row['id'],))
+            cursor = rows
+            if not cursor:
                 raise StatsError(404, '你还没有写过总结。')
             return {'deleted': True, 'revision': self.revision(db, True)}
+
+    def discussion(self, player_id, raw, game_id=None, training_id=None, comment_id=None, method='POST'):
+        if not isinstance(raw, dict):
+            raise StatsError(400, '评论格式无效。')
+        with self.transaction() as db:
+            table, context_id = ('stats_games',game_id) if game_id else ('stats_trainings',training_id)
+            if not db.execute('SELECT 1 FROM '+table+' WHERE id=? AND deleted=0',(context_id,)).fetchone():
+                raise StatsError(404, '这场比赛或训练已不存在。')
+            if game_id and db.execute('SELECT 1 FROM stats_games g JOIN stats_trainings t ON t.id=g.training_id WHERE g.id=? AND t.deleted=1',(game_id,)).fetchone():
+                raise StatsError(404, '这次训练已删除。')
+            author = db.execute('SELECT * FROM stats_players WHERE id=?',(player_id,)).fetchone()
+            if not author: raise StatsError(401, '请重新登录队员身份。')
+            row = None
+            if comment_id is not None:
+                row = db.execute('SELECT * FROM stats_comments WHERE id=? AND game_id IS ? AND training_id IS ?',(comment_id,game_id,training_id)).fetchone()
+                if not row: raise StatsError(404, '这条评论不存在。')
+                if row['player_id'] != player_id: raise StatsError(403, '只能修改自己的评论。')
+            if raw.get('restore') is True and row is None:
+                raise StatsError(400, '请选择要恢复的评论。')
+            if method == 'DELETE' or raw.get('restore') is True:
+                deleted = int(method=='DELETE')
+                db.execute('UPDATE stats_comments SET deleted=?,updated=? WHERE id=?',(deleted,self.now(),comment_id))
+            else:
+                body = text(raw.get('text'),MAX_COMMENT,'评论')
+                parent = raw.get('parentId') if row is None else row['parent_id']
+                if parent is not None:
+                    if type(parent) is not int or not 1 <= parent <= 2**63-1: raise StatsError(400, '回复目标无效。')
+                    target = db.execute('SELECT * FROM stats_comments WHERE id=? AND game_id IS ? AND training_id IS ?',(parent,game_id,training_id)).fetchone()
+                    if not target or target['parent_id'] is not None or (target['deleted'] and row is None):
+                        raise StatsError(400, '请选择同一讨论区中尚未删除的主评论回复。')
+                video = raw.get('video')
+                vg = vk = second = page = None
+                if video is not None:
+                    if not isinstance(video,dict): raise StatsError(400, '视频时间点无效。')
+                    vg, second, page = video.get('gameId'), video.get('seconds'), video.get('page',1)
+                    if not isinstance(vg,str) or not GAME_ID.fullmatch(vg) or type(second) is not int or not 0 <= second <= 86400 or type(page) is not int or not 1 <= page <= 1000:
+                        raise StatsError(400, '时间点需在 0–24 小时内，分 P 需为 1–1000。')
+                    game = db.execute('SELECT * FROM stats_games WHERE id=? AND deleted=0',(vg,)).fetchone()
+                    if not game or (game_id and vg!=game_id) or (training_id and game['training_id']!=training_id):
+                        raise StatsError(400, '只能引用本次训练或比赛的视频。')
+                    meta = self.video_meta(game)
+                    if not meta: raise StatsError(400, '请先添加可播放的 B 站视频链接。')
+                    vk = meta['key']
+                    if video.get('key',vk) != vk: raise StatsError(409, '视频已更换，请重新选择时间点。')
+                stamp = self.now()
+                if row is None:
+                    count = db.execute('SELECT count(*) FROM stats_comments WHERE game_id IS ? AND training_id IS ?',(game_id,training_id)).fetchone()[0]
+                    if count >= MAX_DISCUSSION: raise StatsError(400, '本场讨论已达到 400 条评论，请整理后继续。')
+                    cursor = db.execute('INSERT INTO stats_comments(game_id,training_id,player_id,text,author_name,author_number,created,updated,parent_id,is_discussion,video_game_id,video_key,video_second,video_page) VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?,?)',(game_id,training_id,player_id,body,author['name'],author['number'],stamp,stamp,parent,vg,vk,second,page))
+                    comment_id = cursor.lastrowid
+                else:
+                    if row['deleted']: raise StatsError(409, '请先恢复这条评论再修改。')
+                    db.execute('UPDATE stats_comments SET text=?,updated=?,video_game_id=?,video_key=?,video_second=?,video_page=? WHERE id=?',(body,stamp,vg,vk,second,page,comment_id))
+            db.execute('UPDATE '+table+' SET updated=? WHERE id=?',(self.now(),context_id))
+            return {'comments':self.comments(db,game_id,training_id), 'commentId':comment_id, 'revision':self.revision(db,True)}
 
     def training_updates(self, db, raw):
         if not isinstance(raw, dict):

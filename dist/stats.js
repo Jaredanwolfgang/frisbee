@@ -10,8 +10,8 @@ const StatsUI=(()=>{
  let openGameId=null,sel={thrower:null,receiver:null},sort={key:'goals',dir:1},editingId=null,formGender='male';
  let pointMode=false,pointSel=new Set(),pointStart='offense',editingGameId=null;
  let openTrainingId=null,attendSel=new Set(),attendDirty=false,scrimmageTrainingId=null;
- let trainingPane='plan',gamePane='record',chipQuery='',showAllPlayers=false,teamHub=null;
- const commentDrafts=new Map(),draftKey=g=>me&&g?me.id+':'+g.id:null;
+ let trainingPane='plan',gamePane='record',chipQuery='',showAllPlayers=false,teamHub=null,discussionUI=null;
+
  const metricGroups={attack:['goals','assists','passes'],defense:['turnovers','steals'],line:['points','oPoints','dPoints'],all:STATS.map(([k])=>k)};
  const clearChipSearch=()=>{chipQuery='';$('#stats-chip-search').value='';};
  function focusStatsForm(dialog,field){const title=$(dialog+' h2');if(MobileUI.isPhone()){title?.focus({preventScroll:true});}else $(field).focus();}
@@ -31,7 +31,7 @@ const StatsUI=(()=>{
  function activityCard({attribute,id,name,status,label,heldOn,meta,count,unit}){
   return '<button type="button" class="stats-game-card" '+attribute+'="'+esc(id)+'"><span class="stats-badge '+esc(status)+'">'+esc(label)+'</span><span class="stats-game-card-main"><strong>'+esc(name)+'</strong><span class="team-activity-date"><time'+(/^\d{4}-\d{2}-\d{2}$/.test(heldOn)?' datetime="'+esc(heldOn)+'"':'')+'>'+esc(heldOn)+'</time></span><span class="team-activity-meta">'+esc(meta)+'</span></span><span class="stats-game-card-side"><b>'+count+'</b><small>'+esc(unit)+'</small></span><span class="row-arrow" aria-hidden="true">›</span></button>';
  }
- function gameCard(g){return activityCard({attribute:'data-stats-game',id:g.id,name:g.name,status:g.status,label:g.status==='live'?'进行中':'已结束',heldOn:gameDate(g),meta:(g.opponent?'vs '+g.opponent+' · ':'')+g.events.length+' 条记录',count:g.events.filter(e=>e.kind==='goal').length,unit:'得分'});}
+ function gameCard(g){return activityCard({attribute:'data-stats-game',id:g.id,name:g.name,status:g.status,label:g.status==='live'?'进行中':'已结束',heldOn:gameDate(g),meta:(g.opponent?'vs '+g.opponent+' · ':'')+g.events.length+' 条记录'+(g.video?' · ▶ 视频':''),count:g.events.filter(e=>e.kind==='goal').length,unit:'得分'});}
  function metricView(target,value){const select=$('#stats-'+target+'-view'),table=$('#'+(target==='average'?'stats-averages':'stats-boxscore'));select.value=metricGroups[value]?value:'attack';table.closest('.stats-table-wrap').dataset.statsView=select.value;document.querySelector('[data-scroll-for="'+table.id+'"]').hidden=select.value!=='all';if(target==='average'&&!metricGroups[select.value].includes(sort.key)&&sort.key!=='name'&&sort.key!=='attendance'){sort={key:metricGroups[select.value][0],dir:1};renderAverages();}}
  const pad=n=>String(n).padStart(2,'0');
  const clock=ms=>{const d=new Date(ms||Date.now());return pad(d.getHours())+':'+pad(d.getMinutes());};
@@ -58,7 +58,7 @@ const StatsUI=(()=>{
   const meBox=$('#stats-me');
   meBox.hidden=!me;
   meBox.hidden=true;
-  if(me)meBox.innerHTML='已登录：<b>#'+me.number+' '+esc(me.name)+'</b>（可写赛后总结）';
+  if(me)meBox.innerHTML='已登录：<b>#'+me.number+' '+esc(me.name)+'</b>（可参与赛后讨论）';
   $('#stats-logout').hidden=!me;
   $('#stats-name-options').innerHTML=data.players.map(p=>'<option value="'+esc(p.name)+'">').join('');
  }
@@ -191,21 +191,11 @@ const StatsUI=(()=>{
   });
   box.innerHTML=html;
  }
- const myComment=g=>me?g.comments.find(c=>c.player===me.id):null;
  function renderVideo(g){
   const link=$('#stats-game-video-link');
-  if(g.video){link.hidden=false;link.href=g.video;}else{link.hidden=true;link.removeAttribute('href');}
+  if(g.video){link.hidden=false;link.href='#';}else{link.hidden=true;link.removeAttribute('href');}
  }
- function renderComments(g){
-  const mine=myComment(g),form=$('#stats-comment-form');
-  form.hidden=!me;
-  $('#stats-comment-login').hidden=!!me;
-  $('#stats-comments-note').textContent=me?(mine?'已发布你的总结 · 可修改或删除':'还没有写下你的总结'):'用盘名登录后，写下你自己的总结';
-  if(me&&document.activeElement!==$('#stats-comment-text'))$('#stats-comment-text').value=commentDrafts.has(draftKey(g))?commentDrafts.get(draftKey(g)):(mine?mine.text:'');
-  $('#stats-comment-submit').textContent=mine?'更新我的总结':'发布总结';
-  $('#stats-comment-submit').disabled=busy;$('#stats-comment-delete').hidden=!mine;$('#stats-comment-delete').disabled=busy;
-  $('#stats-comments').innerHTML=g.comments.length?g.comments.map(c=>'<article class="stats-comment"><header><span class="stats-number">#'+c.number+'</span><b>'+esc(c.name)+'</b>'+(me&&c.player===me.id?'<i>我</i>':'')+'<time>'+clock(c.at)+'</time></header><p>'+esc(c.text)+'</p></article>').join(''):'<p class="stats-empty">还没有人写总结。</p>';
- }
+ function renderComments(g){discussionUI?.render($('#game-discussion'),'games',g,gamePane==='comments'&&$('#stats-game-dialog').open);}
  function renderGame(){
   const g=currentGame(),dlg=$('#stats-game-dialog');
   if(!g){openGameId=null;if(dlg.open){dlg.close();deps.toast('这场比赛已被删除。');}return;}
@@ -232,7 +222,7 @@ const StatsUI=(()=>{
   $('#trainings-new').disabled=!loaded&&!error;$('#trainings-new').hidden=!canEdit();
   const box=$('#trainings-list'),empty=$('#trainings-empty');
   empty.hidden=!!data.trainings.length;
-  box.innerHTML=data.trainings.map(t=>activityCard({attribute:'data-training-card',id:t.id,name:t.name,status:t.status,label:trainingStatus[t.status]||'训练',heldOn:t.heldOn,meta:t.drills.length+' 个 Drill · '+t.games.length+' 场训练赛'+(t.comments.length?' · '+t.comments.length+' 条总结':''),count:t.attendees.length,unit:'出勤'})).join('');
+  box.innerHTML=data.trainings.map(t=>activityCard({attribute:'data-training-card',id:t.id,name:t.name,status:t.status,label:trainingStatus[t.status]||'训练',heldOn:t.heldOn,meta:t.drills.length+' 个 Drill · '+t.games.length+' 场训练赛'+(t.comments.some(c=>!c.deleted)?' · '+t.comments.filter(c=>!c.deleted).length+' 条发言':''),count:t.attendees.length,unit:'出勤'})).join('');
  }
  function renderAttendance(t,editable){
   const note=$('#training-attendance-note');
@@ -260,15 +250,7 @@ const StatsUI=(()=>{
   $('#training-games').innerHTML=t.games.length?TeamMetrics.gamesByDate(t.games).map(gameCard).join(''):'<p class="stats-empty">还没有训练赛。点「添加训练赛」记录队内对抗。</p>';
   $('#training-game-add').hidden=!canEdit();$('#training-game-add').disabled=busy;
  }
- function renderTrainingComments(t){
-  const mine=myComment(t),form=$('#training-comment-form');
-  form.hidden=!me;$('#training-comment-login').hidden=!!me;
-  $('#training-comments-note').textContent=me?(mine?'已发布你的总结 · 可修改或删除':'还没有写下你的总结'):'用盘名登录后，写下你自己的总结';
-  if(me&&document.activeElement!==$('#training-comment-text'))$('#training-comment-text').value=commentDrafts.has(draftKey(t))?commentDrafts.get(draftKey(t)):(mine?mine.text:'');
-  $('#training-comment-submit').textContent=mine?'更新我的总结':'发布总结';
-  $('#training-comment-submit').disabled=busy;$('#training-comment-delete').hidden=!mine;$('#training-comment-delete').disabled=busy;
-  $('#training-comments').innerHTML=t.comments.length?t.comments.map(c=>'<article class="stats-comment"><header><span class="stats-number">#'+c.number+'</span><b>'+esc(c.name)+'</b>'+(me&&c.player===me.id?'<i>我</i>':'')+'<time>'+clock(c.at)+'</time></header><p>'+esc(c.text)+'</p></article>').join(''):'<p class="stats-empty">还没有人写总结。</p>';
- }
+ function renderTrainingComments(t){discussionUI?.render($('#training-discussion'),'trainings',t,trainingPane==='comments'&&$('#training-dialog').open);}
  function renderTraining(){
   const t=currentTraining(),dlg=$('#training-dialog');
   if(!t){openTrainingId=null;if(dlg.open){dlg.close();deps.toast('这次训练已被删除。');}return;}
@@ -299,8 +281,9 @@ const StatsUI=(()=>{
   renderAll();
   if(!loaded&&!inflight)refresh();
  }
- async function refresh(){
-  if(inflight)return inflight;
+ async function refresh(force=false){
+  if(inflight){await inflight;if(!force)return;}
+  if(force)revision=-1;
   inflight=(async()=>{try{
    const d=await deps.api('stats'+(revision>=0?'?revision='+revision:''));
    error='';
@@ -407,8 +390,8 @@ const StatsUI=(()=>{
 
  function init(deps_){
   deps=deps_;
-  bindViewTabs('#stats-game-dialog .stats-game-tabs','[data-stats-tab]','statsTab',pane=>{gamePane=pane;syncGamePane();$('#stats-game-dialog .stats-game-body').scrollTop=0;});
-  bindViewTabs('#training-dialog .stats-game-tabs','[data-training-tab]','trainingTab',pane=>{trainingPane=pane;syncTrainingPane();$('#training-body').scrollTop=0;});
+  bindViewTabs('#stats-game-dialog .stats-game-tabs','[data-stats-tab]','statsTab',pane=>{gamePane=pane;syncGamePane();if(currentGame())renderComments(currentGame());$('#stats-game-dialog .stats-game-body').scrollTop=0;});
+  bindViewTabs('#training-dialog .stats-game-tabs','[data-training-tab]','trainingTab',pane=>{trainingPane=pane;syncTrainingPane();if(currentTraining())renderTrainingComments(currentTraining());$('#training-body').scrollTop=0;});
   if(window.ResizeObserver)new ResizeObserver(fitAverageViewport).observe($('#stats-averages'));else window.addEventListener('resize',fitAverageViewport);
   $('#stats-average-view').onchange=event=>metricView('average',event.target.value);
   $('#stats-box-view').onchange=event=>metricView('box',event.target.value);
@@ -452,7 +435,7 @@ const StatsUI=(()=>{
    if(!heldOn){deps.toast('请选择实际比赛日期。');return;}
    const fallback=heldOn+' '+(scrimmageTrainingId?'训练赛':'比赛');
    const name=$('#stats-game-name').value.trim()||fallback,opponent=$('#stats-game-opponent').value.trim();
-   let video=$('#stats-game-video').value.trim();
+   let video=BiliVideo.extractURL($('#stats-game-video').value);
    if(video&&!/^https?:\/\//i.test(video))video='https://'+video;
    if(editingGameId){
     const id=editingGameId;
@@ -475,7 +458,7 @@ const StatsUI=(()=>{
    if(created){deps.toast('已创建训练赛，记录结果不计入场均。');beginPoint();}
    else{beginPoint();deps.toast('已创建比赛，先记录第 1 分的上场阵容。');}
   };
-  $('#stats-comment-login').onclick=$('#stats-login').onclick=()=>{$('#stats-login-name').value='';$('#stats-login-password').value='';$('#stats-login-error').textContent='';$('#stats-login-dialog').showModal();focusStatsForm('#stats-login-dialog','#stats-login-name');};
+  const login=$('#stats-login').onclick=()=>{$('#stats-login-name').value='';$('#stats-login-password').value='';$('#stats-login-error').textContent='';$('#stats-login-dialog').showModal();focusStatsForm('#stats-login-dialog','#stats-login-name');};
   $('#stats-login-dialog').addEventListener('close',()=>$('#stats-login-password').value='');
   $('#stats-players-dialog').addEventListener('close',()=>$('#stats-player-password').value='');
   $('#stats-login-cancel').onclick=()=>$('#stats-login-dialog').close();
@@ -485,42 +468,19 @@ const StatsUI=(()=>{
    if(!name){$('#stats-login-error').textContent='请输入盘名。';return;}
    try{
     const res=await deps.api('stats/login',{method:'POST',body:JSON.stringify({name,password:$('#stats-login-password').value})});
-    me=res.me;$('#stats-login-password').value='';$('#stats-login-dialog').close();renderAll();teamHub?.afterLogin();
+    me=res.me;$('#stats-login-password').value='';$('#stats-login-dialog').close();renderAll();if(!$('#training-dialog').open&&!$('#stats-game-dialog').open)teamHub?.afterLogin();
     deps.toast('已登录为 #'+me.number+' '+me.name+'，已进入个人看板。');
    }catch(err){$('#stats-login-error').textContent=err.message;}
   };
   $('#stats-logout').onclick=async()=>{
    try{await deps.api('stats/logout',{method:'POST',body:'{}'});}catch{}
-   me=null;commentDrafts.clear();$('#stats-comment-text').value='';renderAll();deps.toast('已退出登录。');
-  };
-  $('#stats-comment-text').oninput=()=>{const key=draftKey(currentGame());if(key)commentDrafts.set(key,$('#stats-comment-text').value);};
-  $('#stats-comment-form').onsubmit=async e=>{
-   e.preventDefault();
-   const g=currentGame();
-   if(!g||!me)return;
-   const text=$('#stats-comment-text').value.trim();
-   if(!text){deps.toast('总结不能为空。');$('#stats-comment-text').focus();return;}
-   const res=await mutate('stats/games/'+g.id+'/comments',{method:'POST',body:JSON.stringify({text})},r=>{
-    const mine=myComment(g);
-    if(mine)Object.assign(mine,r.comment);else g.comments.push(r.comment);
-    commentDrafts.delete(draftKey(g));
-   },true);
-   if(res)deps.toast('总结已发布。');
-  };
-  $('#stats-comment-delete').onclick=async()=>{
-   const g=currentGame();
-   if(!g||!me)return;
-   if(!confirm('删除你的赛后总结？'))return;
-   const res=await mutate('stats/games/'+g.id+'/comments',{method:'DELETE'},r=>{
-    g.comments=g.comments.filter(c=>!(me&&c.player===me.id));
-    commentDrafts.delete(draftKey(g));$('#stats-comment-text').value='';
-   },true);
-   if(res)deps.toast('已删除你的总结。');
+   me=null;discussionUI?.reset();renderAll();deps.toast('已退出登录。');
   };
   $('#stats-new-game-cancel').onclick=()=>{editingGameId=null;$('#stats-new-game-dialog').close();};
   $('#stats-game-close').onclick=()=>$('#stats-game-dialog').close();
-  $('#stats-game-dialog').addEventListener('close',()=>{openGameId=null;sel={thrower:null,receiver:null};pointMode=false;pointSel=new Set();});
+  $('#stats-game-dialog').addEventListener('close',()=>{discussionUI?.stop($('#game-discussion'));openGameId=null;sel={thrower:null,receiver:null};pointMode=false;pointSel=new Set();});
   $('#stats-game-unlock').onclick=()=>deps.requestEdit(()=>renderGame());
+  $('#stats-game-video-link').onclick=event=>{event.preventDefault();gamePane='comments';syncGamePane();renderComments(currentGame());};
   $('#stats-game-edit').onclick=$('#stats-game-date-edit').onclick=openGameInfo;
   $('#stats-game-status').onclick=()=>{
    const g=currentGame();if(!g||!canEdit())return;
@@ -563,7 +523,7 @@ const StatsUI=(()=>{
    if(res){openTraining(res.training.id);deps.toast('已创建训练，先记录出勤。');}
   });
   $('#training-close').onclick=()=>$('#training-dialog').close();
-  $('#training-dialog').addEventListener('close',()=>{openTrainingId=null;attendSel=new Set();attendDirty=false;});
+  $('#training-dialog').addEventListener('close',()=>{discussionUI?.stop($('#training-discussion'));openTrainingId=null;attendSel=new Set();attendDirty=false;});
   $('#training-unlock').onclick=()=>deps.requestEdit(()=>renderTraining());
   $('#training-attendance-save').onclick=async()=>{
    const t=currentTraining();
@@ -601,31 +561,6 @@ const StatsUI=(()=>{
    });
    if(res)deps.toast('已删除这次训练。');
   };
-  $('#training-comment-login').onclick=$('#stats-login').onclick=()=>{$('#stats-login-name').value='';$('#stats-login-password').value='';$('#stats-login-error').textContent='';$('#stats-login-dialog').showModal();focusStatsForm('#stats-login-dialog','#stats-login-name');};
-  $('#training-comment-text').oninput=()=>{const key=draftKey(currentTraining());if(key)commentDrafts.set(key,$('#training-comment-text').value);};
-  $('#training-comment-form').onsubmit=async e=>{
-   e.preventDefault();
-   const t=currentTraining();
-   if(!t||!me)return;
-   const text=$('#training-comment-text').value.trim();
-   if(!text){deps.toast('总结不能为空。');$('#training-comment-text').focus();return;}
-   const res=await mutate('stats/trainings/'+t.id+'/comments',{method:'POST',body:JSON.stringify({text})},r=>{
-    const mine=myComment(t);
-    if(mine)Object.assign(mine,r.comment);else t.comments.push(r.comment);
-    commentDrafts.delete(draftKey(t));
-   },true);
-   if(res)deps.toast('总结已发布。');
-  };
-  $('#training-comment-delete').onclick=async()=>{
-   const t=currentTraining();
-   if(!t||!me)return;
-   if(!confirm('删除你的训练总结？'))return;
-   const res=await mutate('stats/trainings/'+t.id+'/comments',{method:'DELETE'},r=>{
-    t.comments=t.comments.filter(c=>!(me&&c.player===me.id));
-    commentDrafts.delete(draftKey(t));$('#training-comment-text').value='';
-   },true);
-   if(res)deps.toast('已删除你的总结。');
-  };
   document.addEventListener('click',e=>{
    if(!active())return;
    const drillLink=e.target.closest('[data-team-drill]');if(drillLink){$('#training-dialog').close();deps.openDrill?.(drillLink.dataset.teamDrill);return;}
@@ -657,7 +592,8 @@ const StatsUI=(()=>{
     if(p)mutate('stats/players/'+p.id,{method:'DELETE'},r=>{data.players=data.players.filter(x=>x.id!==r.deleted);deps.toast('已删除 #'+p.number+' '+p.name);});
    }
   });
-  teamHub=TeamHub.init({api:deps.api,toast:deps.toast,canEdit,refresh,getState:()=>({data,me,loaded,error,busy}),login:()=>$('#stats-comment-login').click(),toggleEdit:deps.toggleEdit,openTeam:deps.openTeam,currentTraining,openTraining,openReview:id=>{openGame(id);gamePane='comments';syncGamePane();},openTrainingReview:id=>{openTraining(id);trainingPane='comments';syncTrainingPane();}});
+  discussionUI=TeamDiscussion.init({api:deps.api,toast:deps.toast,canEdit,getMe:()=>me,login,refresh});
+  teamHub=TeamHub.init({api:deps.api,toast:deps.toast,canEdit,refresh,getState:()=>({data,me,loaded,error,busy}),login,toggleEdit:deps.toggleEdit,openTeam:deps.openTeam,currentTraining,openTraining,openReview:id=>{openGame(id);gamePane='comments';syncGamePane();renderComments(currentGame());},openTrainingReview:id=>{openTraining(id);trainingPane='comments';syncTrainingPane();renderTrainingComments(currentTraining());}});
   refresh();
   timer=setInterval(()=>{if(active()&&!document.hidden&&!busy)refresh();},8000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&active())refresh();});

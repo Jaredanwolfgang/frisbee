@@ -325,10 +325,10 @@ class StatsAPITest(unittest.TestCase):
         frozen = self.request('GET', '/api/stats', auth=False)[1]['games'][0]['comments'][0]
         self.assertEqual((frozen['name'], frozen['number']), ('芒果', 3))
         # Game video is a text hyperlink, validated and returned in snapshots.
-        self.assertEqual(self.request('PUT', f'/api/stats/games/{game}', {'name': 'x', 'video': 'b23.tv/abc'})[0], 400)
-        code, data = self.request('PUT', f'/api/stats/games/{game}', {'name': '队内赛', 'opponent': '海豚队', 'video': ' https://b23.tv/abc '})
-        self.assertEqual(data['game']['video'], 'https://b23.tv/abc')
-        self.assertEqual(self.request('GET', '/api/stats', auth=False)[1]['games'][0]['video'], 'https://b23.tv/abc')
+        self.assertEqual(self.request('PUT', f'/api/stats/games/{game}', {'name': 'x', 'video': 'example.com/video'})[0], 400)
+        code, data = self.request('PUT', f'/api/stats/games/{game}', {'name': '队内赛', 'opponent': '海豚队', 'video': ' https://example.com/video '})
+        self.assertEqual(data['game']['video'], 'https://example.com/video')
+        self.assertEqual(self.request('GET', '/api/stats', auth=False)[1]['games'][0]['video'], 'https://example.com/video')
 
     def test_trainings_attendance_drills_scrimmage_and_reviews(self):
         a, b = self.player('疾风', 7), self.player('芒果', 3, 'female')

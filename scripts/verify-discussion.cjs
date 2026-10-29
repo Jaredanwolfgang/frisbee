@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),B=require('../dist/bili-video.js');
+for(const [raw,n] of [['01:25',85],['1:02:03',3723],['0:00',0],['85',85],['24:00:00',86400]])assert.equal(B.parseTime(raw),n);
+for(const raw of ['', '1:60','1:2:99','-1','86401','Infinity','1.5','abc'])assert.equal(B.parseTime(raw),null);
+assert.equal(B.formatTime(85),'1:25');assert.equal(B.formatTime(3723),'1:02:03');
+const url=new URL(B.embed({key:'BV1B7411m7LV',page:2},85,2,true));
+assert.equal(url.origin,'https://player.bilibili.com');assert.equal(url.searchParams.get('p'),'2');assert.equal(url.searchParams.get('t'),'85');assert.equal(url.searchParams.get('autoplay'),'1');
+assert.equal(B.embed({key:'javascript:alert(1)'},1),'');assert.equal(B.embed({key:'BV1B7411m7LV'},-1),'');
+assert.equal(B.extractURL('【训练】 https://b23.tv/test 分享给你'),'https://b23.tv/test');
+assert.equal(B.extractURL('BV1B7411m7LV'),'https://www.bilibili.com/video/BV1B7411m7LV');
+console.log('PASS: timestamp parsing, zero/hour boundaries, safe player host, official p/t parameters, and shared-link extraction.');

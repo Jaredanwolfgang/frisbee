@@ -488,6 +488,20 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
                     raise APIError(error.status,error.message) from None
                 return self.send(200,result)
 
+            if len(segments) in (3,4) and segments[0] in ('games','trainings') and segments[2]=='discussion' and STATS_MODULE.GAME_ID.fullmatch(segments[1]):
+                if (len(segments)==3 and self.command!='POST') or (len(segments)==4 and (self.command not in ('PUT','DELETE') or not re.fullmatch(r'[1-9][0-9]{0,17}',segments[3]))):
+                    raise APIError(404,'讨论接口不存在。')
+                self.require_same_origin()
+                pid = self.player_identity()
+                if pid is None: raise APIError(401,'请先登录自己的队员身份再参与讨论。')
+                data = self.body() if self.command!='DELETE' else {}
+                context = {'game_id':segments[1]} if segments[0]=='games' else {'training_id':segments[1]}
+                try:
+                    result = stats_store.discussion(pid,data,comment_id=int(segments[3]) if len(segments)==4 else None,method=self.command,**context)
+                except STATS_MODULE.StatsError as error:
+                    raise APIError(error.status,error.message) from None
+                return self.send(200,result)
+
             if len(segments) == 3 and segments[0] in ('games', 'trainings') and segments[2] == 'comments' and STATS_MODULE.GAME_ID.fullmatch(segments[1]):
                 if self.command not in ('POST', 'DELETE'):
                     raise APIError(404, '统计接口不存在。')

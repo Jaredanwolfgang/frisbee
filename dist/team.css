@@ -152,3 +152,69 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 }
 /* Leave enough label space for the full Ultimate defensive-statistics wording. */
 .stats-metric-control select{width:174px;max-width:174px}
+
+/* Team discussion and video review, shared by training and match pages. */
+.discussion-media{margin-bottom:20px;min-width:0}
+.discussion-video-select label,.discussion-video-editor label{display:grid;gap:7px}
+.discussion-video-select{margin-bottom:12px}
+.discussion-video-select select{width:100%;max-width:100%}
+.discussion-player{position:relative;aspect-ratio:16/9;background:#14271d;border-radius:10px;overflow:hidden;margin-bottom:10px}
+.discussion-player iframe{display:block;width:100%;height:100%;border:0}
+.discussion-media>[data-d=media]>a{font-size:12px;margin-right:12px}
+.discussion-media>[data-d=media]>small{color:var(--muted)}
+.discussion-video-empty{margin:0;color:var(--muted);font-size:14px;line-height:1.7}
+.discussion-video-editor{margin-top:12px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfcf8}
+.discussion-video-editor summary{cursor:pointer;font-size:14px;color:#56704c;min-height:24px}
+.discussion-video-editor form{display:flex;align-items:flex-end;gap:10px;padding-top:12px;min-width:0}
+.discussion-video-editor label{flex:1;min-width:0}
+.discussion-video-editor input{width:100%}
+.discussion-heading{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.discussion-heading h3{font-size:16px;margin:0;font-weight:650}
+.discussion-heading>span,.discussion-hint{font-size:12px;color:var(--muted);line-height:1.7}
+.discussion-hint{margin:6px 0 14px}
+.discussion-composer{display:grid;gap:12px;min-width:0;margin-bottom:22px}
+.discussion-composer textarea{display:block;box-sizing:border-box;width:100%;min-height:124px;resize:vertical;line-height:1.7;padding:12px}
+.discussion-attach{display:flex;flex-direction:row;align-items:center;gap:8px;font-size:13px;color:#59734e}
+.discussion-attach input{width:18px;height:18px;padding:0;flex:none;accent-color:#24583e}
+.discussion-time-fields{display:grid;grid-template-columns:minmax(0,1fr) 100px 72px;gap:10px;align-items:start;padding:12px;border:1px solid var(--line);background:#f6f9f1;border-radius:8px}
+.discussion-time-fields label,.discussion-time-fields input,.discussion-time-fields select{width:100%;min-width:0}
+.discussion-time-fields small{grid-column:1/-1;font-size:12px;color:var(--muted);line-height:1.6}
+.discussion-submit{display:flex;justify-content:flex-end;gap:10px}
+.discussion-submit button{min-width:110px;min-height:44px}
+.discussion-replying{border-left:3px solid #87a775;padding:7px 10px;background:#f1f6e9;color:#56704b;font-size:13px;line-height:1.6}
+.discussion-status{margin:0;color:#94603d;font-size:12px;line-height:1.6}
+.discussion-status:empty{display:none}
+.discussion-list{display:grid;gap:20px}
+.discussion-thread{border-top:1px solid var(--line);padding-top:16px;min-width:0}
+.discussion-message{display:grid;grid-template-columns:36px minmax(0,1fr);gap:10px;min-width:0}
+.discussion-avatar{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;overflow:hidden;flex:none;background:#e5eddd;color:#537047;font-size:16px;font-weight:650}
+.discussion-avatar img{width:100%;height:100%;object-fit:cover}
+.discussion-message-main{min-width:0}
+.discussion-message-main header{display:flex;align-items:baseline;flex-wrap:wrap;gap:5px 9px;line-height:1.6}
+.discussion-message-main header strong{font-size:14px;overflow-wrap:anywhere}
+.discussion-message-main header small,.discussion-message-main header time{font-size:12px;color:var(--muted)}
+.discussion-message-main header time{margin-left:auto}
+.discussion-message-main p{font-size:var(--type-reading,15px);line-height:1.8;margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.discussion-message-main p.discussion-deleted{color:var(--muted);font-size:13px}
+.discussion-message-actions{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px}
+.discussion-message-actions button{border:0;background:none;color:#68845b;font-size:12px;padding:6px 0;min-height:32px}
+.discussion-timestamp{display:inline-block;max-width:100%;border:1px solid #d9e4ce;background:#f0f6e8;color:#426738;border-radius:7px;font-size:12px;line-height:1.6;white-space:normal;overflow-wrap:anywhere;text-align:left;padding:7px 10px;margin:4px 0;min-height:36px}
+.discussion-replies{margin:12px 0 0 46px;padding:12px 0 0 12px;border-left:2px solid #e2eadb;display:grid;gap:15px}
+.discussion-message.is-reply{grid-template-columns:30px minmax(0,1fr);gap:8px}
+.discussion-message.is-reply .discussion-avatar{width:30px;height:30px;font-size:14px}
+.discussion-replies details>summary{font-size:12px;color:#668355;min-height:36px;cursor:pointer}
+.discussion-replies details[open]>.discussion-message{margin-top:14px}
+@media(max-width:600px){
+ .discussion-video-editor form{flex-direction:column;align-items:stretch}
+ .discussion-player{border-radius:7px}
+ .discussion-time-fields{grid-template-columns:minmax(0,1fr) 76px;gap:10px;padding:10px}
+ .discussion-time-fields>label:first-child{grid-column:1/-1}
+ .discussion-time-fields small{line-height:1.7}
+ .discussion-composer textarea{min-height:132px}
+ .discussion-submit .primary{flex:1}
+ .discussion-submit button{min-width:0}
+ .discussion-message-main header time{margin-left:0;width:100%}
+ .discussion-replies{margin-left:20px;padding-left:10px}
+ .discussion-message-actions button{min-height:40px;font-size:12px}
+ .discussion-message-main p{font-size:16px}
+}
