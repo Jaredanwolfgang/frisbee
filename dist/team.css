@@ -218,3 +218,6 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
  .discussion-message-actions button{min-height:40px;font-size:12px}
  .discussion-message-main p{font-size:16px}
 }
+
+.discussion-video-editor button,.discussion-attach,.discussion-timestamp,.discussion-replies details>summary{min-height:44px}
+@media(max-width:600px){.discussion-message-actions button{min-height:44px}.discussion-attach{padding:5px 0}}

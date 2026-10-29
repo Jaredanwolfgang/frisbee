@@ -38,6 +38,7 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
  await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});
  assert.equal(new URL($('iframe').src).searchParams.get('t'),'85');const firstSeek=$('iframe');
  await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});assert.notEqual($('iframe'),firstSeek,'clicking the same time point must seek again');
+ data.comments[0].video.seconds=0;ui.render(host,'trainings',data,true);await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});assert.equal(new URL($('iframe').src).searchParams.get('t'),'0');assert.equal(new URL($('iframe').src).searchParams.get('autoplay'),'1');
  await host.onclick({target:$('[data-action="edit"][data-comment="2"]')});$('[data-d="text"]').value='修订后的补充';await $('[data-d="form"]').onsubmit({preventDefault(){}});
  assert.equal(data.comments.find(c=>c.id===2).text,'修订后的补充');
  await host.onclick({target:$('[data-action="delete"][data-comment="2"]')});await host.onclick({target:$('[data-action="delete"][data-comment="2"]')});assert(data.comments.find(c=>c.id===2).deleted);
