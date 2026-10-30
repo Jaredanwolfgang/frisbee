@@ -478,3 +478,20 @@ input::placeholder,textarea::placeholder{color:#7b887e;opacity:1}
  .card-body{padding:11px 10px}
 }
 @media(prefers-reduced-motion:reduce){.search,.card{transition:none}}
+/* Conversation density comes from metadata and padding; reading line-height stays unchanged. */
+#ai-chat-scroll{padding:16px}
+.ai-user{margin:10px 0}
+.ai-user p{padding:8px 12px}
+.ai-assistant{padding:12px;margin-bottom:12px}
+.ai-response-status{margin-bottom:6px}
+.ai-references{margin-top:10px}
+.ai-gesture-row{margin-top:6px}
+.coach-scroll{padding:16px 20px}
+.coach-message{margin-bottom:12px}
+.coach-message small{margin-bottom:3px}
+.coach-user p{padding:8px 12px}
+.coach-assistant{padding-bottom:0}
+@media(max-width:600px){
+ #ai-chat-scroll{padding:12px}
+ .coach-scroll{padding:12px 14px}
+}

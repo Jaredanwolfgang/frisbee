@@ -167,7 +167,7 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 #stats-game-dialog .stats-game-body[data-pane=comments],#training-body[data-training-view=comments]{display:flex;flex-direction:column;overflow:hidden;gap:0;padding:10px 12px max(10px,env(safe-area-inset-bottom))}
 #stats-pane-comments,#training-pane-comments{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:0}
 .discussion-view{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;overflow:hidden}
-.discussion-feed{flex:1;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain;padding:14px 12px;scroll-padding-block:12px}
+.discussion-feed{flex:1;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain;padding:10px 12px;scroll-padding-block:12px}
 .discussion-composer{position:relative;display:flex;flex-direction:column;gap:8px;flex:none;min-width:0;max-height:75%;overflow-y:auto;margin:0;padding:10px;border-top:1px solid var(--line);background:#fff}
 .discussion-compose-row{flex:none;display:flex;align-items:flex-end;gap:8px;min-width:0}
 .discussion-compose-row>label{flex:1;min-width:0;gap:0}
@@ -190,27 +190,28 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .discussion-replying{border-left:3px solid #87a775;padding:7px 10px;background:#f1f6e9;color:#56704b;font-size:13px;line-height:1.6}
 .discussion-status{flex:none;margin:0;color:#94603d;font-size:12px;line-height:1.6}
 .discussion-status:empty{display:none}
-.discussion-list{display:grid;gap:20px}
-.discussion-thread{border-top:1px solid var(--line);padding-top:16px;min-width:0}
+.discussion-list{display:grid;gap:12px}
+.discussion-thread{border-top:1px solid var(--line);padding-top:12px;min-width:0}
 .discussion-thread:first-child{border-top:0;padding-top:0}
-.discussion-message{display:grid;grid-template-columns:36px minmax(0,1fr);gap:10px;min-width:0}
+.discussion-message{display:block;min-width:0}
 .discussion-avatar{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;overflow:hidden;flex:none;background:#e5eddd;color:#537047;font-size:16px;font-weight:650}
 .discussion-avatar img{width:100%;height:100%;object-fit:cover}
 .discussion-message-main{min-width:0}
-.discussion-message-main header{display:flex;align-items:baseline;flex-wrap:wrap;gap:5px 9px;line-height:1.6}
-.discussion-message-main header strong{font-size:14px;overflow-wrap:anywhere}
-.discussion-message-main header small,.discussion-message-main header time{font-size:12px;color:var(--muted)}
-.discussion-message-main header time{margin-left:auto}
-.discussion-message-main p{font-size:var(--type-reading,15px);line-height:1.8;margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.discussion-message-main header{display:flex;align-items:center;gap:6px;min-height:26px;line-height:1.4}
+.discussion-message-main header strong{min-width:0;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+.discussion-message-main header small{flex:none;font-size:12px;color:var(--muted);white-space:nowrap}
+.discussion-message-main header .discussion-avatar{width:26px;height:26px;font-size:13px}
+.discussion-message-main p{font-size:var(--type-reading,15px);line-height:1.8;margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .discussion-message-main p.discussion-deleted{color:var(--muted);font-size:13px}
-.discussion-message-actions{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px}
-.discussion-message-actions button{border:0;background:none;color:#68845b;font-size:12px;padding:6px 0;min-height:32px}
+.discussion-message-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:0 4px;min-height:32px;margin-top:2px}
+.discussion-message-actions time{margin-right:auto;font-size:12px;line-height:1.4;color:var(--muted)}
+.discussion-message-actions button{border:0;background:none;color:#68845b;font-size:12px;line-height:1.4;padding:6px 8px;min-width:40px;min-height:32px;border-radius:5px}
+.discussion-message-actions button:hover{background:#f0f5ec}
 .discussion-timestamp{display:inline;border:0;background:#eaf2e3;color:#38692f;border-radius:4px;font:inherit;font-weight:600;line-height:inherit;white-space:nowrap;vertical-align:baseline;padding:1px 5px;margin:0 2px;min-height:0;text-decoration:underline;text-decoration-color:#a7bf9a;text-underline-offset:3px}
-.discussion-replies{margin:12px 0 0 46px;padding:12px 0 0 12px;border-left:2px solid #e2eadb;display:grid;gap:15px}
-.discussion-message.is-reply{grid-template-columns:30px minmax(0,1fr);gap:8px}
-.discussion-message.is-reply .discussion-avatar{width:30px;height:30px;font-size:14px}
-.discussion-replies details>summary{font-size:12px;color:#668355;min-height:36px;cursor:pointer}
-.discussion-replies details[open]>.discussion-message{margin-top:14px}
+.discussion-replies{margin:4px 0 0 12px;padding:0 0 0 12px;border-left:2px solid #e2eadb;display:grid;gap:10px}
+.discussion-message.is-reply header .discussion-avatar{width:24px;height:24px;font-size:12px}
+.discussion-replies details>summary{font-size:12px;color:#668355;min-height:32px;cursor:pointer}
+.discussion-replies details[open]>.discussion-message{margin-top:8px}
 .discussion-reply-group>summary{display:flex;align-items:center;gap:6px;list-style:none;font-weight:600}
 .discussion-reply-group>summary::-webkit-details-marker{display:none}
 .discussion-reply-group>summary:before{content:'›';font-size:18px;transition:transform .15s}
@@ -223,13 +224,12 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
  .discussion-time-fields{grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:10px}
  .discussion-time-fields>label:first-child{grid-column:1/-1}
  .discussion-time-fields small{line-height:1.7}
- .discussion-message-main header time{margin-left:0;width:100%}
- .discussion-replies{margin-left:20px;padding-left:10px}
- .discussion-message-actions button{min-height:40px;font-size:12px}
+ .discussion-replies{margin-left:8px;padding-left:10px}
+ .discussion-message-actions button{min-height:36px;min-width:44px}
  .discussion-message-main p{font-size:16px}
 }
 
-@media(max-width:600px){.discussion-message-actions button{min-height:44px}}
+
 
 /* Absolute positioning keeps tab labels centered when a new message arrives. */
 .stats-game-tabs [role=tab]{position:relative}
@@ -317,7 +317,7 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 }
 
 .discussion-time-fields>[data-d=insert-time]{min-height:44px;white-space:nowrap}
-.discussion-replies details>summary{min-height:44px}
+@media(max-width:600px){.discussion-replies details>summary{min-height:36px}}
 /* Drill observations stay with the training occurrence; history is read inside the preview. */
 .training-drill-card{min-width:0;border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden}
 .training-drill-card>.stats-drill-row{border:0;border-radius:0;min-width:0;flex-wrap:wrap}
@@ -326,9 +326,10 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .drill-note-details>summary{min-height:44px;padding:11px 0;color:#4c7142;font-size:14px;cursor:pointer;line-height:1.5}
 .drill-note-details>summary small{font-size:12px;font-weight:400}
 .drill-note-details:not([open]){padding-bottom:0}
-.drill-note-list{display:grid;gap:14px;min-width:0}
-.drill-note{display:grid;grid-template-columns:36px minmax(0,1fr);gap:9px;min-width:0;padding:12px 0;border-top:1px solid #e9eee4}
+.drill-note-list{display:grid;gap:8px;min-width:0}
+.drill-note{display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px;min-width:0;padding:8px 0;border-top:1px solid #e9eee4}
 .drill-note:first-child{border-top:0}
+.drill-note>.discussion-avatar{width:28px;height:28px;font-size:13px}
 .drill-note-main{min-width:0}
 .drill-note header{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;line-height:1.6}
 .drill-note header strong{font-size:14px}
@@ -338,7 +339,7 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .drill-note section>b{font-size:12px;color:#8b6949;font-weight:500}
 .drill-note section.drill-note-progress>b{color:#5a7a4b}
 .drill-note p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0;font-size:15px;line-height:1.75}
-.drill-note-edit{border:0;background:none;padding:8px 0;color:#557749;font-size:12px;min-height:44px}
+.drill-note-edit{border:0;background:none;padding:4px 6px;color:#557749;font-size:12px;min-height:36px}
 .drill-note-form{display:grid;gap:12px;padding-top:12px;border-top:1px solid var(--line);min-width:0}
 .drill-note-form label{font-size:14px;gap:6px;min-width:0}
 .drill-note-form textarea{width:100%;min-height:76px;resize:vertical;line-height:1.6;font-size:16px}
@@ -363,12 +364,13 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .team-messages-shell>.stats-form-header{flex:none;padding:16px;border-bottom:1px solid var(--line)}
 .team-messages-shell h2{font-size:18px;flex:1}
 .team-messages-feed{overflow-y:auto;padding:0 16px 20px;overscroll-behavior:contain}
-.team-message{display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;padding:20px 12px 20px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:#fff;text-align:left;width:100%;white-space:normal}
+.team-message{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;padding:12px 12px 12px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:#fff;text-align:left;width:100%;white-space:normal}
+.team-message>.discussion-avatar{width:30px;height:30px;font-size:14px}
 .team-message>span:last-child{min-width:0}
 .team-message strong{display:block;font-size:15px}
 .team-message small{font-size:12px;color:var(--muted);font-weight:400;display:block;line-height:1.6}
 .team-message strong small{display:inline}
-.team-message p{font-size:15px;line-height:1.7;margin:8px 0 0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
+.team-message p{font-size:15px;line-height:1.7;margin:4px 0 0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
 .discussion-mention{color:#76527f;background:#f5eff7;border-radius:3px;padding:1px 2px;font-weight:600;text-decoration:underline;text-decoration-color:#b595bd;text-underline-offset:3px;text-decoration-thickness:1.5px}
 .discussion-composer.is-mentioning{overflow:visible}
 .discussion-mention-picker{position:absolute;z-index:8;right:96px;bottom:calc(100% + 8px);width:280px;max-width:calc(100% - 16px);padding:4px;border:1px solid #e2d9e6;border-radius:10px;background:#fff;box-shadow:0 8px 28px #33233d24;min-height:0}
@@ -459,13 +461,14 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .drill-history-session time{font-size:12px;color:#6f8467;letter-spacing:.02em}
 .drill-history-session h3{font-size:16px;font-weight:600;line-height:1.5;margin:4px 0 0;overflow-wrap:anywhere}
 .drill-history-session>header>small{flex:none;font-size:12px;color:var(--muted)}
-.drill-history-note{padding:20px;min-width:0;border-top:1px solid #e9eee5}
+.drill-history-note{padding:16px 20px;min-width:0;border-top:1px solid #e9eee5}
 .drill-history-note:first-child{border-top:0}
-.drill-history-note>header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.drill-history-note>header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.drill-history-note>header>.discussion-avatar{width:28px;height:28px;font-size:13px}
 .drill-history-note>header>div{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;min-width:0}
 .drill-history-note>header strong{font-size:14px;font-weight:600}
 .drill-history-note>header small{font-size:12px;color:var(--muted)}
-.drill-history-observations{display:grid;gap:18px;min-width:0}
+.drill-history-observations{display:grid;gap:12px;min-width:0}
 .drill-history-observations section{min-width:0}
 .drill-history-observations h4{font-size:12px;font-weight:500;color:#9a7350;margin:0 0 7px}
 .drill-history-observations .drill-history-progress h4{color:#5d7c53}
