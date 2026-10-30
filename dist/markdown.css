@@ -1,0 +1,41 @@
+/* Shared reading rhythm for training/match discussions and Drill observations. */
+.light-markdown{display:flow-root;min-width:0;white-space:normal;overflow-wrap:anywhere;font-size:var(--type-reading,15px);line-height:1.8}
+.discussion-copy{margin:4px 0 0}
+.discussion-thread>.discussion-message .discussion-copy{margin:8px 0 4px}
+.light-markdown p{margin:6px 0;font-size:inherit;line-height:inherit;white-space:pre-wrap}
+.light-markdown ul,.light-markdown ol{margin:6px 0;padding-left:1.45em}
+.light-markdown li{margin:2px 0;padding-left:2px;white-space:pre-wrap}
+.light-markdown blockquote{margin:6px 0;padding:4px 10px;border-left:3px solid #b6c9aa;background:#eef3e9;border-radius:0 5px 5px 0;color:#53664e}
+.light-markdown strong{font-weight:650;color:inherit}
+.light-markdown a{color:#735285;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.light-markdown>:first-child{margin-top:0}
+.light-markdown>:last-child{margin-bottom:0}
+.light-markdown .md-context{font-size:13px;color:var(--muted);margin-bottom:4px}
+.light-markdown .discussion-deleted{font-size:13px;color:var(--muted)}
+.drill-note-main .light-markdown{margin-top:4px;line-height:1.75}
+.drill-history-observations .light-markdown{font-size:16px;line-height:1.85}
+.md-editor-host{position:relative}
+.md-editor{position:relative;min-width:0;width:100%}
+.md-editor>textarea{display:block;width:100%;padding-right:42px}
+.discussion-composer textarea.md-input{padding-right:42px}
+.md-format-toggle{position:absolute;right:5px;bottom:6px;z-index:2;display:grid;place-items:center;width:30px;min-height:32px;padding:2px;border:0;border-radius:5px;background:#f0f3ec;color:#62765a;font-size:13px;line-height:1;font-weight:600;touch-action:manipulation}
+.md-format-toggle[aria-expanded=true]{background:#e5eddc;color:#345d37}
+.md-editor-host.is-formatting{overflow:visible}
+.md-format-panel{position:absolute;z-index:9;left:8px;right:8px;max-height:min(260px,45dvh);overflow:auto;padding:8px;border:1px solid #d7e1d0;border-radius:9px;background:#fff;box-shadow:0 5px 20px #263b3020}
+.md-format-actions{display:flex;align-items:center;gap:3px}
+.md-format-actions button{display:flex;align-items:center;justify-content:center;gap:4px;flex:1;min-width:0;min-height:36px;padding:5px 3px;border:0;border-radius:5px;background:#f3f6ef;color:#506c47;font-size:12px;white-space:nowrap;line-height:1.4}
+.md-format-actions button:hover{background:#e8efdf}
+.md-format-actions b{font-family:Georgia,serif;font-size:15px}
+.md-editor-status{margin:6px 0 0;color:var(--muted);font-size:11px;line-height:1.5}
+.md-editor-status:empty{display:none}
+.md-link-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) auto;gap:8px;align-items:end;margin-top:8px}
+.md-link-fields label{min-width:0;font-size:12px;gap:4px}
+.md-link-fields input{width:100%;min-width:0}
+.md-link-fields button{min-height:40px;border:1px solid var(--line);background:#eef4e8;color:#41663b;border-radius:5px;padding:8px;font-size:12px;white-space:nowrap}
+@media(max-width:600px){
+ .md-link-fields{grid-template-columns:minmax(0,1fr) auto}
+ .md-link-fields>label:first-child{grid-column:1/-1}
+ .md-link-fields input{font-size:16px!important}
+ .md-format-actions button{min-height:40px}
+ .drill-history-observations .light-markdown{line-height:1.8}
+}

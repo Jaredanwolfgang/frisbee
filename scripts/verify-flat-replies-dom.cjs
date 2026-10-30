@@ -5,7 +5,7 @@ window.HTMLElement.prototype.scrollIntoView=function(){};window.HTMLElement.prot
 Object.defineProperty(window.HTMLSelectElement.prototype,'value',{get(){return this.getAttribute('data-value')||'';},set(value){this.setAttribute('data-value',value);}});
 Object.defineProperty(window.HTMLElement.prototype,'open',{get(){return this.hasAttribute('open');},set(value){this.toggleAttribute('open',!!value);}});
 const cx={document,window,URLSearchParams,Intl,Date,setTimeout:()=>0,clearTimeout(){}};vm.createContext(cx);
-vm.runInContext(['bili-video.js','discussion-text.js','discussion.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.discussion=TeamDiscussion;',cx);
+vm.runInContext(fs.readFileSync('dist/lite-markdown.js','utf8')+'\n'+fs.readFileSync('dist/markdown-editor.js','utf8')+'\n'+['bili-video.js','discussion-text.js','discussion.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.discussion=TeamDiscussion;',cx);
 const host=document.querySelector('#thread'),$=s=>host.querySelector(s),stamp=Date.now();
 const comment=(id,parentId,player,name,text,replyTo=null)=>({id,parentId,player,name,number:player,text,created:stamp,at:stamp,deleted:false,video:null,replyTo});
 async function check(kind){

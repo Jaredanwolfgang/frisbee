@@ -1,7 +1,7 @@
 // NODE_PATH=/tmp/frisbee-discussion-dom/node_modules node scripts/verify-drill-journal-dom.cjs
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{parseHTML}=require('linkedom');
 const {document:doc,window:win}=parseHTML('<html><body><div id="training"></div><div id="history"></div></body></html>');win.HTMLElement.prototype.scrollIntoView=function(){};
-const cx={document:doc};vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/drill-journal.js','utf8')+'\nglobalThis.journal=DrillJournal;',cx);
+const cx={document:doc};vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/lite-markdown.js','utf8')+'\n'+fs.readFileSync('dist/markdown-editor.js','utf8')+'\n'+fs.readFileSync('dist/drill-journal.js','utf8')+'\nglobalThis.journal=DrillJournal;',cx);
 const host=doc.querySelector('#training'),history=doc.querySelector('#history'),$=s=>host.querySelector(s),tick=()=>new Promise(setImmediate);
 let me={id:1},notes=[],posts=0,logins=0,revision=1;
 const training={id:'training-one',drills:[{id:'drill-one',name:'长名称 Drill：回传、切入与后续衔接',noteCount:0,noteVersion:0}]};let journal;

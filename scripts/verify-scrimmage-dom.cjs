@@ -21,7 +21,7 @@ async function api(path,options){if(!options&&path.includes('/notes'))return{not
  return clone(state);
 }
 const cx={document:doc,window:win,Intl,Date,URLSearchParams,console,parseFloat,setInterval:()=>0,getComputedStyle:()=>({columnGap:'12px'}),MobileUI:{isPhone:()=>true},bindTap:(el,fn)=>el.onclick=fn};
-cx.setTimeout=()=>0;cx.clearTimeout=()=>{};vm.createContext(cx);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js','drill-journal.js','team-metrics.js','team-hub.js','team-messages.js','stats.js'].map(f=>fs.readFileSync('dist/'+f,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
+cx.setTimeout=()=>0;cx.clearTimeout=()=>{};vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/lite-markdown.js','utf8')+'\n'+fs.readFileSync('dist/markdown-editor.js','utf8')+'\n'+['bili-video.js','discussion-text.js','discussion.js','drill-journal.js','team-metrics.js','team-hub.js','team-messages.js','stats.js'].map(f=>fs.readFileSync('dist/'+f,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
 const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disabled '+s);el.click();};
 (async()=>{
  cx.stats.init({api,toast:t=>toasts.push(t),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:f=>f?.(),getDrills:()=>catalog});await tick();

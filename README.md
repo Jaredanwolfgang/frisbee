@@ -269,3 +269,14 @@ Drill 添加选择器使用独立的有界容器与单列列表，长名称在�
 战术库打开 Drill 预览后，可以在「演示 / 训练记录」两个页签间切换，训练记录在独立的通栏页面按训练实际日期倒序展示历次问题与进步，显示训练名称、日期与记录队员。较多记录可加载更早记录；查看无须登录。手机支持左右滑动切换这两页，绘图与全屏时不拦截画板手势；关闭预览可返回原训练。记录保存在服务器，不写进战术几何或步骤，战术编辑不会覆盖练习记录。移除训练安排中的 Drill 保留已有记录，删除整次训练后该次记录从汇总中隐藏。
 
 新增 `stats_drill_notes` 表及 `(training_id,drill_id,player_id)` 唯一约束，历史数据不修改。`GET/POST /api/stats/trainings/{trainingId}/drills/{drillId}/notes` 用于查看本次及保存自己的记录；`GET /api/stats/drills/{drillId}/notes?offset=0` 用于跨训练历史（每页 30 条）。训练快照只带备注数量与版本，展开时才读取正文，避免首屏载入全部记录。`tests/test_drill_journal.py` 验证权限、重复更新、实际日期排序、分页与历史保存；`scripts/verify-drill-journal-dom.cjs` 验证草稿、头像显示、内容转义和预览历史。
+
+
+## 轻量 Markdown
+
+训练讨论、队内训练赛和正式比赛的赛后讨论，以及 Drill 的问题/进步备注和跨训练记录，都支持 `**加粗**`、`- 无序列表`、`1. 有序列表`、`> 引用`、`[文字](https://example.com)`。普通换行仍会保留。输入框内的「Aa」可展开格式工具，选中文字后加粗或把当前行/选中多行改为列表、引用；链接从小面板填写。手机输入框和发送、@、时间节点仍在原位置。
+
+服务器继续保存原始文字，编辑时显示 Markdown 原文，无需迁移旧评论或备注；每个原有字段仍按 800 字限制（含格式标记）。@ 队友和视频时间节点按原始文字的 Unicode 码点定位；工具按钮逐次修改标记，保留节点。消息中心和个人心得列表显示去除格式标记的简短摘要。评论回复仍统一平铺，达到两条时默认折叠，气泡和回复区保持 16px 间距。
+
+本功能不提供文件上传、图片插入或视频嵌入。网页链接只允许 HTTP/HTTPS；HTML 与其他未支持语法按普通文字显示，不加载外部媒体。Markdown 内容由 `dist/lite-markdown.js` 的小型渲染器转换，格式操作由 `dist/markdown-editor.js` 提供，不增加第三方运行依赖。
+
+验证：`node scripts/verify-markdown.cjs` 覆盖语法、安全链接、HTML/媒体排除、Unicode/CRLF 节点和格式操作；`NODE_PATH=/tmp/frisbee-discussion-dom/node_modules node scripts/verify-markdown-dom.cjs` 覆盖真实组件的格式按钮、@/视频节点发布编辑、链接校验、Drill 保存及历史回看。

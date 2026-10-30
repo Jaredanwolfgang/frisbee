@@ -6,7 +6,7 @@ const {document,window}=parseHTML('<html><body><div id="test-discussion"></div><
 window.HTMLElement.prototype.scrollIntoView=function(){};window.HTMLElement.prototype.focus=function(){};
 Object.defineProperty(window.HTMLSelectElement.prototype,'value',{get(){return this.querySelector('option[selected]')?.getAttribute('value')||this.querySelector('option')?.getAttribute('value')||'';},set(value){for(const option of this.querySelectorAll('option')){if(option.getAttribute('value')===value)option.setAttribute('selected','');else option.removeAttribute('selected');}}});
 const context={document,URLSearchParams,Intl,Date,console};context.setTimeout=()=>0;context.clearTimeout=()=>{};vm.createContext(context);
-vm.runInContext(fs.readFileSync('dist/bili-video.js','utf8')+'\n'+fs.readFileSync('dist/discussion-text.js','utf8')+'\n'+fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',context);
+vm.runInContext(fs.readFileSync('dist/lite-markdown.js','utf8')+'\n'+fs.readFileSync('dist/markdown-editor.js','utf8')+'\n'+fs.readFileSync('dist/bili-video.js','utf8')+'\n'+fs.readFileSync('dist/discussion-text.js','utf8')+'\n'+fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',context);
 const host=document.querySelector('#test-discussion'),$=s=>host.querySelector(s),clone=x=>JSON.parse(JSON.stringify(x));
 let me={id:1},admin=true,loginCount=0,nextId=3;
 const stamp=Date.now();
@@ -72,7 +72,7 @@ async function verifyStartup(){
  const state={players:[{id:1,number:1,name:'测试队员',gender:'male',avatar:'',loginReady:true}],games:[],trainings:[t],me:{id:1,name:'测试队员',number:1},revision:1};
  const errors=[];let poll;let inboxRows=[];
  const cx={document:doc,window:win,URLSearchParams,Intl,Date,console,setInterval:fn=>{poll=fn;return 0;},parseFloat,getComputedStyle:()=>({columnGap:'12px'}),MobileUI:{isPhone:()=>false},bindTap:(el,fn)=>el.onclick=fn};
- cx.setTimeout=()=>0;cx.clearTimeout=()=>{};vm.createContext(cx);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js','drill-journal.js','team-metrics.js','team-hub.js','team-messages.js','stats.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
+ cx.setTimeout=()=>0;cx.clearTimeout=()=>{};vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/lite-markdown.js','utf8')+'\n'+fs.readFileSync('dist/markdown-editor.js','utf8')+'\n'+['bili-video.js','discussion-text.js','discussion.js','drill-journal.js','team-metrics.js','team-hub.js','team-messages.js','stats.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
  cx.stats.init({api:async(path,options)=>{if(path.startsWith('stats/notifications?'))return{messages:clone(inboxRows),summary:clone(state.notifications),nextOffset:null};if(path==='stats/notifications/read'){const body=JSON.parse(options.body);inboxRows.forEach(m=>{if(body.all||m.id===body.id||m.gameId===body.gameId||(!m.gameId&&m.trainingId===body.trainingId))m.unread=false;});const summary={unread:0,trainings:{},games:{},trainingComments:{}};for(const m of inboxRows.filter(m=>m.unread)){summary.unread++;if(m.trainingId)summary.trainings[m.trainingId]=(summary.trainings[m.trainingId]||0)+1;if(m.gameId)summary.games[m.gameId]=(summary.games[m.gameId]||0)+1;else if(m.trainingId)summary.trainingComments[m.trainingId]=(summary.trainingComments[m.trainingId]||0)+1;}state.notifications=summary;return{summary:clone(summary)};}return clone(state);},toast:e=>errors.push(e),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:fn=>fn?.(),getDrills:()=>[]});
  await new Promise(setImmediate);
  assert.equal(doc.querySelector('#stats-meta').textContent.includes('测试'),false);
@@ -155,7 +155,7 @@ function verifyUnread(){
  const dom=parseHTML('<html><body><button role="tab">训练讨论</button></body></html>'),doc=dom.document,tab=doc.querySelector('button');
  const saved=new Map();let reader={id:1},storageBlocked=false;
  const cx={document:doc,localStorage:{getItem(key){if(storageBlocked)throw Error('blocked');return saved.get(key)||null;},setItem(key,value){if(storageBlocked)throw Error('blocked');saved.set(key,value);}}};
- cx.setTimeout=()=>0;cx.clearTimeout=()=>{};vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/discussion-text.js','utf8')+'\n'+fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',cx);
+ cx.setTimeout=()=>0;cx.clearTimeout=()=>{};vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/lite-markdown.js','utf8')+'\n'+fs.readFileSync('dist/markdown-editor.js','utf8')+'\n'+fs.readFileSync('dist/discussion-text.js','utf8')+'\n'+fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',cx);
  const make=()=>cx.discussion.init({getMe:()=>reader}),has=()=>tab.classList.contains('has-unread');let ui=make();
  const entry={id:'read-training',comments:[{id:100,player:1,deleted:false}]};
  ui.syncUnread(tab,'trainings',entry,false);assert(!has(),'own messages do not trigger a dot');
@@ -201,7 +201,7 @@ async function verifyMultipleVideos(){
 verifyMultipleVideos().catch(error=>{console.error(error);process.exitCode=1;});
 
 async function verifyMentionsAndMobileVideo(){
- const context={document,URLSearchParams,Intl,Date,console,setTimeout:()=>0,clearTimeout:()=>{}};vm.createContext(context);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js'].map(f=>fs.readFileSync('dist/'+f,'utf8')).join('\n')+'\nglobalThis.discussion=TeamDiscussion;',context);
+ const context={document,URLSearchParams,Intl,Date,console,setTimeout:()=>0,clearTimeout:()=>{}};vm.createContext(context);vm.runInContext(fs.readFileSync('dist/lite-markdown.js','utf8')+'\n'+fs.readFileSync('dist/markdown-editor.js','utf8')+'\n'+['bili-video.js','discussion-text.js','discussion.js'].map(f=>fs.readFileSync('dist/'+f,'utf8')).join('\n')+'\nglobalThis.discussion=TeamDiscussion;',context);
  const iso=document.createElement('div');iso.id='mention-demo';document.body.append(iso);const entry={id:'mention-training',games:[video],comments:[]};let sent;
  context.window={matchMedia:()=>({matches:true})};
  const ui=context.discussion.init({getMe:()=>({id:1}),getPlayers:()=>[{id:1,name:'我',number:1},{id:2,name:'队友',number:2},...Array.from({length:8},(_,i)=>({id:i+3,name:'训练队友'+(i+3),number:i+3}))],toast(){},login(){},api:async(path,options)=>{sent=JSON.parse(options.body);entry.comments=[{...sent,id:11,parentId:null,player:1,name:'我',number:1,created:stamp,at:stamp,mentions:sent.mentions.map(m=>({...m,name:'队友'})),videoRefs:sent.videoRefs.map(r=>({...r,available:true}))}];return{comments:entry.comments};},refresh:async()=>ui.render(iso,'trainings',entry,true)});

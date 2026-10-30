@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{parseHTML}=require('linkedom');
 const {document,window}=parseHTML(fs.readFileSync('dist/index.html','utf8'));window.HTMLElement.prototype.focus=function(){};window.HTMLElement.prototype.showModal=function(){this.open=true;};window.HTMLElement.prototype.close=function(){this.open=false;};
-const cx={document};vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/team-messages.js','utf8')+'\nglobalThis.messages=TeamMessages;',cx);
+const cx={document};vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/lite-markdown.js','utf8')+'\n'+fs.readFileSync('dist/markdown-editor.js','utf8')+'\n'+fs.readFileSync('dist/team-messages.js','utf8')+'\nglobalThis.messages=TeamMessages;',cx);
 let me={id:1},summary={unread:1,trainings:{'training-a':1}},nextResolve,opened=null,reads=0;const $=s=>document.querySelector(s),tick=()=>new Promise(setImmediate);
 const ui=cx.messages.init({getMe:()=>me,getSummary:()=>summary,onSummary:s=>{summary=s;ui.update();},toast(){},openMessage:async m=>opened=m,api:async(path,options)=>{if(options){reads++;return{summary:{unread:0,trainings:{}}};}return new Promise(resolve=>nextResolve=resolve);}});
 const msg={type:'reply',id:1,trainingId:'training-a',trainingName:'训练',heldOn:'2026-10-30',name:'<队友>',text:'@我 一起复盘',unread:true};

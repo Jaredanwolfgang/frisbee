@@ -1,0 +1,35 @@
+// NODE_PATH=/tmp/frisbee-discussion-dom/node_modules node scripts/verify-markdown-dom.cjs
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{parseHTML}=require('linkedom');
+const {document,window}=parseHTML('<html><body><div id="discussion"></div><div id="drills"></div><div id="history"></div></body></html>');
+window.HTMLElement.prototype.focus=function(){};window.HTMLElement.prototype.scrollIntoView=function(){};window.HTMLElement.prototype.getBoundingClientRect=()=>({top:0,bottom:100,left:0,right:320,width:320,height:100});
+Object.defineProperty(window.HTMLSelectElement.prototype,'value',{get(){return this.querySelector('option')?.value||'';},set(value){}});
+const cx={document,window,URL,URLSearchParams,Intl,Date,setTimeout:()=>0,clearTimeout(){}};vm.createContext(cx);
+vm.runInContext(['lite-markdown.js','markdown-editor.js','discussion-text.js','bili-video.js','discussion.js','drill-journal.js'].map(f=>fs.readFileSync('dist/'+f,'utf8')).join('\n')+'\nglobalThis.modules={TeamDiscussion,DrillJournal};',cx);
+const tick=()=>new Promise(setImmediate),host=document.querySelector('#discussion'),q=s=>host.querySelector(s),stamp=Date.now();
+const clip={id:'clip',name:'训练赛',video:'https://www.bilibili.com/video/av123',videoMeta:{key:'av123',page:1}},entry={id:'training',games:[clip],comments:[]};let sent,discussion;
+discussion=cx.modules.TeamDiscussion.init({getMe:()=>({id:1}),getPlayers:()=>[{id:2,name:'队友',number:2}],toast(){},login(){},api:async(path,options)=>{sent=JSON.parse(options.body);entry.comments=[{...sent,id:1,player:1,name:'我',number:1,created:stamp,at:stamp,deleted:false,mentions:sent.mentions.map(m=>({...m,name:'队友'})),videoRefs:sent.videoRefs.map(r=>({...r,available:true}))}];return{comments:entry.comments};},refresh:async()=>discussion.render(host,'trainings',entry,true)});
+(async()=>{
+ discussion.render(host,'trainings',entry,true);const input=q('[data-d="text"]');input.setSelectionRange=(a,b)=>{input.selectionStart=a;input.selectionEnd=b;};
+ input.value='🥏 @队';input.setSelectionRange(input.value.length,input.value.length);input.oninput();q('[data-d="mention-options"]').onclick({target:q('[data-mention-person="2"]')});
+ q('[data-d="attach"]').onclick();q('[data-d="time"]').value='0:05';q('[data-d="insert-time"]').onclick();
+ input.setSelectionRange(0,input.value.length);q('.md-format-toggle').onclick();q('.md-format-panel').onclick({target:q('[data-md="bold"]')});
+ assert(input.value.startsWith('**'));assert(q('.discussion-draft-mention'),'bold formatting preserves mention highlighting');
+ input.setSelectionRange(0,input.value.length);q('.md-format-toggle').onclick();q('.md-format-panel').onclick({target:q('[data-md="ordered"]')});
+ await q('[data-d="form"]').onsubmit({preventDefault(){}});
+ assert(sent.text.startsWith('1. **'));assert.equal(sent.mentions.length,1);assert.equal(sent.videoRefs.length,1);
+ const chars=Array.from(sent.text);assert.equal(chars.slice(sent.mentions[0].start,sent.mentions[0].end).join(''),'@队友');assert.equal(chars.slice(sent.videoRefs[0].start,sent.videoRefs[0].end).join(''),'0:05');
+ assert(q('.discussion-copy ol strong .discussion-mention'));assert(q('.discussion-copy ol strong .discussion-timestamp'));
+ await host.onclick({target:q('[data-action="edit"]')});assert.equal(input.value,sent.text,'editing uses raw Markdown, not rendered HTML');
+ input.setSelectionRange(0,input.value.length);q('.md-format-toggle').onclick();q('.md-format-panel').onclick({target:q('[data-md="link"]')});assert(q('.md-editor-status').textContent.includes('@ 队友和视频节点'),'link tool cannot swallow an interactive anchor');
+ q('.md-format-toggle').onclick();input.setSelectionRange(input.value.length,input.value.length);q('.md-format-toggle').onclick();q('.md-format-panel').onclick({target:q('[data-md="link"]')});q('[data-md-label]').value='训练说明';q('[data-md-url]').value='javascript:alert(1)';q('[data-md-insert]').onclick();assert(q('.md-editor-status').textContent.includes('有效'));
+ q('[data-md-url]').value='https://example.com/training';q('[data-md-insert]').onclick();await q('[data-d="form"]').onsubmit({preventDefault(){}});assert(q('.discussion-copy a[href="https://example.com/training"]'));assert.equal(sent.mentions.length,1);assert.equal(sent.videoRefs.length,1);
+ assert(!q('input[type="file"]'),'formatting adds no upload field');discussion.stop(host);
+ const drillHost=document.querySelector('#drills'),history=document.querySelector('#history'),d=s=>drillHost.querySelector(s);let notes=[],journal;
+ const training={id:'t',drills:[{id:'drill',name:'Drill',noteCount:0,noteVersion:0}]};
+ journal=cx.modules.DrillJournal.init({getMe:()=>({id:1}),toast(){},login(){},refresh:async()=>{},api:async(path,options)=>{if(options){const raw=JSON.parse(options.body);notes=[{...raw,id:2,player:1,name:'我',number:1,trainingId:'t',trainingName:'训练',heldOn:'2026-10-30'}];}return{notes,total:notes.length,trainingCount:1,nextOffset:null};}});
+ journal.renderTraining(drillHost,training,true,1);d('[data-j="toggle"]').onclick();await tick();const problem=d('[data-j="problems"]');problem.setSelectionRange=(a,b)=>{problem.selectionStart=a;problem.selectionEnd=b;};problem.value='切入偏早\n回盘后未清空';problem.oninput();problem.setSelectionRange(0,problem.value.length);
+ const drillToggle=problem.closest('.md-editor').querySelector('.md-format-toggle');drillToggle.onclick();const drillPanel=document.getElementById(drillToggle.getAttribute('aria-controls'));drillPanel.onclick({target:drillPanel.querySelector('[data-md="list"]')});assert(problem.value.startsWith('- '));d('[data-j="progress"]').value='> **沟通更及时**';await d('[data-j="form"]').onsubmit({preventDefault(){}});
+ assert.equal(d('.drill-note ul').children.length,2);assert(d('.drill-note blockquote strong'));
+ journal.renderHistory(history,'drill',true);await tick();assert(history.querySelector('.drill-history-note ul'));assert(history.querySelector('.drill-history-note blockquote strong'));assert(!drillHost.querySelector('input[type="file"]'));
+ console.log('PASS: real formatting controls preserve mention/video anchors across publish/edit, validate links, retain raw Drill notes and render shared training/history Markdown without uploads.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
