@@ -468,6 +468,22 @@ input::placeholder,textarea::placeholder{color:#7b887e;opacity:1}
  .rule-shortcuts button{min-height:40px}
  .rule-chapter-grid button{min-height:50px}
 }
+/* Shared header fits phone widths without moving actions below the brand. */
+@media(min-width:361px) and (max-width:600px){
+ body .topbar .workspace-nav{flex:1 1 172px;gap:6px}
+ body .workspace-switcher{padding-left:8px}
+ body .workspace-toggle{width:80px;padding-left:4px;padding-right:4px}
+}
+@media(min-width:361px) and (max-width:389px){
+ body .topbar .workspace-nav{flex-basis:144px;gap:4px}
+ body .tiga-brand{gap:4px}
+ body .tiga-brand>span{font-size:20px}
+ body .tiga-brand .tiga-mode-icon{width:22px;height:22px}
+ body .workspace-switcher{padding-left:4px}
+ body .workspace-toggle{width:72px;font-size:12px!important}
+ body .topbar>.header-actions{gap:5px}
+ body .header-actions>#new-btn{padding-left:10px;padding-right:10px}
+}
 @media(max-width:360px){
  body .topbar .workspace-nav{flex:1 1 150px;gap:6px}
  body .tiga-brand{gap:4px}body .tiga-brand>span{font-size:20px}body .tiga-brand .tiga-mode-icon{width:22px;height:22px}

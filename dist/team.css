@@ -121,8 +121,9 @@
  #training-pane-attendance #training-attendance-chips{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;align-content:start;padding:3px}
 }
 
-/* Player identity belongs to the team workspace; editor access remains shared. */
-body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{display:none}
+/* Member identity and inbox belong to the team workspace; editor access stays shared. */
+body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user,
+body:not(.stats-mode):not(.trainings-mode) #team-notifications{display:none}
 
 /* Keep header controls together at the right, in their keyboard focus order. */
 .topbar>.header-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex:none;margin-left:auto}
@@ -167,7 +168,7 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 #stats-game-dialog .stats-game-body[data-pane=comments],#training-body[data-training-view=comments]{display:flex;flex-direction:column;overflow:hidden;gap:0;padding:10px 12px max(10px,env(safe-area-inset-bottom))}
 #stats-pane-comments,#training-pane-comments{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:0}
 .discussion-view{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;overflow:hidden}
-.discussion-feed{flex:1;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain;padding:10px 12px;scroll-padding-block:12px}
+.discussion-feed{flex:1;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain;padding:16px 12px;scroll-padding-block:16px}
 .discussion-composer{position:relative;display:flex;flex-direction:column;gap:8px;flex:none;min-width:0;max-height:75%;overflow-y:auto;margin:0;padding:10px;border-top:1px solid var(--line);background:#fff}
 .discussion-compose-row{flex:none;display:flex;align-items:flex-end;gap:8px;min-width:0}
 .discussion-compose-row>label{flex:1;min-width:0;gap:0}
@@ -190,10 +191,12 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .discussion-replying{border-left:3px solid #87a775;padding:7px 10px;background:#f1f6e9;color:#56704b;font-size:13px;line-height:1.6}
 .discussion-status{flex:none;margin:0;color:#94603d;font-size:12px;line-height:1.6}
 .discussion-status:empty{display:none}
-.discussion-list{display:grid;gap:12px}
-.discussion-thread{border-top:1px solid var(--line);padding-top:12px;min-width:0}
-.discussion-thread:first-child{border-top:0;padding-top:0}
+.discussion-list{display:grid;gap:20px}
+.discussion-thread{min-width:0}
 .discussion-message{display:block;min-width:0}
+.discussion-thread>.discussion-message{padding:14px 16px;border:1px solid #dfe7d9;border-radius:12px;background:#f7faf4}
+.discussion-thread>.discussion-message .discussion-message-main>p{margin:8px 0 4px}
+.discussion-thread>.discussion-message .discussion-message-actions{margin-top:4px}
 .discussion-avatar{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;overflow:hidden;flex:none;background:#e5eddd;color:#537047;font-size:16px;font-weight:650}
 .discussion-avatar img{width:100%;height:100%;object-fit:cover}
 .discussion-message-main{min-width:0}
