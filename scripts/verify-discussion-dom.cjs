@@ -108,7 +108,7 @@ async function verifyStartup(){
  win.HTMLElement.prototype.getBoundingClientRect=function(){const i=this.parentElement?.dataset.teamFeed?[...this.parentElement.children].indexOf(this):0;return{top:i*60,bottom:(i+1)*60,left:0,right:390,width:390,height:60};};
  state.me.joinedOn=null;state.players[0].joinedOn=null;state.games=[];state.trainings=Array.from({length:8},(_,i)=>({...t,id:'past-'+i,name:'历史训练'+i,heldOn:'2026-10-'+String(i+1).padStart(2,'0'),attendees:[1],comments:i<2?[{id:800+i,player:1,text:'已写心得',deleted:false,parentId:null,created:stamp,at:stamp}]:[]}));state.revision++;
  poll();await new Promise(setImmediate);
- for(const list of doc.querySelectorAll('[data-team-feed]')){assert.equal(list.children.length,8);assert.equal(list.style.getPropertyValue('--team-feed-height'),'300px');list.scrollTop=120;}
+ for(const list of doc.querySelectorAll('[data-team-feed]')){assert.equal(list.children.length,8);assert.equal(list.closest('.team-personal-records').style.getPropertyValue('--team-record-slots'),'5');list.scrollTop=120;}
  poll();await new Promise(setImmediate);for(const list of doc.querySelectorAll('[data-team-feed]'))assert.equal(list.scrollTop,120,'polling preserves record-list scroll');
  // Inbox deep links land in either a formal match or the right training scrimmage.
  const author={player:2,name:'队友',number:2,created:stamp,at:stamp,parentId:null,deleted:false};

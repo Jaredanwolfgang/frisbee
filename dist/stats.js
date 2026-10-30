@@ -626,5 +626,5 @@ const StatsUI=(()=>{
  }
  let timer=0;
  function localDate(){const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
- return {init,render,navigate:(section,updateURL=true)=>teamHub?.navigate(section,updateURL),syncHeader:()=>teamHub?.renderHeader(),renderDrillHistory:(host,id)=>drillJournal?.renderHistory(host,id)};
+ return {init,render,navigate:(section,updateURL=true)=>teamHub?.navigate(section,updateURL),syncHeader:()=>teamHub?.renderHeader(),renderDrillHistory:(host,id,visible=false)=>drillJournal?.renderHistory(host,id,visible)};
 })();

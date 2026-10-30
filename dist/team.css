@@ -316,8 +316,8 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .training-drill-card>.stats-drill-row{border:0;border-radius:0;min-width:0;flex-wrap:wrap}
 .training-drill-card>.stats-drill-row>strong{flex:1;min-width:100px;white-space:normal;overflow-wrap:anywhere}
 .drill-note-details{border-top:1px solid var(--line);padding:0 12px 12px}
-.drill-note-details>summary,.drill-history-details>summary{min-height:44px;padding:11px 0;color:#4c7142;font-size:14px;cursor:pointer;line-height:1.5}
-.drill-note-details>summary small,.drill-history-details>summary small{font-size:12px;font-weight:400}
+.drill-note-details>summary{min-height:44px;padding:11px 0;color:#4c7142;font-size:14px;cursor:pointer;line-height:1.5}
+.drill-note-details>summary small{font-size:12px;font-weight:400}
 .drill-note-details:not([open]){padding-bottom:0}
 .drill-note-list{display:grid;gap:14px;min-width:0}
 .drill-note{display:grid;grid-template-columns:36px minmax(0,1fr);gap:9px;min-width:0;padding:12px 0;border-top:1px solid #e9eee4}
@@ -336,20 +336,11 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .drill-note-form label{font-size:14px;gap:6px;min-width:0}
 .drill-note-form textarea{width:100%;min-height:76px;resize:vertical;line-height:1.6;font-size:16px}
 .drill-note-form button{justify-self:end;min-height:44px}
-.drill-history{border:1px solid var(--line);padding:0 12px;border-radius:8px;margin-bottom:14px;min-width:0;background:#fff}
-.drill-history .drill-note p{font-size:14px}
-.drill-history [data-j=more]{width:100%;margin:8px 0 12px;min-height:44px;white-space:normal}
-.board-fullscreen #drill-history-btn{display:none}
-#drill-history-btn{flex:none;min-height:44px;white-space:nowrap}
 @media(max-width:600px){
  .drill-note-details{padding-left:10px;padding-right:10px}
  .drill-note p{font-size:16px}
  .drill-note-form textarea{font-size:16px}
- .drill-history{padding:0 10px}
- #drill-history-btn{font-size:13px;min-height:44px;padding:8px}
 }
-.inspector .drill-history-details>summary{font-size:14px!important;font-weight:600}
-@media(max-width:600px){.drill-history .drill-note p{font-size:16px}}
 /* Keep member notices and the discussion composer compact on phones. */
 #team-notifications{position:relative;flex:none;min-width:44px;min-height:44px}
 #team-notifications svg{width:22px;height:22px}
@@ -443,3 +434,64 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 
 .discussion-mention-options button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .discussion-mention-options button>small{flex:none}
+
+/* Saved Drills have two real pages; records never share the narrow editor inspector. */
+.drill-preview-tabs{display:flex;flex:none;gap:24px;padding:0 24px;background:#fff;border-bottom:1px solid var(--line)}
+.drill-preview-tabs button{position:relative;min-height:48px;min-width:100px;padding:12px 4px;border:0;border-radius:0;background:none;color:var(--muted);font-size:14px;font-weight:500;-webkit-appearance:none}
+.drill-preview-tabs button[aria-selected=true]{color:var(--green)}
+.drill-preview-tabs button[aria-selected=true]:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:#54794c}
+.drill-records-panel{flex:1;min-height:0;min-width:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 28px 32px;background:#f6f8f4;scrollbar-gutter:stable;touch-action:pan-y}
+.drill-history{width:100%;max-width:860px;min-width:0;margin:0 auto;background:none}
+.drill-history-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;min-height:44px}
+.drill-history-heading p{margin:0;font-size:13px;color:var(--muted)}
+.drill-history-heading button{min-height:44px;font-size:13px;background:transparent}
+.drill-history-list{display:grid;gap:18px;min-width:0}
+.drill-history-session{min-width:0;border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+.drill-history-session>header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:1px solid #e6ece2;background:#fbfcf9}
+.drill-history-session>header>div{min-width:0}
+.drill-history-session time{font-size:12px;color:#6f8467;letter-spacing:.02em}
+.drill-history-session h3{font-size:16px;font-weight:600;line-height:1.5;margin:4px 0 0;overflow-wrap:anywhere}
+.drill-history-session>header>small{flex:none;font-size:12px;color:var(--muted)}
+.drill-history-note{padding:20px;min-width:0;border-top:1px solid #e9eee5}
+.drill-history-note:first-child{border-top:0}
+.drill-history-note>header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.drill-history-note>header>div{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;min-width:0}
+.drill-history-note>header strong{font-size:14px;font-weight:600}
+.drill-history-note>header small{font-size:12px;color:var(--muted)}
+.drill-history-observations{display:grid;gap:18px;min-width:0}
+.drill-history-observations section{min-width:0}
+.drill-history-observations h4{font-size:12px;font-weight:500;color:#9a7350;margin:0 0 7px}
+.drill-history-observations .drill-history-progress h4{color:#5d7c53}
+.drill-history-observations p{font-size:16px;line-height:1.85;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.drill-history [data-j=more]{display:block;min-height:44px;margin:20px auto 0;max-width:100%;white-space:normal}
+.drill-history-empty{padding:48px 24px;border:1px dashed #d7e1d1;border-radius:12px;text-align:center;background:#fff}
+.drill-history-empty strong{font-size:16px;font-weight:500}
+.drill-history-empty p{font-size:14px;line-height:1.8;color:var(--muted);margin:10px 0 0}
+.board-is-fullscreen .drill-preview-tabs{visibility:hidden}
+/* Both personal cards share the same header, summary and five-row viewport. */
+.team-personal-records{--team-record-row:88px;align-items:stretch}
+.team-record-card{display:flex;flex-direction:column}
+.team-record-card>.team-card-heading{flex:none;min-height:44px;margin-bottom:12px}
+.team-record-summary{flex:none;height:var(--team-record-summary-height,auto)}
+.team-record-summary-content{display:grid;gap:8px;padding-bottom:18px}
+.team-record-value{display:flex;align-items:baseline;gap:10px;min-width:0}
+.team-record-value>strong{font-size:28px;line-height:1.3;color:#4b7040;font-weight:650}
+.team-record-value>span{font-size:13px;color:var(--muted)}
+.team-record-summary .team-caption{font-size:12px;line-height:1.65;margin:0}
+.team-record-card .team-personal-feed-scroll{flex:none;height:calc(var(--team-record-slots,5)*var(--team-record-row));max-height:calc(var(--team-record-slots,5)*var(--team-record-row));border-top:0;box-shadow:inset 0 1px 0 var(--line)}
+.team-record-card .team-personal-feed-scroll>button{height:var(--team-record-row);min-height:var(--team-record-row);padding:12px 0;overflow:hidden}
+.team-record-card .team-personal-feed-scroll>button:first-child{border-top:0}
+.team-record-card .team-feed-row strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.team-record-card .team-feed-row small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.team-feed-done{color:#5a7b50;background:#edf4e7}
+@media(max-width:600px){
+ .drill-preview-tabs{padding:0 14px;gap:22px}
+ .drill-preview-tabs button{min-width:86px;min-height:48px;font-size:14px}
+ .drill-records-panel{padding:12px 12px max(24px,env(safe-area-inset-bottom));scrollbar-gutter:auto}
+ .drill-history-heading{margin-bottom:10px}
+ .drill-history-session>header{padding:14px;gap:10px}
+ .drill-history-session h3{font-size:15px}
+ .drill-history-note{padding:16px 14px}
+ .drill-history-observations p{font-size:16px;line-height:1.8}
+ .team-personal-records{--team-record-row:92px}
+}
