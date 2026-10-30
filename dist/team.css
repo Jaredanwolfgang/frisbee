@@ -310,8 +310,8 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
  .stats-empty-action strong{font-size:16px}
  .stats-empty-action p{font-size:14px}
 }
+/* Desktop work dialogs keep one stable frame; only their content scrolls. */
 @media(min-width:601px){
- #stats-game-dialog .stats-game-shell,#training-dialog .stats-game-shell{height:auto;max-height:90dvh}
- #stats-game-dialog .stats-game-body,#training-dialog .stats-game-body{min-height:230px}
- #stats-game-dialog:has(.stats-game-body[data-pane=comments]) .stats-game-shell,#training-dialog:has(#training-body[data-training-view=comments]) .stats-game-shell{height:min(760px,90dvh)}
+ #stats-game-dialog .stats-game-shell,#training-dialog .stats-game-shell{height:min(760px,90dvh);max-height:none}
+ #stats-game-dialog .stats-game-body,#training-dialog .stats-game-body{min-height:0}
 }
