@@ -77,7 +77,7 @@ const StatsUI=(()=>{
   const sortValue=row=>sort.key==='attendance'?(attend(row.p)?.r??-1):row.t[sort.key];
   rows.sort((a,b)=>{if(sort.key==='name')return (a.p.number-b.p.number)*(sort.dir>0?1:-1)||a.p.number-b.p.number;return (sortValue(b)-sortValue(a))*(sort.dir>0?1:-1)||a.p.number-b.p.number;});
   const avg=n=>games?(n/games).toFixed(1):'—';
-  const attendCell=p=>{const a=attend(p);return '<td><b>'+(a?Math.round(a.r*100)+'%':'—')+'</b><small>'+(a?a.n+'/'+a.total:'—')+'</small></td>';};
+  const attendCell=p=>{const a=attend(p);return '<td title="出勤 / 应计训练；入队前已登记的出勤计入，未出勤的入队前训练不算缺勤"><b>'+(a?Math.round(a.r*100)+'%':'—')+'</b><small>'+(a?a.n+'/'+a.total:'—')+'</small></td>';};
   table.innerHTML='<thead><tr>'+[['name','队员'],...STATS].map(([k,t])=>'<th'+(k==='name'?'':' data-stat="'+k+'"')+'><button type="button" data-stats-sort="'+k+'">'+t+(sort.key===k?(sort.dir>0?' ↓':' ↑'):'')+'</button></th>').join('')+'<th><button type="button" data-stats-sort="attendance">出勤率'+(sort.key==='attendance'?(sort.dir>0?' ↓':' ↑'):'')+'</button></th></tr></thead><tbody>'+
    rows.map(({p,t})=>'<tr><th scope="row"><span class="stats-number">#'+p.number+'</span><span class="stats-table-name" title="'+esc(p.name)+'">'+esc(p.name)+'</span>'+genderMark(p)+'</th>'+STATS.map(([k])=>'<td data-stat="'+k+'"><b>'+avg(t[k])+'</b><small>'+t[k]+'</small></td>').join('')+attendCell(p)+'</tr>').join('')+'</tbody>';
   fitAverageViewport();wrap.scrollTop=scroll.top;wrap.scrollLeft=scroll.left;

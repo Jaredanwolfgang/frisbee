@@ -3,7 +3,7 @@ const M=require('../dist/team-metrics.js');
 const p={id:1,joinedOn:'2026-10-01'},today='2026-10-27';
 const training=(id,day,status,attendees)=>({id,heldOn:day,status,attendees,games:[],comments:[]});
 const trainings=[training('old','2026-09-30','completed',[1]),training('yes','2026-10-10','completed',[1]),training('no','2026-10-12','completed',[]),training('future','2026-11-01','completed',[]),training('planned','2026-10-13','planned',[]),training('cancelled','2026-10-14','cancelled',[])];
-assert.deepEqual([M.attendance(trainings,p,today).present,M.attendance(trainings,p,today).total,M.attendance(trainings,p,today).rate],[1,2,50]);
+assert.deepEqual([M.attendance(trainings,p,today).present,M.attendance(trainings,p,today).total,M.attendance(trainings,p,today).rate],[2,3,67]);
 assert.equal(M.attendance([],p,today).rate,null);
 const game=(status,events)=>({status,events});
 const games=[game('finished',[{kind:'point',line:[1,2],start:'offense'},{kind:'pass',from:1,to:2},{kind:'goal',from:2,to:1},{kind:'turnover',from:2,to:1},{kind:'defense',from:1}]),game('finished',[{kind:'goal',from:3,to:4}]),game('live',[{kind:'goal',from:1,to:2}])];
@@ -15,7 +15,7 @@ assert.deepEqual(personal.totals,{goals:1,assists:0,passes:1,turnovers:1,steals:
 const practice=M.personal(data,p,today,true);
 assert.equal(practice.finished.length,1);assert.equal(practice.totals.assists,1);assert.equal(practice.totals.goals,0);
 assert.equal(M.personal(data,{id:9},today).finished.length,0);
-console.log('PASS: personal participation, finished-game totals, practice isolation, zero denominators, and attendance excluding future/cancelled/planned/pre-join sessions.');
+console.log('PASS: personal participation, finished-game totals, practice isolation, zero denominators, and attendance excluding future/cancelled/planned sessions while retaining explicitly recorded pre-join attendance.');
 
 const dated=[{id:'unknown',created:999},{id:'older',heldOn:'2026-09-01',created:900},{id:'newer',heldOn:'2026-10-20',created:100}];
 assert.deepEqual(M.gamesByDate(dated).map(g=>g.id),['newer','older','unknown']);
@@ -31,3 +31,13 @@ const swapped={...twoSides,start:'defense',sides:{a:[1,3],b:[2,4],offense:'b'}};
 assert.equal(M.tally([{events:[twoSides,swapped]}],2).oPoints,2);
 assert.equal(M.tally([{events:[twoSides,swapped]}],1).dPoints,1);
 console.log('PASS: per-player A/B opening roles, per-point lineup changes and explicit/unassigned team scores.');
+
+const backfilled=[training('earlier-missed','2026-10-20','completed',[]),training('first','2026-10-22','completed',[1,2]),training('second','2026-10-29','completed',[1]),training('not-done','2026-10-21','planned',[1,2]),training('cancelled','2026-10-21','cancelled',[1,2]),training('future','2026-11-01','completed',[1,2])];
+const lateA={id:1,joinedOn:'2026-10-29'},lateB={id:2,joinedOn:'2026-10-28'};
+const a=M.attendance(backfilled,lateA,'2026-10-30'),b=M.attendance(backfilled,lateB,'2026-10-30');
+assert.deepEqual([a.present,a.total,a.rate],[2,2,100]);
+assert.deepEqual([b.present,b.total,b.rate],[1,2,50]);
+assert.equal(a.list.some(t=>t.id==='earlier-missed'),false,'unattended pre-join sessions do not become absences');
+assert.equal(M.attendance(backfilled,{id:3,joinedOn:'2026-10-29'},'2026-10-30').total,1,'a new teammate is not charged for earlier practices');
+assert.equal(M.attendance(backfilled,{id:3,joinedOn:''},'2026-10-30').total,3,'no join date retains all completed past sessions');
+console.log('PASS: backfilled pre-join attendance is counted, later absences remain in the denominator, and new members are not charged for unrecorded pre-join practices.');

@@ -70,8 +70,8 @@ async function verifyStartup(){
  const g={id:'fixture-game',name:'训练赛',status:'finished',created:stamp,heldOn:'2026-10-28',events:[],comments:clone(data.comments),video:video.video,videoMeta:video.videoMeta};
  const t={id:'fixture-training',name:'训练',status:'completed',created:stamp,heldOn:'2026-10-28',games:[g],comments:clone(data.comments),warmup:'热身',attendees:[1],drills:[]};
  const state={players:[{id:1,number:1,name:'测试队员',gender:'male',avatar:'',loginReady:true}],games:[],trainings:[t],me:{id:1,name:'测试队员',number:1},revision:1};
- const errors=[];
- const cx={document:doc,window:win,URLSearchParams,Intl,Date,console,setInterval:()=>0,parseFloat,getComputedStyle:()=>({columnGap:'12px'}),MobileUI:{isPhone:()=>false},bindTap:(el,fn)=>el.onclick=fn};
+ const errors=[];let poll;
+ const cx={document:doc,window:win,URLSearchParams,Intl,Date,console,setInterval:fn=>{poll=fn;return 0;},parseFloat,getComputedStyle:()=>({columnGap:'12px'}),MobileUI:{isPhone:()=>false},bindTap:(el,fn)=>el.onclick=fn};
  vm.createContext(cx);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js','drill-journal.js','team-metrics.js','team-hub.js','stats.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
  cx.stats.init({api:async()=>clone(state),toast:e=>errors.push(e),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:fn=>fn?.(),getDrills:()=>[]});
  await new Promise(setImmediate);
@@ -96,8 +96,16 @@ async function verifyStartup(){
  assert.equal(doc.querySelector('#game-discussion iframe'),null);
  doc.querySelector('#training-close').click();
  assert.equal(doc.querySelector('#training-discussion iframe'),null);
+ state.players[0].joinedOn='2026-10-29';state.players.push({id:2,name:'晚添加的队员',number:2,gender:'female',avatar:'',joinedOn:'2026-10-28'});
+ state.me.joinedOn='2026-10-29';state.trainings=[{...t,id:'before-join',heldOn:'2026-10-22',attendees:[1,2]},{...t,id:'after-join',heldOn:'2026-10-29',attendees:[1]}];state.revision++;
+ poll();await new Promise(setImmediate);
+ const averageRows=[...doc.querySelectorAll('#stats-averages tbody tr')];
+ assert.equal(averageRows.find(r=>r.textContent.includes('测试队员')).lastElementChild.textContent,'100%2/2');
+ assert.equal(averageRows.find(r=>r.textContent.includes('晚添加的队员')).lastElementChild.textContent,'50%1/2');
+ assert(doc.querySelector('#team-roster-grid').textContent.includes('训练 2/2'));
+ assert(doc.querySelector('#team-dashboard').textContent.includes('出勤 2 / 2 次'));
  assert.equal(errors.length,0,errors.join('\n'));
- console.log('PASS: actual StatsUI/TeamHub startup, training discussion navigation, logged-in composer and player cleanup against index.html.');
+ console.log('PASS: actual StatsUI/TeamHub startup, training discussion navigation, logged-in composer player cleanup and backfilled attendance across table/roster/personal dashboard against index.html.');
 }
 verifyStartup().catch(error=>{console.error(error);process.exitCode=1;});
 
