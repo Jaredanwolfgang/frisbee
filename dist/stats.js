@@ -392,7 +392,7 @@ const StatsUI=(()=>{
   editingGameId=g?g.id:null;
   if(!g)return;
   document.querySelectorAll('.more-menu').forEach(m=>m.open=false);
-  const internal=isScrimmage(g);scrimmageTrainingId=internal?(g.trainingId||data.trainings.find(t=>t.games.some(x=>x.id===g.id))?.id):null;$('#stats-opponent-field').hidden=internal;$('#stats-game-opponent').disabled=internal;
+  $('#stats-video-field').hidden=false;const internal=isScrimmage(g);scrimmageTrainingId=internal?(g.trainingId||data.trainings.find(t=>t.games.some(x=>x.id===g.id))?.id):null;$('#stats-opponent-field').hidden=internal;$('#stats-game-opponent').disabled=internal;
   $('#stats-new-game-title').textContent=internal?'修改训练赛信息':'修改比赛信息';
   $('#stats-new-game-note').textContent=internal?'队内 A / B 两队对抗，每一分可重新选上场阵容。':'设置实际比赛日期，修改名称、对手和录像链接。';
   $('#stats-new-game-submit').textContent='保存';
@@ -413,7 +413,7 @@ const StatsUI=(()=>{
   $('#stats-unlock').onclick=()=>deps.requestEdit();
   $('#stats-players-btn').onclick=()=>deps.requestEdit(openPlayers);
   $('#stats-new-game').onclick=()=>deps.requestEdit(()=>{
-   editingGameId=null;scrimmageTrainingId=null;$('#stats-opponent-field').hidden=false;$('#stats-game-opponent').disabled=false;
+   editingGameId=null;scrimmageTrainingId=null;$('#stats-video-field').hidden=true;$('#stats-opponent-field').hidden=false;$('#stats-game-opponent').disabled=false;
    $('#stats-new-game-title').textContent='新建比赛';$('#stats-new-game-note').textContent='创建后进入实时记录；可以随时结束，结束后计入场均。';
    $('#stats-new-game-submit').textContent='开始记录';
    $('#stats-new-game-form').reset();
@@ -557,7 +557,7 @@ const StatsUI=(()=>{
   $('#drill-picker-close').onclick=()=>$('#drill-picker-dialog').close();
   $('#training-game-add').onclick=()=>{
    const t=currentTraining();if(!t)return;
-   scrimmageTrainingId=t.id;editingGameId=null;$('#stats-opponent-field').hidden=true;$('#stats-game-opponent').disabled=true;
+   scrimmageTrainingId=t.id;editingGameId=null;$('#stats-video-field').hidden=true;$('#stats-opponent-field').hidden=true;$('#stats-game-opponent').disabled=true;
    $('#stats-new-game-title').textContent='添加训练赛';$('#stats-new-game-note').textContent='A、B 两队队内对抗，下一步选择上场队员与进攻方。';
    $('#stats-new-game-submit').textContent='开始记录';
    $('#stats-new-game-form').reset();$('#stats-game-date').value=t.heldOn||'';

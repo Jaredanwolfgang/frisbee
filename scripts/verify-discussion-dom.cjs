@@ -6,7 +6,7 @@ const {document,window}=parseHTML('<html><body><div id="test-discussion"></div><
 window.HTMLElement.prototype.scrollIntoView=function(){};window.HTMLElement.prototype.focus=function(){};
 Object.defineProperty(window.HTMLSelectElement.prototype,'value',{get(){return this.querySelector('option[selected]')?.getAttribute('value')||this.querySelector('option')?.getAttribute('value')||'';},set(value){for(const option of this.querySelectorAll('option')){if(option.getAttribute('value')===value)option.setAttribute('selected','');else option.removeAttribute('selected');}}});
 const context={document,URLSearchParams,Intl,Date,console};vm.createContext(context);
-vm.runInContext(fs.readFileSync('dist/bili-video.js','utf8')+'\n'+fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',context);
+vm.runInContext(fs.readFileSync('dist/bili-video.js','utf8')+'\n'+fs.readFileSync('dist/discussion-text.js','utf8')+'\n'+fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',context);
 const host=document.querySelector('#test-discussion'),$=s=>host.querySelector(s),clone=x=>JSON.parse(JSON.stringify(x));
 let me={id:1},admin=true,loginCount=0,nextId=3;
 const stamp=Date.now();
@@ -15,10 +15,10 @@ let data={id:'training-a',games:[video],comments:[{id:1,parentId:null,player:2,n
 const calls=[],toasts=[];
 let ui;
 async function api(path,options){calls.push([path,options]);const body=options.body?JSON.parse(options.body):{};const id=Number(path.split('/').at(-1));
- if(options.method==='POST'){data.comments.push({id:nextId++,parentId:body.parentId,player:1,name:'我',number:1,text:body.text,created:stamp,at:stamp,deleted:false,video:body.video?{...body.video,available:true,name:'训练赛'}:null});}
+ if(options.method==='POST'){data.comments.push({id:nextId++,parentId:body.parentId,player:1,name:'我',number:1,text:body.text,created:stamp,at:stamp,deleted:false,video:null,videoRefs:(body.videoRefs||[]).map(r=>({...r,available:true,name:'训练赛'}))});}
  else if(options.method==='DELETE'){const c=data.comments.find(c=>c.id===id);c.deleted=true;c.saved=c.text;c.text='';}
  else if(body.restore){const c=data.comments.find(c=>c.id===id);c.deleted=false;c.text=c.saved;}
- else{const c=data.comments.find(c=>c.id===id);c.text=body.text;c.video=body.video;}
+ else{const c=data.comments.find(c=>c.id===id);c.text=body.text;c.video=null;c.videoRefs=(body.videoRefs||[]).map(r=>({...r,available:true,name:'训练赛'}));}
  return {comments:clone(data.comments)};
 }
 ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount++,toast:t=>toasts.push(t),api,refresh:async()=>{data=clone(data);ui.render(host,'trainings',data,true);}});
@@ -36,15 +36,15 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
  assert(!$('[data-d="attach"]').hidden);$('[data-d="attach"]').onclick();assert.equal($('[data-d="attach"]').getAttribute('aria-expanded'),'true');assert(!$('[data-d="time-fields"]').hidden);
  $('[data-d="attach"]').onclick();assert.equal($('[data-d="attach"]').getAttribute('aria-pressed'),'false');assert($('[data-d="time-fields"]').hidden);
  assert.equal($('[data-message="1"] .discussion-avatar img').getAttribute('src'),data.comments[0].avatar);
- assert.equal($('[data-message="1"] .discussion-message-main p').textContent,data.comments[0].text);
+ assert.equal($('[data-message="1"] .discussion-message-main p').textContent,data.comments[0].text+' 1:25');
  assert.equal($('[data-message="1"] .discussion-message-main p img'),null,'comment HTML must remain text');
  $('[data-d="feed"]').scrollTop=123;const frame=$('iframe');$('[data-d="text"]').value='尚未发出的观察';ui.render(host,'trainings',clone(data),true);
  assert.equal($('iframe'),frame,'polling must not reset the player');assert.equal($('[data-d="feed"]').scrollTop,123,'polling preserves the scrolling feed');assert.equal($('[data-d="text"]').value,'尚未发出的观察');
  await host.onclick({target:$('[data-action="reply"][data-comment="1"]')});
  assert.equal($('[data-d="reply-note"]').textContent,'回复 另一名队员 的评论');
  $('[data-d="text"]').value='补充：接盘前先观察。';$('[data-d="attach"]').onclick();
- $('[data-d="time"]').value='1:25';$('[data-d="page"]').value='1';await $('[data-d="form"]').onsubmit({preventDefault(){}});
- const posted=JSON.parse(calls.at(-1)[1].body);assert.equal(posted.parentId,1);assert.equal(posted.video.seconds,85);assert.equal(data.comments.length,3);assert.equal($('[data-d="text"]').value,'');assert.equal($('[data-d="text"]').style.height,'46px');assert($('[data-d="submit"] svg'));assert.equal($('[data-d="attach"]').getAttribute('aria-expanded'),'false');
+ $('[data-d="time"]').value='1:25';await $('[data-d="form"]').onsubmit({preventDefault(){}});
+ const posted=JSON.parse(calls.at(-1)[1].body);assert.equal(posted.parentId,1);assert.equal(posted.videoRefs[0].seconds,85);assert.equal(data.comments.length,3);assert.equal($('[data-d="text"]').value,'');assert.equal($('[data-d="text"]').style.height,'46px');assert($('[data-d="submit"] svg'));assert.equal($('[data-d="attach"]').getAttribute('aria-expanded'),'false');
  await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});
  assert.equal(new URL($('iframe').src).searchParams.get('t'),'85');const firstSeek=$('iframe');
  await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});assert.notEqual($('iframe'),firstSeek,'clicking the same time point must seek again');
@@ -72,7 +72,7 @@ async function verifyStartup(){
  const state={players:[{id:1,number:1,name:'测试队员',gender:'male',avatar:'',loginReady:true}],games:[],trainings:[t],me:{id:1,name:'测试队员',number:1},revision:1};
  const errors=[];
  const cx={document:doc,window:win,URLSearchParams,Intl,Date,console,setInterval:()=>0,parseFloat,getComputedStyle:()=>({columnGap:'12px'}),MobileUI:{isPhone:()=>false},bindTap:(el,fn)=>el.onclick=fn};
- vm.createContext(cx);vm.runInContext(['bili-video.js','discussion.js','team-metrics.js','team-hub.js','stats.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
+ vm.createContext(cx);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js','team-metrics.js','team-hub.js','stats.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
  cx.stats.init({api:async()=>clone(state),toast:e=>errors.push(e),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:fn=>fn?.(),getDrills:()=>[]});
  await new Promise(setImmediate);
  assert.equal(doc.querySelector('#stats-meta').textContent.includes('测试'),false);
@@ -91,7 +91,7 @@ async function verifyStartup(){
  doc.querySelector('#stats-game-video-link').click();
  assert(!doc.querySelector('#stats-tab-comments').classList.contains('has-unread'));
  assert(doc.querySelector('#game-discussion iframe'));
- assert.equal(doc.querySelector('#game-discussion .discussion-video-editor').hidden,false);
+ assert.equal(doc.querySelector('#game-discussion .discussion-video-editor'),null);
  doc.querySelector('#stats-game-close').click();
  assert.equal(doc.querySelector('#game-discussion iframe'),null);
  doc.querySelector('#training-close').click();
@@ -125,7 +125,7 @@ function verifyUnread(){
  const dom=parseHTML('<html><body><button role="tab">训练讨论</button></body></html>'),doc=dom.document,tab=doc.querySelector('button');
  const saved=new Map();let reader={id:1},storageBlocked=false;
  const cx={document:doc,localStorage:{getItem(key){if(storageBlocked)throw Error('blocked');return saved.get(key)||null;},setItem(key,value){if(storageBlocked)throw Error('blocked');saved.set(key,value);}}};
- vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',cx);
+ vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/discussion-text.js','utf8')+'\n'+fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',cx);
  const make=()=>cx.discussion.init({getMe:()=>reader}),has=()=>tab.classList.contains('has-unread');let ui=make();
  const entry={id:'read-training',comments:[{id:100,player:1,deleted:false}]};
  ui.syncUnread(tab,'trainings',entry,false);assert(!has(),'own messages do not trigger a dot');
@@ -152,17 +152,18 @@ async function verifyMultipleVideos(){
  const clips=[{id:'first-game',name:'第一场对抗',video:'https://www.bilibili.com/video/av123',videoMeta:{key:'av123',page:1}},{id:'second-game',name:'第二场对抗',video:'https://www.bilibili.com/video/BV1B7411m7LV?p=2',videoMeta:{key:'BV1B7411m7LV',page:2}}];
  const entry={id:'multi-training',games:clips,comments:[{id:1,parentId:null,player:2,name:'队员',number:2,text:'第一场的节点',created:stamp,at:stamp,video:{gameId:clips[0].id,key:'av123',seconds:15,page:1,available:true,name:clips[0].name}}]};
  let payload,scroll,animated=false,multi;
- multi=context.discussion.init({getMe:()=>({id:1}),canEdit:()=>false,toast(){},login(){},api:async(path,options)=>{payload=JSON.parse(options.body);entry.comments.push({id:2,parentId:null,player:1,name:'我',number:1,text:payload.text,created:stamp,at:stamp,video:{...payload.video,available:true,name:clips[1].name}});return{comments:clone(entry.comments)};},refresh:async()=>multi.render(iso,'trainings',entry,true)});
+ multi=context.discussion.init({getMe:()=>({id:1}),canEdit:()=>false,toast(){},login(){},api:async(path,options)=>{payload=JSON.parse(options.body);entry.comments.push({id:2,parentId:null,player:1,name:'我',number:1,text:payload.text,created:stamp,at:stamp,video:null,videoRefs:payload.videoRefs.map(r=>({...r,available:true,name:clips.find(g=>g.id===r.gameId).name}))});return{comments:clone(entry.comments)};},refresh:async()=>multi.render(iso,'trainings',entry,true)});
  const q=s=>iso.querySelector(s);multi.render(iso,'trainings',entry,true);
  assert(!q('.discussion-video-select').hidden);assert.equal(q('[data-d="attach-video"]').options.length,2);
  q('[data-d="attach"]').onclick();q('[data-d="time"]').value='00:15';q('[data-d="attach-video"]').value=clips[1].id;q('[data-d="attach-video"]').onchange({target:q('[data-d="attach-video"]')});
- assert.equal(q('[data-d="time"]').value,'','changing videos clears stale time input');assert.equal(Number(q('[data-d="page"]').value),2);
- q('[data-d="time"]').value='01:25';q('[data-d="text"]').value='第二场的走位';await q('[data-d="form"]').onsubmit({preventDefault(){}});
- assert.deepEqual(payload.video,{gameId:clips[1].id,key:clips[1].videoMeta.key,seconds:85,page:2});
+ assert.equal(q('[data-d="time"]').value,'','changing videos clears stale time input');assert.equal(q('[data-d="page"]'),null);
+ q('[data-d="text"]').value='观察';q('[data-d="text"]').oninput();q('[data-d="attach-video"]').value=clips[0].id;q('[data-d="attach-video"]').onchange({target:q('[data-d="attach-video"]')});q('[data-d="time"]').value='00:15';q('[data-d="insert-time"]').onclick();
+ q('[data-d="text"]').value+='对比';q('[data-d="text"]').oninput();q('[data-d="attach"]').onclick();q('[data-d="attach-video"]').value=clips[1].id;q('[data-d="attach-video"]').onchange({target:q('[data-d="attach-video"]')});q('[data-d="time"]').value='01:25';q('[data-d="insert-time"]').onclick();await q('[data-d="form"]').onsubmit({preventDefault(){}});
+ assert.equal(payload.videoRefs.length,2);assert.equal(payload.videoRefs[1].gameId,clips[1].id);assert.equal(payload.videoRefs[1].seconds,85);assert.equal(payload.videoRefs[1].page,2);assert.equal(q('[data-message="2"] p').querySelectorAll('button').length,2,'both nodes flow inside the same paragraph');assert.equal(q('[data-message="2"] p').textContent.includes('P2'),false);
  q('.discussion-media').scrollIntoView=options=>scroll=options;q('.discussion-media').animate=()=>animated=true;
- await iso.onclick({target:q('[data-action="seek"][data-comment="2"]')});
+ await iso.onclick({target:q('[data-action="seek"][data-comment="2"][data-ref="1"]')});
  const params=new URL(q('iframe').src).searchParams;assert.equal(params.get('bvid'),'BV1B7411m7LV');assert.equal(params.get('t'),'85');assert.equal(params.get('p'),'2');assert.equal(q('[data-d="watch-video"]').value,'second-game');
- assert(q('[data-d="media-current"]').textContent.includes('第二场对抗 · P2 · 1:25'));assert.equal(scroll.behavior,'smooth');assert(animated);
+ assert(q('[data-d="media-current"]').textContent.includes('第二场对抗 · 1:25'));assert.equal(scroll.behavior,'smooth');assert(animated);
  const frame=q('iframe');multi.render(iso,'trainings',clone(entry),true);assert.equal(q('iframe'),frame,'refresh preserves the chosen clip');
  await iso.onclick({target:q('[data-action="seek"][data-comment="1"]')});assert.equal(new URL(q('iframe').src).searchParams.get('aid'),'123');assert.equal(new URL(q('iframe').src).searchParams.get('t'),'15');assert(q('[data-d="media-current"]').textContent.includes('第一场对抗'));
  console.log('PASS: multiple scrimmage videos, selected source and part submission, timestamp-driven source switching, playback offset, smooth scroll/highlight and polling persistence.');

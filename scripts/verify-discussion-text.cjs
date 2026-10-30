@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),T=require('../dist/discussion-text.js'),V=require('../dist/bili-video.js');
+const first={gameId:'one',key:'av123',seconds:5,page:1},second={gameId:'two',key:'av456',seconds:85,page:1};
+let draft=T.insert('🥏观察',[],4,4,first,V.formatTime(5));
+assert.equal(draft.text,'🥏观察 0:05 ');assert.equal(draft.refs[0].start,4);assert.equal(draft.refs[0].end,8);
+draft=T.insert(draft.text,draft.refs,draft.caret,draft.caret,second,V.formatTime(85));
+assert.equal(draft.refs.length,2);assert.equal(T.cp(draft.text).slice(draft.refs[1].start,draft.refs[1].end).join(''),'1:25');
+const extended='补充'+draft.text,moved=T.rebase(draft.text,extended,draft.refs);assert.equal(moved[0].start,draft.refs[0].start+2);
+const inside=T.cp(draft.text);inside.splice(draft.refs[0].start+1,0,'改');assert.equal(T.rebase(draft.text,inside.join(''),draft.refs).length,1,'editing inside a node unlinks only that node');
+const formatted=T.trim(' '+draft.text+' ',draft.refs.map(r=>({...r,start:r.start+1,end:r.end+1})));assert.equal(formatted.text,draft.text.trim());assert.equal(formatted.refs.length,2);
+const replace=T.insert('0:05',[{...first,start:0,end:4}],0,4,second,'1:25');assert.equal(replace.refs.length,1);assert.equal(replace.refs[0].gameId,'two');
+const legacy=T.draft({text:'历史文字',video:first},V.formatTime);assert.equal(legacy.text,'历史文字 0:05');assert.equal(legacy.refs.length,1);
+assert.equal(T.rebase(draft.text,draft.text.replace('🥏观察',''),draft.refs)[1].start,draft.refs[1].start-3);
+console.log('PASS: Unicode/emoji anchors, multi-source insertion, caret replacement, rebase/deletion, trimming and legacy conversion.');

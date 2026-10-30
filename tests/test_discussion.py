@@ -109,6 +109,48 @@ class DiscussionTest(unittest.TestCase):
         self.request('DELETE','/api/stats/trainings/'+self.t)
         self.assertEqual(self.request('POST',game_base,{'text':'hidden'},auth=False,extra={'Cookie':self.ca})[0],404)
 
+    def test_multiple_inline_video_nodes_unicode_edit_restore_and_source_binding(self):
+        self.setup_thread()
+        first=self.request('POST','/api/stats/games',{'name':'第一场','trainingId':self.t,'video':URL})[1]['game']
+        second=self.request('POST','/api/stats/games',{'name':'第二场','trainingId':self.t,'video':OTHER})[1]['game']
+        body='🥏观察 0:05，补充 1:25'
+        refs=[{'gameId':g['id'],'key':g['videoMeta']['key'],'seconds':n,'page':g['videoMeta']['page'],'start':body.index(label),'end':body.index(label)+len(label)} for g,n,label in [(first,5,'0:05'),(second,85,'1:25')]]
+        root=self.post(body,videoRefs=refs)['commentId']
+        saved=next(c for c in self.stats.snapshot()['trainings'][0]['comments'] if c['id']==root)
+        self.assertIsNone(saved['video']);self.assertEqual(len(saved['videoRefs']),2)
+        self.assertEqual([r['gameId'] for r in saved['videoRefs']],[first['id'],second['id']])
+        self.assertTrue(all(r['available'] for r in saved['videoRefs']))
+        path=self.base+'/'+str(root)
+        self.assertEqual(self.request('PUT',path,{'text':'旧客户端覆盖'},auth=False,extra={'Cookie':self.ca})[0],409)
+        self.assertEqual(self.request('PUT',path,{'text':body,'videoRefs':refs},auth=False,extra={'Cookie':self.cb})[0],403)
+        moved=[{**r,'start':r['start']+2,'end':r['end']+2} for r in refs]
+        self.assertEqual(self.request('PUT',path,{'text':'补充'+body,'videoRefs':moved},auth=False,extra={'Cookie':self.ca})[0],200)
+        self.request('PUT','/api/stats/games/'+first['id'],{'video':OTHER})
+        changed=next(c for c in self.stats.snapshot()['trainings'][0]['comments'] if c['id']==root)
+        self.assertFalse(changed['videoRefs'][0]['available']);self.assertTrue(changed['videoRefs'][1]['available'])
+        self.assertEqual(self.request('PUT',path,{'text':'补充'+body,'videoRefs':moved},auth=False,extra={'Cookie':self.ca})[0],200,'editing preserves an existing unavailable reference without retargeting it')
+        self.assertEqual(self.request('POST',self.base,{'text':body,'videoRefs':refs},auth=False,extra={'Cookie':self.ca})[0],409,'new stale references are rejected')
+        self.request('DELETE',path,auth=False,extra={'Cookie':self.ca})
+        deleted=next(c for c in self.stats.snapshot()['trainings'][0]['comments'] if c['id']==root)
+        self.assertEqual((deleted['text'],deleted['videoRefs']),('',[]))
+        restored=self.request('PUT',path,{'restore':True},auth=False,extra={'Cookie':self.ca})[1]
+        self.assertEqual(len(next(c for c in restored['comments'] if c['id']==root)['videoRefs']),2)
+        reopened=fixture.API.STATS_MODULE.StatsStore(self.path).snapshot()['trainings'][0]['comments']
+        self.assertEqual(len(next(c for c in reopened if c['id']==root)['videoRefs']),2)
+
+    def test_inline_reference_positions_limits_and_context(self):
+        self.setup_thread()
+        game=self.request('POST','/api/stats/games',{'name':'视频','trainingId':self.t,'video':URL})[1]['game']
+        ref={'gameId':game['id'],'key':game['videoMeta']['key'],'seconds':5,'page':2,'start':0,'end':4}
+        for changes in [{'start':True},{'end':900},{'start':-1},{'seconds':6},{'page':0},{'gameId':'missing'}]:
+            self.assertEqual(self.request('POST',self.base,{'text':'0:05','videoRefs':[{**ref,**changes}]},auth=False,extra={'Cookie':self.ca})[0],400,changes)
+        for invalid in (None,{},[ref,ref],[ref]*21):
+            self.assertEqual(self.request('POST',self.base,{'text':'0:05','videoRefs':invalid},auth=False,extra={'Cookie':self.ca})[0],400)
+        self.assertEqual(self.request('POST',self.base,{'text':'0:05','videoRefs':[ref],'video':ref},auth=False,extra={'Cookie':self.ca})[0],400)
+        other=self.game();self.request('PUT','/api/stats/games/'+other,{'video':URL})
+        self.assertEqual(self.request('POST',self.base,{'text':'0:05','videoRefs':[{**ref,'gameId':other}]},auth=False,extra={'Cookie':self.ca})[0],400)
+        self.assertEqual(self.request('POST','/api/stats/games/'+game['id']+'/discussion',{'text':'0:05','videoRefs':[ref]},auth=False,extra={'Cookie':self.ca})[0],200)
+
     def test_legacy_unique_summary_constraint_is_removed_without_losing_rows(self):
         path=self.path.parent/'old-review.sqlite3';fixture.API.Store(path,fixture.SEEDS)
         with sqlite3.connect(path) as db:
