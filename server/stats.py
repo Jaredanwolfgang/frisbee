@@ -525,7 +525,7 @@ class StatsStore:
                     ref = validate_video(video)
                     vg,vk,second,page = ref['gameId'],ref['key'],ref['seconds'],ref['page']
                 mentions = raw.get('mentions',[])
-                if not isinstance(mentions,list) or len(mentions)>20 or (game_id and mentions): raise StatsError(400,'训练讨论每条评论最多提及 20 次队友。')
+                if not isinstance(mentions,list) or len(mentions)>20: raise StatsError(400,'每条讨论最多提及 20 次队友。')
                 previous = json.loads(row['mentions'] or '[]') if row else []
                 clean_mentions, previous_end = [],0
                 for mention in mentions:
@@ -571,15 +571,20 @@ class StatsStore:
 
     @staticmethod
     def notification_query():
-        return ' FROM stats_notifications n JOIN stats_comments c ON c.id=n.comment_id JOIN stats_trainings t ON t.id=c.training_id WHERE n.player_id=? AND n.active=1 AND c.deleted=0 AND t.deleted=0'
+        return ' FROM stats_notifications n JOIN stats_comments c ON c.id=n.comment_id LEFT JOIN stats_games g ON g.id=c.game_id LEFT JOIN stats_trainings t ON t.id=COALESCE(c.training_id,g.training_id) WHERE n.player_id=? AND n.active=1 AND c.deleted=0 AND ((c.training_id IS NOT NULL AND t.deleted=0) OR (g.id IS NOT NULL AND g.deleted=0 AND (g.training_id IS NULL OR t.deleted=0)))'
 
     def notification_summary(self, player_id):
-        if player_id is None: return {'unread':0,'trainings':{}}
+        if player_id is None: return {'unread':0,'trainings':{},'trainingComments':{},'games':{}}
         db=self.connect()
         try:
-            rows=db.execute('SELECT c.training_id,count(*)'+self.notification_query()+' AND n.read_at=0 GROUP BY c.training_id',(player_id,)).fetchall()
-            trainings={r[0]:r[1] for r in rows}
-            return {'unread':sum(trainings.values()),'trainings':trainings}
+            rows=db.execute('SELECT t.id,c.game_id,count(*)'+self.notification_query()+' AND n.read_at=0 GROUP BY t.id,c.game_id',(player_id,)).fetchall()
+            trainings,training_comments,games,unread={},{},{},0
+            for tid,gid,count in rows:
+                unread+=count
+                if tid: trainings[tid]=trainings.get(tid,0)+count
+                if gid: games[gid]=count
+                elif tid: training_comments[tid]=count
+            return {'unread':unread,'trainings':trainings,'trainingComments':training_comments,'games':games}
         finally: db.close()
 
     def notifications(self, player_id, offset=0):
@@ -588,11 +593,11 @@ class StatsStore:
         try:
             query=self.notification_query()
             total=db.execute('SELECT count(*)'+query,(player_id,)).fetchone()[0]
-            rows=db.execute('SELECT n.id,n.created,n.read_at,c.id AS comment_id,c.player_id AS sender,c.text,c.author_name,c.author_number,c.training_id,t.name AS training_name,t.held_on'+query+' ORDER BY n.created DESC,n.id DESC LIMIT 30 OFFSET ?',(player_id,offset)).fetchall()
+            rows=db.execute('SELECT n.id,n.created,n.read_at,c.id AS comment_id,c.player_id AS sender,c.text,c.author_name,c.author_number,t.id AS training_id,t.name AS training_name,g.id AS game_id,g.name AS game_name,COALESCE(NULLIF(g.held_on,\'\'),t.held_on) AS held_on'+query+' ORDER BY n.created DESC,n.id DESC LIMIT 30 OFFSET ?',(player_id,offset)).fetchall()
             messages=[]
             for r in rows:
                 sender=db.execute('SELECT name,number,avatar_digest FROM stats_players WHERE id=?',(r['sender'],)).fetchone()
-                messages.append({'id':r['id'],'commentId':r['comment_id'],'trainingId':r['training_id'],'trainingName':r['training_name'],'heldOn':r['held_on'],'sender':r['sender'],'name':sender['name'] if sender else r['author_name'],'number':sender['number'] if sender else r['author_number'],'avatar':('api/stats/avatars/'+str(r['sender'])+'/'+sender['avatar_digest']) if sender and sender['avatar_digest'] else '', 'text':r['text'][:240],'created':r['created'],'unread':r['read_at']==0})
+                messages.append({'id':r['id'],'commentId':r['comment_id'],'trainingId':r['training_id'],'trainingName':r['training_name'],'gameId':r['game_id'],'gameName':r['game_name'],'heldOn':r['held_on'],'sender':r['sender'],'name':sender['name'] if sender else r['author_name'],'number':sender['number'] if sender else r['author_number'],'avatar':('api/stats/avatars/'+str(r['sender'])+'/'+sender['avatar_digest']) if sender and sender['avatar_digest'] else '', 'text':r['text'][:240],'created':r['created'],'unread':r['read_at']==0})
             return {'messages':messages,'nextOffset':offset+len(messages) if offset+len(messages)<total else None,'summary':self.notification_summary(player_id)}
         finally: db.close()
 
@@ -600,6 +605,10 @@ class StatsStore:
         if not isinstance(raw,dict): raise StatsError(400,'消息读取信息无效。')
         condition,extra='',[]
         if raw.get('all') is True: pass
+        elif 'gameId' in raw:
+            gid=raw['gameId']
+            if not isinstance(gid,str) or not GAME_ID.fullmatch(gid): raise StatsError(400,'比赛编号无效。')
+            condition=' AND c.game_id=?';extra=[gid]
         elif 'trainingId' in raw:
             tid=raw['trainingId']
             if not isinstance(tid,str) or not GAME_ID.fullmatch(tid): raise StatsError(400,'训练编号无效。')

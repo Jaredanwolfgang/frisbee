@@ -168,7 +168,7 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 #stats-pane-comments,#training-pane-comments{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:0}
 .discussion-view{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;overflow:hidden}
 .discussion-feed{flex:1;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain;padding:14px 12px;scroll-padding-block:12px}
-.discussion-composer{display:flex;flex-direction:column;gap:8px;flex:none;min-width:0;max-height:75%;overflow-y:auto;margin:0;padding:10px;border-top:1px solid var(--line);background:#fff}
+.discussion-composer{position:relative;display:flex;flex-direction:column;gap:8px;flex:none;min-width:0;max-height:75%;overflow-y:auto;margin:0;padding:10px;border-top:1px solid var(--line);background:#fff}
 .discussion-compose-row{flex:none;display:flex;align-items:flex-end;gap:8px;min-width:0}
 .discussion-compose-row>label{flex:1;min-width:0;gap:0}
 .discussion-context{flex:none;display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
@@ -372,10 +372,9 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .team-message strong small{display:inline}
 .team-message p{font-size:15px;line-height:1.7;margin:8px 0 0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
 .discussion-mention{color:#76527f;background:#f5eff7;border-radius:3px;padding:1px 2px;font-weight:600;text-decoration:underline;text-decoration-color:#b595bd;text-underline-offset:3px;text-decoration-thickness:1.5px}
-.discussion-mention-picker{display:flex;flex-direction:column;flex:0 1 auto;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:#f9fbf7;padding:10px;margin-bottom:8px;min-height:0}
-.discussion-mention-picker label{flex:none;font-size:12px;gap:5px}
-.discussion-mention-picker input{width:100%;font-size:16px;min-height:42px}
-.discussion-mention-options{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;gap:0;max-height:240px;max-height:min(240px,32dvh);overflow-y:auto;overscroll-behavior:contain;margin-top:8px;scrollbar-gutter:stable}
+.discussion-composer.is-mentioning{overflow:visible}
+.discussion-mention-picker{position:absolute;z-index:8;right:96px;bottom:calc(100% + 8px);width:280px;max-width:calc(100% - 16px);padding:4px;border:1px solid #e2d9e6;border-radius:10px;background:#fff;box-shadow:0 8px 28px #33233d24;min-height:0}
+.discussion-mention-options{min-height:0;display:flex;flex-direction:column;gap:0;max-height:240px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .discussion-mention-options button{color:var(--ink);-webkit-text-fill-color:currentColor;-webkit-appearance:none;appearance:none;flex:none;width:100%;height:48px;border:0;border-bottom:1px solid #e6e0e9;border-radius:0;background:none;display:flex;gap:5px;align-items:center;justify-content:space-between;padding:8px;font-size:14px;min-width:0;min-height:44px;white-space:normal;overflow-wrap:anywhere}
 .discussion-mention-options small{font-size:12px;color:var(--muted)}
 .discussion-mention-trigger{font-size:21px!important;font-weight:500}
@@ -435,3 +434,12 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .discussion-composer textarea.has-mention-highlight{position:relative;background:transparent;color:transparent;-webkit-text-fill-color:transparent;caret-color:var(--ink)}
 .discussion-composer textarea.has-mention-highlight::selection{color:var(--ink);-webkit-text-fill-color:var(--ink);background:#e8dced}
 .discussion-mention-options button:hover,.discussion-mention-options button:focus-visible{background:#f5eff7}
+
+/* Summaries stay visible while each personal record list scrolls through at most five rows. */
+.team-dashboard-grid{align-items:start}
+.team-personal-feed-scroll{min-width:0;max-height:var(--team-feed-height,440px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;scroll-padding-block:4px}
+.team-personal-feed-scroll .team-written-review p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.team-personal-feed-scroll:focus-visible{outline:2px solid #9fbd95;outline-offset:3px;border-radius:6px}
+
+.discussion-mention-options button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.discussion-mention-options button>small{flex:none}

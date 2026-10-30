@@ -33,7 +33,7 @@ const StatsUI=(()=>{
  }
  const isScrimmage=g=>!!g&&(!!g.trainingId||data.trainings.some(t=>t.games.some(x=>x.id===g.id)));
  const sideName=side=>side==='a'?'A 队':'B 队';
- function gameCard(g){const internal=isScrimmage(g),score=TeamMetrics.score(g);return activityCard({attribute:'data-stats-game',id:g.id,name:g.name,status:g.status,label:g.status==='live'?'进行中':'已结束',heldOn:gameDate(g),meta:(internal?'队内对抗 · ':g.opponent?'vs '+g.opponent+' · ':'')+g.events.length+' 条记录'+(g.video?' · ▶ 视频':'')+(internal&&score.unassigned?' · '+score.unassigned+' 次历史得分未分队':''),count:internal?score.a+' : '+score.b:g.events.filter(e=>e.kind==='goal').length,unit:internal?'A 队 / B 队':'得分'});}
+ function gameCard(g){const internal=isScrimmage(g),score=TeamMetrics.score(g);return activityCard({attribute:'data-stats-game',id:g.id,unread:!!notifications.games?.[g.id],name:g.name,status:g.status,label:g.status==='live'?'进行中':'已结束',heldOn:gameDate(g),meta:(internal?'队内对抗 · ':g.opponent?'vs '+g.opponent+' · ':'')+g.events.length+' 条记录'+(g.video?' · ▶ 视频':'')+(internal&&score.unassigned?' · '+score.unassigned+' 次历史得分未分队':''),count:internal?score.a+' : '+score.b:g.events.filter(e=>e.kind==='goal').length,unit:internal?'A 队 / B 队':'得分'});}
  function metricView(target,value){const select=$('#stats-'+target+'-view'),table=$('#'+(target==='average'?'stats-averages':'stats-boxscore'));select.value=metricGroups[value]?value:'attack';table.closest('.stats-table-wrap').dataset.statsView=select.value;document.querySelector('[data-scroll-for="'+table.id+'"]').hidden=select.value!=='all';if(target==='average'&&!metricGroups[select.value].includes(sort.key)&&sort.key!=='name'&&sort.key!=='attendance'){sort={key:metricGroups[select.value][0],dir:1};renderAverages();}}
  const pad=n=>String(n).padStart(2,'0');
  const clock=ms=>{const d=new Date(ms||Date.now());return pad(d.getHours())+':'+pad(d.getMinutes());};
@@ -204,10 +204,11 @@ const StatsUI=(()=>{
   if(g.video){link.hidden=false;link.href='#';}else{link.hidden=true;link.removeAttribute('href');}
  }
  function discussionVisible(kind,pane){const dialog=$('#'+(kind==='games'?'stats-game-dialog':'training-dialog'));return pane==='comments'&&dialog.open&&active()&&!document.hidden&&!$$('dialog').some(other=>other.open&&other!==dialog&&other.id!=='team-notifications-dialog'&&!(kind==='games'&&other.id==='training-dialog'));}
- function renderComments(g){discussionUI?.render($('#game-discussion'),'games',g,discussionVisible('games',gamePane));discussionUI?.syncUnread($('#stats-tab-comments'),'games',g,discussionVisible('games',gamePane));}
+ function renderComments(g){const visible=discussionVisible('games',gamePane);discussionUI?.render($('#game-discussion'),'games',g,visible);discussionUI?.syncUnread($('#stats-tab-comments'),'games',g,visible);syncMentionRead('games',g,visible,$('#stats-tab-comments'));}
  function renderGame(){
   const g=currentGame(),dlg=$('#stats-game-dialog');
   if(!g){openGameId=null;if(dlg.open){dlg.close();deps.toast('这场比赛已被删除。');}return;}
+  $('#stats-game-close').setAttribute('aria-label',$('#training-dialog').open?'返回训练赛':$('#team-notifications-dialog').open?'返回消息':'返回比赛列表');
   const editable=canEdit()&&g.status==='live'&&!busy;
   syncGamePane();
   $('#stats-game-title').textContent=g.name;
@@ -257,13 +258,15 @@ const StatsUI=(()=>{
  }
  function renderTrainingGames(t){
   $('#training-games').innerHTML=t.games.length?TeamMetrics.gamesByDate(t.games).map(gameCard).join(''):'<p class="stats-empty">还没有训练赛。点「添加训练赛」记录队内对抗。</p>';
-  $('#training-game-add').hidden=!canEdit();$('#training-game-add').disabled=busy;
+  $('#training-game-add').hidden=!canEdit();$('#training-game-add').disabled=busy;const unread=t.games.some(g=>notifications.games?.[g.id]);$('#training-tab-games').classList.toggle('has-unread',unread);$('#training-tab-games').setAttribute('aria-label',unread?'训练赛，有未读消息':'训练赛');
  }
- function applyNotifications(summary){notifications=summary||{unread:0,trainings:{}};renderTrainingsPanel();teamHub?.render();messagesUI?.update();}
- function renderTrainingComments(t){const visible=discussionVisible('trainings',trainingPane);discussionUI?.render($('#training-discussion'),'trainings',t,visible);discussionUI?.syncUnread($('#training-tab-comments'),'trainings',t,visible);
-  if(!visible&&notifications.trainings[t.id])$('#training-tab-comments').classList.add('has-unread');
-  if(visible&&me&&notifications.trainings[t.id]&&!readingTraining){const actor=me.id;readingTraining=t.id;deps.api('stats/notifications/read',{method:'POST',body:JSON.stringify({trainingId:t.id})}).then(result=>{if(me?.id===actor)applyNotifications(result.summary);}).catch(error=>deps.toast(error.message)).finally(()=>readingTraining=null);}
+ function applyNotifications(summary){notifications=summary||{unread:0,trainings:{}};renderAll();}
+ function syncMentionRead(kind,entry,visible,tab){
+  const unread=kind==='games'?notifications.games?.[entry.id]:(notifications.trainingComments?notifications.trainingComments[entry.id]:notifications.trainings[entry.id]);
+  if(!visible&&unread)tab.classList.add('has-unread');
+  if(visible&&me&&unread&&!readingTraining){const actor=me.id;readingTraining=kind+':'+entry.id;const context=kind==='games'?{gameId:entry.id}:{trainingId:entry.id};deps.api('stats/notifications/read',{method:'POST',body:JSON.stringify(context)}).then(result=>{if(me?.id===actor)applyNotifications(result.summary);}).catch(error=>deps.toast(error.message)).finally(()=>readingTraining=null);}
  }
+ function renderTrainingComments(t){const visible=discussionVisible('trainings',trainingPane);discussionUI?.render($('#training-discussion'),'trainings',t,visible);discussionUI?.syncUnread($('#training-tab-comments'),'trainings',t,visible);syncMentionRead('trainings',t,visible,$('#training-tab-comments'));}
  function renderTraining(){
   const t=currentTraining(),dlg=$('#training-dialog');
   if(!t){openTrainingId=null;if(dlg.open){dlg.close();deps.toast('这次训练已被删除。');}return;}
@@ -612,7 +615,11 @@ const StatsUI=(()=>{
   drillJournal=DrillJournal.init({api:deps.api,toast:deps.toast,getMe:()=>me,login,refresh});
   discussionUI=TeamDiscussion.init({api:deps.api,toast:deps.toast,canEdit,getMe:()=>me,getPlayers:()=>data.players,login,refresh});
   teamHub=TeamHub.init({api:deps.api,toast:deps.toast,requestEdit:deps.requestEdit,canEdit,refresh,getState:()=>({data,me,loaded,error,busy,notifications}),login,toggleEdit:deps.toggleEdit,openTeam:deps.openTeam,currentTraining,openTraining,openReview:id=>{openGame(id);gamePane='comments';syncGamePane();renderComments(currentGame());},openTrainingReview:id=>{openTraining(id);trainingPane='comments';syncTrainingPane();renderTrainingComments(currentTraining());}});
-  messagesUI=TeamMessages.init({api:deps.api,toast:deps.toast,getMe:()=>me,getSummary:()=>notifications,onSummary:applyNotifications,openMessage:async message=>{await refresh(true);if(!data.trainings.some(t=>t.id===message.trainingId))throw new Error('这次训练已被删除。');openTraining(message.trainingId);trainingPane='comments';syncTrainingPane();renderTrainingComments(currentTraining());discussionUI.reveal($('#training-discussion'),message.commentId);}});
+  messagesUI=TeamMessages.init({api:deps.api,toast:deps.toast,getMe:()=>me,getSummary:()=>notifications,onSummary:applyNotifications,openMessage:async message=>{
+   await refresh(true);
+   if(message.gameId){const game=findGameContainer(message.gameId);if(!game)throw new Error('这场比赛已被删除。');if(message.trainingId){const training=data.trainings.find(t=>t.id===message.trainingId&&t.games.some(g=>g.id===message.gameId));if(!training)throw new Error('这次训练已被删除。');openTraining(training.id);trainingPane='games';syncTrainingPane();renderTrainingGames(training);}openGame(game.id);gamePane='comments';syncGamePane();renderComments(game);discussionUI.reveal($('#game-discussion'),message.commentId);}
+   else{if(!data.trainings.some(t=>t.id===message.trainingId))throw new Error('这次训练已被删除。');openTraining(message.trainingId);trainingPane='comments';syncTrainingPane();renderTrainingComments(currentTraining());discussionUI.reveal($('#training-discussion'),message.commentId);}
+  }});
   refresh();
   timer=setInterval(()=>{if(active()&&!document.hidden&&!busy)refresh();},8000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&active())refresh();});
