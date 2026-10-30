@@ -10,6 +10,9 @@ const clip={id:'clip',name:'训练赛',video:'https://www.bilibili.com/video/av1
 discussion=cx.modules.TeamDiscussion.init({getMe:()=>({id:1}),getPlayers:()=>[{id:2,name:'队友',number:2}],toast(){},login(){},api:async(path,options)=>{sent=JSON.parse(options.body);entry.comments=[{...sent,id:1,player:1,name:'我',number:1,created:stamp,at:stamp,deleted:false,mentions:sent.mentions.map(m=>({...m,name:'队友'})),videoRefs:sent.videoRefs.map(r=>({...r,available:true}))}];return{comments:entry.comments};},refresh:async()=>discussion.render(host,'trainings',entry,true)});
 (async()=>{
  discussion.render(host,'trainings',entry,true);const input=q('[data-d="text"]');input.setSelectionRange=(a,b)=>{input.selectionStart=a;input.selectionEnd=b;};
+ assert.equal(q('.md-format-toggle').parentElement,q('.discussion-tools'),'format toggle does not consume space inside the textarea');
+ assert(q('.md-format-panel').classList.contains('is-inline'),'format controls occupy their own layout area');
+ assert.equal(q('[data-d="submit"]').parentElement,q('.discussion-submit'),'send remains independent from secondary tools');
  input.value='🥏 @队';input.setSelectionRange(input.value.length,input.value.length);input.oninput();q('[data-d="mention-options"]').onclick({target:q('[data-mention-person="2"]')});
  q('[data-d="attach"]').onclick();q('[data-d="time"]').value='0:05';q('[data-d="insert-time"]').onclick();
  input.setSelectionRange(0,input.value.length);q('.md-format-toggle').onclick();q('.md-format-panel').onclick({target:q('[data-md="bold"]')});
@@ -28,7 +31,8 @@ discussion=cx.modules.TeamDiscussion.init({getMe:()=>({id:1}),getPlayers:()=>[{i
  const training={id:'t',drills:[{id:'drill',name:'Drill',noteCount:0,noteVersion:0}]};
  journal=cx.modules.DrillJournal.init({getMe:()=>({id:1}),toast(){},login(){},refresh:async()=>{},api:async(path,options)=>{if(options){const raw=JSON.parse(options.body);notes=[{...raw,id:2,player:1,name:'我',number:1,trainingId:'t',trainingName:'训练',heldOn:'2026-10-30'}];}return{notes,total:notes.length,trainingCount:1,nextOffset:null};}});
  journal.renderTraining(drillHost,training,true,1);d('[data-j="toggle"]').onclick();await tick();const problem=d('[data-j="problems"]');problem.setSelectionRange=(a,b)=>{problem.selectionStart=a;problem.selectionEnd=b;};problem.value='切入偏早\n回盘后未清空';problem.oninput();problem.setSelectionRange(0,problem.value.length);
- const drillToggle=problem.closest('.md-editor').querySelector('.md-format-toggle');drillToggle.onclick();const drillPanel=document.getElementById(drillToggle.getAttribute('aria-controls'));drillPanel.onclick({target:drillPanel.querySelector('[data-md="list"]')});assert(problem.value.startsWith('- '));d('[data-j="progress"]').value='> **沟通更及时**';await d('[data-j="form"]').onsubmit({preventDefault(){}});
+ const drillToggle=problem.closest('label').querySelector('.md-format-toggle');drillToggle.onclick();const drillPanel=document.getElementById(drillToggle.getAttribute('aria-controls'));drillPanel.onclick({target:drillPanel.querySelector('[data-md="list"]')});assert(problem.value.startsWith('- '));d('[data-j="progress"]').value='> **沟通更及时**';await d('[data-j="form"]').onsubmit({preventDefault(){}});
+ assert.equal(drillToggle.parentElement,problem.closest('label'),'Drill formatting sits beside the label, outside the writing area');assert(drillPanel.classList.contains('is-inline'));
  assert.equal(d('.drill-note ul').children.length,2);assert(d('.drill-note blockquote strong'));
  journal.renderHistory(history,'drill',true);await tick();assert(history.querySelector('.drill-history-note ul'));assert(history.querySelector('.drill-history-note blockquote strong'));assert(!drillHost.querySelector('input[type="file"]'));
  console.log('PASS: real formatting controls preserve mention/video anchors across publish/edit, validate links, retain raw Drill notes and render shared training/history Markdown without uploads.');

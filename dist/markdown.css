@@ -21,7 +21,17 @@
 .md-format-toggle{position:absolute;right:5px;bottom:6px;z-index:2;display:grid;place-items:center;width:30px;min-height:32px;padding:2px;border:0;border-radius:5px;background:#f0f3ec;color:#62765a;font-size:13px;line-height:1;font-weight:600;touch-action:manipulation}
 .md-format-toggle[aria-expanded=true]{background:#e5eddc;color:#345d37}
 .md-editor-host.is-formatting{overflow:visible}
+.md-editor-host.has-inline-format.is-formatting{overflow:hidden}
+.md-editor.has-external-toggle>textarea,.discussion-composer .has-external-toggle>textarea.md-input{padding-right:12px}
+.md-format-toggle.is-external{position:static;flex:none;width:36px;min-width:36px;min-height:36px;height:36px;padding:4px}
+.discussion-tools{display:flex;align-items:center;gap:6px}
+.drill-note-form label.md-field-label{display:grid;grid-template-columns:minmax(0,1fr) 36px;align-items:center;gap:6px}
+.md-field-label>.md-format-toggle{grid-column:2;grid-row:1;justify-self:end}
+.md-field-label>.md-editor{grid-column:1/-1;grid-row:2}
 .md-format-panel{position:absolute;z-index:9;left:8px;right:8px;max-height:min(260px,45dvh);overflow:auto;padding:8px;border:1px solid #d7e1d0;border-radius:9px;background:#fff;box-shadow:0 5px 20px #263b3020}
+.md-format-panel.is-inline{position:relative;inset:auto;width:100%;min-height:0;flex:0 1 auto;box-shadow:none;margin:0;overscroll-behavior:contain}
+.discussion-composer>.md-format-panel.is-inline{max-width:420px;align-self:flex-end}
+.discussion-composer.is-formatting{flex-shrink:1;max-height:100%}
 .md-format-actions{display:flex;align-items:center;gap:3px}
 .md-format-actions button{display:flex;align-items:center;justify-content:center;gap:4px;flex:1;min-width:0;min-height:36px;padding:5px 3px;border:0;border-radius:5px;background:#f3f6ef;color:#506c47;font-size:12px;white-space:nowrap;line-height:1.4}
 .md-format-actions button:hover{background:#e8efdf}
@@ -33,9 +43,24 @@
 .md-link-fields input{width:100%;min-width:0}
 .md-link-fields button{min-height:40px;border:1px solid var(--line);background:#eef4e8;color:#41663b;border-radius:5px;padding:8px;font-size:12px;white-space:nowrap}
 @media(max-width:600px){
+ .discussion-composer>.md-format-panel.is-inline{max-width:none}
+ .discussion-compose-row{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:6px 8px}
+ .discussion-compose-row>label{grid-column:1;grid-row:1}
+ .discussion-submit{display:contents}
+ .discussion-submit>.discussion-tools{grid-column:1/-1;grid-row:2;justify-content:flex-start}
+ .discussion-submit>.discussion-icon[type=submit]{grid-column:2;grid-row:1;align-self:end;width:44px;min-width:44px}
+ .discussion-submit .discussion-tools .discussion-icon{width:36px;min-width:36px;height:36px;min-height:36px;padding:7px}
  .md-link-fields{grid-template-columns:minmax(0,1fr) auto}
  .md-link-fields>label:first-child{grid-column:1/-1}
  .md-link-fields input{font-size:16px!important}
  .md-format-actions button{min-height:40px}
  .drill-history-observations .light-markdown{line-height:1.8}
+}
+html.keyboard-open .discussion-view.has-format-panel>.discussion-feed{padding-top:0;padding-bottom:0}
+html.keyboard-open .discussion-composer.is-formatting textarea{max-height:70px;overflow-y:auto!important}
+html.keyboard-open .discussion-composer.is-formatting .discussion-context:not([hidden])~.discussion-compose-row textarea{max-height:46px}
+@media(max-height:500px){
+ .discussion-view.has-format-panel>.discussion-feed{padding-top:0;padding-bottom:0}
+ .discussion-composer.is-formatting textarea{max-height:70px;overflow-y:auto!important}
+ .discussion-composer.is-formatting .discussion-context:not([hidden])~.discussion-compose-row textarea{max-height:46px}
 }

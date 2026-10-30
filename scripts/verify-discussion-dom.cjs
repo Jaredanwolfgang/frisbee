@@ -57,7 +57,7 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
  me=null;ui.render(host,'trainings',data,true);assert($('[data-d="form"]').hidden);assert(!$('[data-action="login"]').hidden);
  await host.onclick({target:$('[data-action="reply"][data-comment="1"]')});assert.equal(loginCount,1);
  me={id:1};ui.render(host,'trainings',{id:'other-training',games:[],comments:[]},true);assert($('[data-d="attach"]').hidden,'no video means no timestamp button');assert($('.discussion-media').hidden,'no video leaves no empty media explanation');$('[data-d="text"]').value='新训练的评论';const before=calls.length;await $('[data-d="form"]').onsubmit({preventDefault(){}});assert.equal(calls.length,before+1,'changing context must replace old event handlers');
- console.log('PASS: bottom composer outside the feed, same-row icon controls, one-to-four-line sizing, icon controls, discussion DOM, XSS-safe text, avatars, reply/timestamp publish, editing, delete/restore, player persistence, repeated seeking, guest login and context isolation.');
+ console.log('PASS: bottom composer outside the feed, same-row input/send with a dedicated tools group, one-to-four-line sizing, icon controls, discussion DOM, XSS-safe text, avatars, reply/timestamp publish, editing, delete/restore, player persistence, repeated seeking, guest login and context isolation.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
 
 // Load the actual team modules against index.html to catch removed-ID/startup regressions.
