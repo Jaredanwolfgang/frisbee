@@ -7,10 +7,10 @@ let me={id:1},notes=[],posts=0,logins=0,revision=1;
 const training={id:'training-one',drills:[{id:'drill-one',name:'长名称 Drill：回传、切入与后续衔接',noteCount:0,noteVersion:0}]};let journal;
 journal=cx.journal.init({getMe:()=>me,login:()=>logins++,toast(){},refresh:async()=>journal.renderTraining(host,training,true,revision),api:async(path,options)=>{if(options){posts++;const body=JSON.parse(options.body);notes=[{id:1,player:1,name:'<队员>',number:1,trainingName:'周五训练',heldOn:'2026-10-30',avatar:'',...body}];training.drills[0].noteCount=1;training.drills[0].noteVersion=++revision;}return{notes,total:notes.length,trainingCount:notes.length?1:0,nextOffset:null};}});
 (async()=>{
- journal.renderTraining(host,training,true,revision);$('details').open=true;$('details').ontoggle();await tick();
+ journal.renderTraining(host,training,true,revision);$('[data-j="toggle"]').onclick();await tick();$('[data-j="write"]').onclick();
  $('[data-j="problems"]').value='<img src=x onerror=alert(1)>切入时机';$('[data-j="problems"]').oninput();$('[data-j="progress"]').value='回传更稳定';$('[data-j="progress"]').oninput();
  await $('[data-j="form"]').onsubmit({preventDefault(){}});assert.equal(posts,1);assert.equal($('[data-j="notes"] img'),null,'text is escaped');assert($('[data-j="notes"]').textContent.includes('<img'));
- assert.equal($('[data-j="save"]').textContent,'更新我的记录');assert.equal($('[data-j="progress"]').value,'回传更稳定');
+ assert.equal($('[data-j="save"]').textContent,'更新我的记录');assert($('[data-j="form"]').hidden,'saved record replaces the form');$('[data-j="write"]').onclick();assert.equal($('[data-j="progress"]').value,'回传更稳定');
  $('[data-j="problems"]').value='尚未保存的下一次修改';$('[data-j="problems"]').oninput();journal.renderTraining(host,training,true,++revision);await tick();assert.equal($('[data-j="problems"]').value,'尚未保存的下一次修改','polling does not reset a dirty form');
  await $('[data-j="form"]').onsubmit({preventDefault(){}});assert.equal(notes.length,1);assert.equal(posts,2);
  journal.renderHistory(history,'drill-one');history.querySelector('details').open=true;history.querySelector('details').ontoggle();await tick();assert(history.textContent.includes('2026-10-30'));assert(history.textContent.includes('尚未保存的下一次修改'));assert(history.textContent.includes('回传更稳定'));

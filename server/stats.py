@@ -118,6 +118,8 @@ class StatsStore:
             db.execute('CREATE TABLE IF NOT EXISTS stats_trainings (id TEXT PRIMARY KEY, name TEXT NOT NULL, warmup TEXT NOT NULL DEFAULT \'\', attendees TEXT NOT NULL DEFAULT \'[]\', drills TEXT NOT NULL DEFAULT \'[]\', created INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)')
             db.execute('CREATE TABLE IF NOT EXISTS stats_drill_notes (id INTEGER PRIMARY KEY AUTOINCREMENT,training_id TEXT NOT NULL,drill_id TEXT NOT NULL,player_id INTEGER NOT NULL,problems TEXT NOT NULL,progress TEXT NOT NULL,author_name TEXT NOT NULL,author_number INTEGER NOT NULL,created INTEGER NOT NULL,updated INTEGER NOT NULL,UNIQUE(training_id,drill_id,player_id))')
             db.execute('CREATE INDEX IF NOT EXISTS stats_drill_notes_drill ON stats_drill_notes(drill_id,training_id)')
+            db.execute('CREATE TABLE IF NOT EXISTS stats_notifications (id INTEGER PRIMARY KEY AUTOINCREMENT,player_id INTEGER NOT NULL,comment_id INTEGER NOT NULL,created INTEGER NOT NULL,read_at INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 1,UNIQUE(comment_id,player_id))')
+            db.execute('CREATE INDEX IF NOT EXISTS stats_notifications_player ON stats_notifications(player_id,active,read_at)')
             # Older databases keep their rows; new columns are added in place.
             for statement in ("ALTER TABLE stats_players ADD COLUMN gender TEXT NOT NULL DEFAULT ''",
                               'ALTER TABLE stats_events ADD COLUMN line TEXT',
@@ -157,7 +159,7 @@ class StatsStore:
                 db.execute('INSERT INTO stats_comments_fixed(id,game_id,training_id,player_id,text,author_name,author_number,created,updated) SELECT id,game_id,training_id,player_id,text,author_name,author_number,created,updated FROM stats_comments')
                 db.execute('DROP TABLE stats_comments')
                 db.execute('ALTER TABLE stats_comments_fixed RENAME TO stats_comments')
-            for column in ["parent_id INTEGER", "deleted INTEGER NOT NULL DEFAULT 0", "is_discussion INTEGER NOT NULL DEFAULT 0", "video_game_id TEXT", "video_key TEXT", "video_second INTEGER", "video_page INTEGER", "video_refs TEXT NOT NULL DEFAULT '[]'"]:
+            for column in ["parent_id INTEGER", "deleted INTEGER NOT NULL DEFAULT 0", "is_discussion INTEGER NOT NULL DEFAULT 0", "video_game_id TEXT", "video_key TEXT", "video_second INTEGER", "video_page INTEGER", "video_refs TEXT NOT NULL DEFAULT '[]'", "mentions TEXT NOT NULL DEFAULT '[]'"]:
                 try:
                     db.execute('ALTER TABLE stats_comments ADD COLUMN '+column)
                 except sqlite3.OperationalError:
@@ -238,6 +240,7 @@ class StatsStore:
                 cache[vg] = (game['name'] if game else '已移除的视频',self.video_meta(game) if game else None)
             name, meta = cache[vg]
             return {**ref,'name':name,'available':bool(meta and meta['key']==ref['key'])}
+        out['mentions'] = [] if row['deleted'] else json.loads(row['mentions'] or '[]')
         out['videoRefs'] = []
         if not row['deleted']:
             out['videoRefs'] = [resolved(ref) for ref in json.loads(row['video_refs'] or '[]')]
@@ -414,9 +417,9 @@ class StatsStore:
             if not row:
                 raise StatsError(401, '名单里已没有这名队员，请重新登录。')
             stamp = self.now()
-            existing = db.execute('SELECT id,video_refs FROM stats_comments WHERE game_id IS ? AND training_id IS ? AND player_id=? AND is_discussion=0 AND deleted=0', (game_id, training_id, player_id)).fetchone()
+            existing = db.execute('SELECT id,video_refs,mentions FROM stats_comments WHERE game_id IS ? AND training_id IS ? AND player_id=? AND is_discussion=0 AND deleted=0', (game_id, training_id, player_id)).fetchone()
             if existing:
-                if existing['video_refs'] != '[]': raise StatsError(409, '这条评论包含正文时间节点，请刷新并在讨论区修改。')
+                if existing['video_refs'] != '[]' or existing['mentions'] != '[]': raise StatsError(409, '这条评论包含正文时间节点，请刷新并在讨论区修改。')
                 db.execute('UPDATE stats_comments SET text=?, updated=?, author_name=?, author_number=? WHERE id=?', (body, stamp, row['name'], row['number'], existing['id']))
             else:
                 db.execute('INSERT INTO stats_comments(game_id,training_id,player_id,text,author_name,author_number,created,updated) VALUES (?,?,?,?,?,?,?,?)', (game_id, training_id, player_id, body, row['name'], row['number'], stamp, stamp))
@@ -477,8 +480,8 @@ class StatsStore:
                 video = raw.get('video')
                 vg = vk = second = page = None
                 refs = []
-                if row and row['video_refs'] != '[]' and 'videoRefs' not in raw:
-                    raise StatsError(409, '这条评论包含多个时间节点，请刷新页面后再修改。')
+                if row and ((row['video_refs'] != '[]' and 'videoRefs' not in raw) or (row['mentions'] != '[]' and 'mentions' not in raw)):
+                    raise StatsError(409, '这条评论包含时间节点或队友提及，请刷新页面后再修改。')
                 def validate_video(value, allow_saved=False):
                     if not isinstance(value,dict): raise StatsError(400, '视频时间点无效。')
                     vg, second, page = value.get('gameId'),value.get('seconds'),value.get('page',1)
@@ -521,6 +524,25 @@ class StatsStore:
                 elif video is not None:
                     ref = validate_video(video)
                     vg,vk,second,page = ref['gameId'],ref['key'],ref['seconds'],ref['page']
+                mentions = raw.get('mentions',[])
+                if not isinstance(mentions,list) or len(mentions)>20 or (game_id and mentions): raise StatsError(400,'训练讨论每条评论最多提及 20 次队友。')
+                previous = json.loads(row['mentions'] or '[]') if row else []
+                clean_mentions, previous_end = [],0
+                for mention in mentions:
+                    if not isinstance(mention,dict): raise StatsError(400,'提及信息无效。')
+                    pid,begin,end = mention.get('player'),mention.get('start'),mention.get('end')
+                    if type(pid) is not int or not 1 <= pid <= 2**63-1: raise StatsError(400,'提及队友编号无效。')
+                    if type(begin) is not int or type(end) is not int or not previous_end <= begin < end <= len(body): raise StatsError(400,'提及位置无效，请重新选择队友。')
+                    target = db.execute('SELECT name FROM stats_players WHERE id=?',(pid,)).fetchone()
+                    label = body[begin:end]
+                    old = next((m for m in previous if m['player']==pid and label=='@'+m['name']),None)
+                    if target and label=='@'+target['name']: name=target['name']
+                    elif old: name=old['name']
+                    else: raise StatsError(400,'提及的队友或文字已变化，请重新选择。')
+                    clean_mentions.append({'player':pid,'name':name,'start':begin,'end':end})
+                    previous_end=end
+                anchors=sorted([*refs,*clean_mentions],key=lambda r:r['start'])
+                if any(a['end']>b['start'] for a,b in zip(anchors,anchors[1:])): raise StatsError(400,'时间节点和队友提及不能重叠。')
                 stamp = self.now()
                 if row is None:
                     count = db.execute('SELECT count(*) FROM stats_comments WHERE game_id IS ? AND training_id IS ?',(game_id,training_id)).fetchone()[0]
@@ -530,8 +552,67 @@ class StatsStore:
                 else:
                     if row['deleted']: raise StatsError(409, '请先恢复这条评论再修改。')
                     db.execute('UPDATE stats_comments SET text=?,updated=?,video_game_id=?,video_key=?,video_second=?,video_page=?,video_refs=? WHERE id=?',(body,stamp,vg,vk,second,page,json.dumps(refs),comment_id))
+                db.execute('UPDATE stats_comments SET mentions=? WHERE id=?',(json.dumps(clean_mentions),comment_id))
+                self.sync_mentions(db,comment_id,player_id,{m['player'] for m in clean_mentions},stamp)
             db.execute('UPDATE '+table+' SET updated=? WHERE id=?',(self.now(),context_id))
             return {'comments':self.comments(db,game_id,training_id), 'commentId':comment_id, 'revision':self.revision(db,True)}
+
+    @staticmethod
+    def sync_mentions(db, comment_id, author_id, recipients, stamp):
+        recipients = recipients-{author_id}
+        existing = {r['player_id']:r for r in db.execute('SELECT * FROM stats_notifications WHERE comment_id=?',(comment_id,))}
+        for pid,row in existing.items():
+            if pid not in recipients: db.execute('UPDATE stats_notifications SET active=0 WHERE id=?',(row['id'],))
+        for pid in recipients:
+            if pid not in existing:
+                db.execute('INSERT INTO stats_notifications(player_id,comment_id,created) VALUES (?,?,?)',(pid,comment_id,stamp))
+            elif not existing[pid]['active']:
+                db.execute('UPDATE stats_notifications SET active=1,read_at=0,created=? WHERE id=?',(stamp,existing[pid]['id']))
+
+    @staticmethod
+    def notification_query():
+        return ' FROM stats_notifications n JOIN stats_comments c ON c.id=n.comment_id JOIN stats_trainings t ON t.id=c.training_id WHERE n.player_id=? AND n.active=1 AND c.deleted=0 AND t.deleted=0'
+
+    def notification_summary(self, player_id):
+        if player_id is None: return {'unread':0,'trainings':{}}
+        db=self.connect()
+        try:
+            rows=db.execute('SELECT c.training_id,count(*)'+self.notification_query()+' AND n.read_at=0 GROUP BY c.training_id',(player_id,)).fetchall()
+            trainings={r[0]:r[1] for r in rows}
+            return {'unread':sum(trainings.values()),'trainings':trainings}
+        finally: db.close()
+
+    def notifications(self, player_id, offset=0):
+        if type(offset) is not int or not 0<=offset<=20000: raise StatsError(400,'消息页码无效。')
+        db=self.connect()
+        try:
+            query=self.notification_query()
+            total=db.execute('SELECT count(*)'+query,(player_id,)).fetchone()[0]
+            rows=db.execute('SELECT n.id,n.created,n.read_at,c.id AS comment_id,c.player_id AS sender,c.text,c.author_name,c.author_number,c.training_id,t.name AS training_name,t.held_on'+query+' ORDER BY n.created DESC,n.id DESC LIMIT 30 OFFSET ?',(player_id,offset)).fetchall()
+            messages=[]
+            for r in rows:
+                sender=db.execute('SELECT name,number,avatar_digest FROM stats_players WHERE id=?',(r['sender'],)).fetchone()
+                messages.append({'id':r['id'],'commentId':r['comment_id'],'trainingId':r['training_id'],'trainingName':r['training_name'],'heldOn':r['held_on'],'sender':r['sender'],'name':sender['name'] if sender else r['author_name'],'number':sender['number'] if sender else r['author_number'],'avatar':('api/stats/avatars/'+str(r['sender'])+'/'+sender['avatar_digest']) if sender and sender['avatar_digest'] else '', 'text':r['text'][:240],'created':r['created'],'unread':r['read_at']==0})
+            return {'messages':messages,'nextOffset':offset+len(messages) if offset+len(messages)<total else None,'summary':self.notification_summary(player_id)}
+        finally: db.close()
+
+    def read_notifications(self, player_id, raw):
+        if not isinstance(raw,dict): raise StatsError(400,'消息读取信息无效。')
+        condition,extra='',[]
+        if raw.get('all') is True: pass
+        elif 'trainingId' in raw:
+            tid=raw['trainingId']
+            if not isinstance(tid,str) or not GAME_ID.fullmatch(tid): raise StatsError(400,'训练编号无效。')
+            condition=' AND c.training_id=?';extra=[tid]
+        elif 'id' in raw:
+            id_=raw['id']
+            if type(id_) is not int or not 1<=id_<=2**63-1: raise StatsError(400,'消息编号无效。')
+            condition=' AND n.id=?';extra=[id_]
+        else: raise StatsError(400,'请选择要标记已读的消息。')
+        with self.transaction() as db:
+            ids=[r[0] for r in db.execute('SELECT n.id'+self.notification_query()+condition,(player_id,*extra))]
+            for id_ in ids: db.execute('UPDATE stats_notifications SET read_at=? WHERE id=? AND player_id=?',(self.now(),id_,player_id))
+        return {'summary':self.notification_summary(player_id)}
 
     def drill_notes(self, drill_id, training_id=None, offset=0):
         if not isinstance(drill_id,str) or not TACTIC_ID.fullmatch(drill_id): raise StatsError(400,'Drill 编号无效。')

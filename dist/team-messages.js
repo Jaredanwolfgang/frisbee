@@ -1,0 +1,15 @@
+'use strict';
+const TeamMessages=(()=>{
+ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ function init(d){const $=s=>document.querySelector(s),dialog=$('#team-notifications-dialog'),button=$('#team-notifications');let actor=null,token=0,rows=[],offset=null,loading=false;
+  function draw(){const list=$('[data-messages-list]');list.innerHTML=rows.map(m=>'<button type="button" class="team-message'+(m.unread?' has-alert':'')+'" data-message-open="'+m.id+'"><span class="discussion-avatar">'+(/^api\/stats\/avatars\/\d+\/[a-f0-9]+$/.test(m.avatar||'')?'<img src="'+esc(m.avatar)+'" width="36" height="36" alt="" loading="lazy">':esc(m.name.slice(0,1)))+'</span><span><strong>'+esc(m.name)+' <small>在训练讨论中 @ 了你</small></strong><small>'+esc(m.heldOn)+' · '+esc(m.trainingName)+'</small><p>'+esc(m.text)+'</p></span></button>').join('');}
+  function update(){const id=d.getMe()?.id||null;if(id!==actor){actor=id;token++;rows=[];offset=null;loading=false;draw();if(dialog.open)dialog.close();}let changed=false;for(const m of rows)if(m.unread&&!d.getSummary().trainings?.[m.trainingId]){m.unread=false;changed=true;}if(changed)draw();const unread=!!d.getSummary().unread;button.hidden=!actor;button.querySelector('.notification-dot').hidden=!unread;button.setAttribute('aria-label',unread?'我的消息，有未读消息':'我的消息');$('[data-messages-read]').disabled=!unread;}
+  async function load(reset=false){if(loading||!actor)return;loading=true;const request=++token,id=actor;$('[data-messages-status]').textContent='正在读取消息…';try{const result=await d.api('stats/notifications?offset='+(reset?0:offset||0));if(request!==token||actor!==id)return;rows=reset?result.messages:[...rows,...result.messages];offset=result.nextOffset;d.onSummary(result.summary);draw();$('[data-messages-more]').hidden=offset===null;$('[data-messages-status]').textContent=rows.length?'':'还没有收到队友的 @ 提醒。';}catch(error){if(request===token)$('[data-messages-status]').textContent=error.message;}finally{if(request===token)loading=false;}}
+  button.onclick=()=>{update();if(!actor)return;dialog.showModal();$('#team-notifications-title').focus({preventScroll:true});load(true);};
+  $('[data-messages-close]').onclick=()=>dialog.close();$('[data-messages-more]').onclick=()=>load();
+  $('[data-messages-read]').onclick=async()=>{const id=actor;try{const result=await d.api('stats/notifications/read',{method:'POST',body:JSON.stringify({all:true})});if(id!==actor)return;rows.forEach(m=>m.unread=false);d.onSummary(result.summary);draw();}catch(e){d.toast(e.message);}};
+  $('[data-messages-list]').onclick=async event=>{const target=event.target.closest('[data-message-open]'),message=rows.find(m=>m.id===Number(target?.dataset.messageOpen));if(!message)return;const id=actor;try{await d.openMessage(message);if(id!==actor)return;const result=await d.api('stats/notifications/read',{method:'POST',body:JSON.stringify({id:message.id})});if(id!==actor)return;message.unread=false;d.onSummary(result.summary);draw();}catch(e){d.toast(e.message);}};
+  return{update};
+ }
+ return{init};
+})();

@@ -456,13 +456,28 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
                 if known and not re.fullmatch(r'[0-9]{1,16}', known):
                     raise APIError(400, '同步版本无效。')
                 pid = self.player_identity()
-                return self.send(200, {**stats_store.snapshot(int(known) if known else None), 'canEdit': self.authorized(), 'me': stats_store.player_brief(pid) if pid else None})
+                return self.send(200, {**stats_store.snapshot(int(known) if known else None), 'canEdit': self.authorized(), 'me': stats_store.player_brief(pid) if pid else None,'notifications':stats_store.notification_summary(pid)})
             segments = [unquote(s) for s in path[len('/api/stats/'):].split('/') if s]
             if segments == ['login'] and self.command == 'POST':
                 return self.stats_login()
             if segments == ['logout'] and self.command == 'POST':
                 self.require_same_origin()
                 return self.stats_logout()
+            if segments in (['notifications'],['notifications','read']):
+                pid=self.player_identity()
+                if pid is None: raise APIError(401,'请先登录队员身份查看消息。')
+                try:
+                    if segments==['notifications'] and self.command=='GET':
+                        offset=parse_qs(urlparse(self.path).query).get('offset',['0'])[0]
+                        if not re.fullmatch(r'[0-9]{1,5}',offset): raise APIError(400,'消息页码无效。')
+                        return self.send(200,stats_store.notifications(pid,int(offset)))
+                    if segments==['notifications','read'] and self.command=='POST':
+                        self.require_same_origin()
+                        return self.send(200,stats_store.read_notifications(pid,self.body()))
+                    raise APIError(404,'消息接口不存在。')
+                except STATS_MODULE.StatsError as error:
+                    raise APIError(error.status,error.message) from None
+
             if len(segments) == 3 and segments[0] == 'avatars' and self.command == 'GET' and re.fullmatch(r'[0-9]{1,10}',segments[1]) and re.fullmatch(r'[a-f0-9]{24}',segments[2]):
                 try:
                     image = stats_store.avatar(int(segments[1]),segments[2])

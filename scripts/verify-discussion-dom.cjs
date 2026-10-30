@@ -5,7 +5,7 @@ const {parseHTML}=require('linkedom');
 const {document,window}=parseHTML('<html><body><div id="test-discussion"></div></body></html>');
 window.HTMLElement.prototype.scrollIntoView=function(){};window.HTMLElement.prototype.focus=function(){};
 Object.defineProperty(window.HTMLSelectElement.prototype,'value',{get(){return this.querySelector('option[selected]')?.getAttribute('value')||this.querySelector('option')?.getAttribute('value')||'';},set(value){for(const option of this.querySelectorAll('option')){if(option.getAttribute('value')===value)option.setAttribute('selected','');else option.removeAttribute('selected');}}});
-const context={document,URLSearchParams,Intl,Date,console};vm.createContext(context);
+const context={document,URLSearchParams,Intl,Date,console};context.setTimeout=()=>0;context.clearTimeout=()=>{};vm.createContext(context);
 vm.runInContext(fs.readFileSync('dist/bili-video.js','utf8')+'\n'+fs.readFileSync('dist/discussion-text.js','utf8')+'\n'+fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',context);
 const host=document.querySelector('#test-discussion'),$=s=>host.querySelector(s),clone=x=>JSON.parse(JSON.stringify(x));
 let me={id:1},admin=true,loginCount=0,nextId=3;
@@ -48,7 +48,7 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
  await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});
  assert.equal(new URL($('iframe').src).searchParams.get('t'),'85');const firstSeek=$('iframe');
  await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});assert.notEqual($('iframe'),firstSeek,'clicking the same time point must seek again');
- data.comments[0].video.seconds=0;ui.render(host,'trainings',data,true);await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});assert.equal(new URL($('iframe').src).searchParams.get('t'),'0');assert.equal(new URL($('iframe').src).searchParams.get('autoplay'),'1');
+ data.comments[0].video.seconds=0;ui.render(host,'trainings',data,true);await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});assert.equal(new URL($('iframe').src).searchParams.get('t'),'0');assert.equal(new URL($('iframe').src).searchParams.get('autoplay'),'0');
  await host.onclick({target:$('[data-action="edit"][data-comment="2"]')});$('[data-d="text"]').value='修订后的补充';await $('[data-d="form"]').onsubmit({preventDefault(){}});
  assert.equal(data.comments.find(c=>c.id===2).text,'修订后的补充');
  await host.onclick({target:$('[data-action="delete"][data-comment="2"]')});await host.onclick({target:$('[data-action="delete"][data-comment="2"]')});assert(data.comments.find(c=>c.id===2).deleted);
@@ -72,7 +72,7 @@ async function verifyStartup(){
  const state={players:[{id:1,number:1,name:'测试队员',gender:'male',avatar:'',loginReady:true}],games:[],trainings:[t],me:{id:1,name:'测试队员',number:1},revision:1};
  const errors=[];let poll;
  const cx={document:doc,window:win,URLSearchParams,Intl,Date,console,setInterval:fn=>{poll=fn;return 0;},parseFloat,getComputedStyle:()=>({columnGap:'12px'}),MobileUI:{isPhone:()=>false},bindTap:(el,fn)=>el.onclick=fn};
- vm.createContext(cx);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js','drill-journal.js','team-metrics.js','team-hub.js','stats.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
+ cx.setTimeout=()=>0;cx.clearTimeout=()=>{};vm.createContext(cx);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js','drill-journal.js','team-metrics.js','team-hub.js','team-messages.js','stats.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
  cx.stats.init({api:async()=>clone(state),toast:e=>errors.push(e),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:fn=>fn?.(),getDrills:()=>[]});
  await new Promise(setImmediate);
  assert.equal(doc.querySelector('#stats-meta').textContent.includes('测试'),false);
@@ -133,7 +133,7 @@ function verifyUnread(){
  const dom=parseHTML('<html><body><button role="tab">训练讨论</button></body></html>'),doc=dom.document,tab=doc.querySelector('button');
  const saved=new Map();let reader={id:1},storageBlocked=false;
  const cx={document:doc,localStorage:{getItem(key){if(storageBlocked)throw Error('blocked');return saved.get(key)||null;},setItem(key,value){if(storageBlocked)throw Error('blocked');saved.set(key,value);}}};
- vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/discussion-text.js','utf8')+'\n'+fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',cx);
+ cx.setTimeout=()=>0;cx.clearTimeout=()=>{};vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/discussion-text.js','utf8')+'\n'+fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',cx);
  const make=()=>cx.discussion.init({getMe:()=>reader}),has=()=>tab.classList.contains('has-unread');let ui=make();
  const entry={id:'read-training',comments:[{id:100,player:1,deleted:false}]};
  ui.syncUnread(tab,'trainings',entry,false);assert(!has(),'own messages do not trigger a dot');
@@ -177,3 +177,19 @@ async function verifyMultipleVideos(){
  console.log('PASS: multiple scrimmage videos, selected source and part submission, timestamp-driven source switching, playback offset, smooth scroll/highlight and polling persistence.');
 }
 verifyMultipleVideos().catch(error=>{console.error(error);process.exitCode=1;});
+
+async function verifyMentionsAndMobileVideo(){
+ const context={document,URLSearchParams,Intl,Date,console,setTimeout:()=>0,clearTimeout:()=>{}};vm.createContext(context);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js'].map(f=>fs.readFileSync('dist/'+f,'utf8')).join('\n')+'\nglobalThis.discussion=TeamDiscussion;',context);
+ const iso=document.createElement('div');iso.id='mention-demo';document.body.append(iso);const entry={id:'mention-training',games:[video],comments:[]};let sent;
+ context.window={matchMedia:()=>({matches:true})};
+ const ui=context.discussion.init({getMe:()=>({id:1}),getPlayers:()=>[{id:1,name:'我',number:1},{id:2,name:'队友',number:2}],toast(){},login(){},api:async(path,options)=>{sent=JSON.parse(options.body);entry.comments=[{...sent,id:11,parentId:null,player:1,name:'我',number:1,created:stamp,at:stamp,mentions:sent.mentions.map(m=>({...m,name:'队友'})),videoRefs:sent.videoRefs.map(r=>({...r,available:true}))}];return{comments:entry.comments};},refresh:async()=>ui.render(iso,'trainings',entry,true)});
+ const q=s=>iso.querySelector(s);ui.render(iso,'trainings',entry,true);
+ assert.equal(q('iframe'),null,'mobile does not connect to Bili until user chooses to watch');q('.discussion-video-start').onclick();assert(q('iframe'));assert.equal(new URL(q('iframe').src).searchParams.get('autoplay'),'0');const frame=q('iframe');ui.render(iso,'trainings',entry,true);assert.equal(q('iframe'),frame,'polling does not reload video');q('.discussion-video-controls button').onclick();assert.notEqual(q('iframe'),frame,'retry creates a fresh player');
+ const input=q('[data-d="text"]');input.setSelectionRange=(a,b)=>{input.selectionStart=a;input.selectionEnd=b;};input.value='🥏请 @队';input.selectionStart=input.selectionEnd=input.value.length;input.oninput();assert(!q('[data-d="mention-picker"]').hidden);q('[data-d="mention-options"]').onclick({target:q('[data-mention-person="2"]')});assert(input.value.includes('@队友'));
+ q('[data-d="attach"]').onclick();q('[data-d="time"]').value='00:15';q('[data-d="insert-time"]').onclick();await q('[data-d="form"]').onsubmit({preventDefault(){}});
+ assert.equal(sent.mentions.length,1);assert.equal(sent.mentions[0].player,2);assert.equal(Array.from(sent.text).slice(sent.mentions[0].start,sent.mentions[0].end).join(''),'@队友');assert.equal(sent.videoRefs.length,1);assert.equal(q('.discussion-mention').textContent,'@队友');assert(q('[data-message="11"] .discussion-timestamp'));
+ await iso.onclick({target:q('[data-action="edit"]')});assert(input.value.includes('@队友'));input.value='前缀'+input.value;input.oninput();await q('[data-d="form"]').onsubmit({preventDefault(){}});assert.equal(Array.from(sent.text).slice(sent.mentions[0].start,sent.mentions[0].end).join(''),'@队友');
+ ui.stop(iso);assert.equal(q('iframe'),null,'leaving discussion releases the player');delete context.window;
+ console.log('PASS: typed teammate mentions, selection and Unicode anchors coexist with inline video nodes; mobile deliberate loading, retry and polling preservation.');
+}
+verifyMentionsAndMobileVideo().catch(e=>{console.error(e);process.exitCode=1;});
