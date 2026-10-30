@@ -11,10 +11,12 @@ const $=s=>doc.querySelector(s),clone=x=>JSON.parse(JSON.stringify(x)),tick=()=>
 const players=Array.from({length:16},(_,i)=>({id:i+1,name:'队员'+(i+1),number:i+1,gender:'male',avatar:'',loginReady:true}));
 const game={id:'practice',trainingId:'training',name:'队内对抗',opponent:'旧版的外部队伍',status:'live',heldOn:'2026-10-29',created:now,events:[],comments:[],video:''};
 const training={id:'training',name:'训练',heldOn:'2026-10-29',status:'completed',attendees:players.map(p=>p.id),drills:[],warmup:'',games:[game],comments:[]};
+const catalog=[{id:'simple',name:'二人钟摆',summary:''},{id:'long',name:'三人四角 Drill 基础版：Handler 接应与竖排排头补位及后续交叉跑动',summary:'观察持盘人，轮流回切。'.repeat(20)}];
 const state={players,games:[],trainings:[training],me:null,revision:1};let seq=0;
 const calls=[],toasts=[];
 async function api(path,options){if(!options)return clone(state);const body=JSON.parse(options.body||'{}');calls.push({path,...options,body});
  if(path.endsWith('/events')){let event;if(options.method==='DELETE')return{removed:game.events.pop(),revision:++state.revision};if(body.kind==='point')event={seq:++seq,at:now,kind:'point',line:body.sides?[...body.sides.a,...body.sides.b]:body.line,start:body.sides?(body.sides.offense==='a'?'offense':'defense'):body.start,...(body.sides?{sides:body.sides}:{})};else{const point=game.events.filter(e=>e.kind==='point').at(-1);event={seq:++seq,at:now,kind:body.kind,from:body.from,to:body.to??null,side:point.sides.a.includes(body.from)?'a':'b'};}game.events.push(clone(event));return{event,revision:++state.revision};}
+ if(options.method==='PUT'&&path.startsWith('stats/trainings/')){training.drills=body.drills.map(id=>catalog.find(d=>d.id===id));return{training:clone(training),revision:++state.revision};}
  if(options.method==='PUT'){Object.assign(game,body);return{game:clone(game),revision:++state.revision};}
  return clone(state);
 }
@@ -22,8 +24,13 @@ const cx={document:doc,window:win,Intl,Date,URLSearchParams,console,parseFloat,s
 vm.createContext(cx);vm.runInContext(['bili-video.js','discussion.js','team-metrics.js','team-hub.js','stats.js'].map(f=>fs.readFileSync('dist/'+f,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
 const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disabled '+s);el.click();};
 (async()=>{
- cx.stats.init({api,toast:t=>toasts.push(t),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:f=>f?.(),getDrills:()=>[]});await tick();
- click('[data-training-card]');click('#training-tab-games');click('#training-games [data-stats-game]');
+ cx.stats.init({api,toast:t=>toasts.push(t),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:f=>f?.(),getDrills:()=>catalog});await tick();
+ click('[data-training-card]');click('#training-drill-add');
+ assert($('#drill-picker-dialog').open);assert.equal($('#drill-picker-dialog .stats-players-content'),null,'picker does not inherit roster modal widths');
+ const longRow=$('[data-drill-pick="long"]').closest('.drill-picker-item');assert.equal(longRow.querySelector('.drill-picker-copy strong').textContent,catalog[1].name);assert(longRow.querySelector('button'),'add stays in its own grid column');
+ click('[data-drill-pick="long"]');await tick();assert(!$('#drill-picker-dialog').open);assert($('#training-drills').textContent.includes(catalog[1].name));
+ click('#training-drill-add');assert.equal($('[data-drill-pick="long"]'),null,'already added Drills are filtered out');click('#drill-picker-close');
+ click('#training-tab-games');click('#training-games [data-stats-game]');
  assert(!$('#stats-game-sub').textContent.includes('外部'));assert(!$('#stats-score-b-box').hidden);assert.equal($('#stats-score-label').textContent,'A 队');assert($('#rec-pass').disabled);
  click('#stats-game-date-edit');assert($('#stats-opponent-field').hidden);assert($('#stats-game-opponent').disabled);$('#stats-new-game-dialog').close();
  click('#rec-point');assert($('#stats-recorder').classList.contains('scrimmage-setting'));assert($('#point-confirm').disabled);
@@ -44,5 +51,5 @@ const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disab
  click('#stats-new-game');assert(!$('#stats-opponent-field').hidden,'formal matches retain the opponent input');assert(!$('#stats-game-opponent').disabled);$('#stats-new-game-dialog').close();
  $('#stats-game-dialog').close();click('#training-game-add');assert($('#stats-opponent-field').hidden,'new scrimmages have no opponent field');
  assert.equal($('#stats-game-date').value,'2026-10-29');
- console.log('PASS: mobile A/B setup, transfer and seven-player cap, per-point offense, score and undo, lineup reuse, same-team recording, two-side logs and formal-match isolation.');
+ console.log('PASS: long-name Drill selection and adding, mobile A/B setup, transfer and seven-player cap, per-point offense, score and undo, lineup reuse, same-team recording, two-side logs and formal-match isolation.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

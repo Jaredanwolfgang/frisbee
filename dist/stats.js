@@ -282,8 +282,8 @@ const StatsUI=(()=>{
   const t=currentTraining();
   if(!t)return;
   const have=new Set(t.drills.map(d=>d.id)),drills=(deps.getDrills?.()||[]).filter(d=>!have.has(d.id));
-  $('#drill-picker-list').innerHTML=drills.length?drills.map(d=>'<div class="stats-drill-row"><span class="stats-drill-icon" aria-hidden="true">▶</span><strong>'+esc(d.name)+'</strong>'+(d.summary?'<small>'+esc(d.summary)+'</small>':'')+'<button type="button" class="quiet-btn" data-drill-pick="'+esc(d.id)+'">添加</button></div>').join(''):'<p class="stats-empty">训练库里还没有可添加的 Drill，或都已添加。先在战术库新建 Drill。</p>';
-  $('#drill-picker-dialog').showModal();
+  $('#drill-picker-list').innerHTML=drills.length?drills.map(d=>'<div class="drill-picker-item"><span class="stats-drill-icon" aria-hidden="true">▶</span><div class="drill-picker-copy"><strong>'+esc(d.name)+'</strong>'+(d.summary?'<small>'+esc(d.summary)+'</small>':'')+'</div><button type="button" class="quiet-btn" data-drill-pick="'+esc(d.id)+'">添加</button></div>').join(''):'<p class="stats-empty">训练库里还没有可添加的 Drill，或都已添加。先在战术库新建 Drill。</p>';
+  $('#drill-picker-dialog').showModal();$('#drill-picker-title').focus({preventScroll:true});
  }
 
  function render(){

@@ -25,7 +25,7 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
 (async()=>{
  ui.render(host,'trainings',data,true);
  assert.equal($('iframe').src.includes('player.bilibili.com'),true);assert.equal($('.discussion-heading'),null);assert.equal($('.discussion-hint'),null);
- const children=[...host.children];assert(children.indexOf($('[data-d="list"]'))<children.indexOf($('[data-d="form"]')),'composer belongs after the comments');
+ const children=[...host.children];assert(children.indexOf($('[data-d="feed"]'))<children.indexOf($('[data-d="form"]')),'composer stays outside and after the scrolling feed');assert.equal($('[data-d="list"]').parentElement,$('[data-d="feed"]'));assert.equal($('[data-d="text"]').closest('.discussion-compose-row'),$('[data-d="submit"]').closest('.discussion-compose-row'));assert.equal($('[data-d="attach"]').closest('.discussion-compose-row'),$('[data-d="submit"]').closest('.discussion-compose-row'));
  const text=$('[data-d="text"]');assert.equal(text.getAttribute('rows'),'1');
  Object.defineProperty(text,'scrollHeight',{configurable:true,get:()=>20+24*Math.max(1,text.value.split('\n').length)});
  text.value='一行';text.oninput();assert.equal(text.style.height,'46px');
@@ -38,8 +38,8 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
  assert.equal($('[data-message="1"] .discussion-avatar img').getAttribute('src'),data.comments[0].avatar);
  assert.equal($('[data-message="1"] .discussion-message-main p').textContent,data.comments[0].text);
  assert.equal($('[data-message="1"] .discussion-message-main p img'),null,'comment HTML must remain text');
- const frame=$('iframe');$('[data-d="text"]').value='尚未发出的观察';ui.render(host,'trainings',clone(data),true);
- assert.equal($('iframe'),frame,'polling must not reset the player');assert.equal($('[data-d="text"]').value,'尚未发出的观察');
+ $('[data-d="feed"]').scrollTop=123;const frame=$('iframe');$('[data-d="text"]').value='尚未发出的观察';ui.render(host,'trainings',clone(data),true);
+ assert.equal($('iframe'),frame,'polling must not reset the player');assert.equal($('[data-d="feed"]').scrollTop,123,'polling preserves the scrolling feed');assert.equal($('[data-d="text"]').value,'尚未发出的观察');
  await host.onclick({target:$('[data-action="reply"][data-comment="1"]')});
  assert.equal($('[data-d="reply-note"]').textContent,'回复 另一名队员 的评论');
  $('[data-d="text"]').value='补充：接盘前先观察。';$('[data-d="attach"]').onclick();
@@ -57,7 +57,7 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
  me=null;ui.render(host,'trainings',data,true);assert($('[data-d="form"]').hidden);assert(!$('[data-action="login"]').hidden);
  await host.onclick({target:$('[data-action="reply"][data-comment="1"]')});assert.equal(loginCount,1);
  me={id:1};ui.render(host,'trainings',{id:'other-training',games:[],comments:[]},true);assert($('[data-d="attach"]').hidden,'no video means no timestamp button');assert($('.discussion-media').hidden,'no video leaves no empty media explanation');$('[data-d="text"]').value='新训练的评论';const before=calls.length;await $('[data-d="form"]').onsubmit({preventDefault(){}});assert.equal(calls.length,before+1,'changing context must replace old event handlers');
- console.log('PASS: bottom composer, one-to-four-line sizing, icon controls, discussion DOM, XSS-safe text, avatars, reply/timestamp publish, editing, delete/restore, player persistence, repeated seeking, guest login and context isolation.');
+ console.log('PASS: bottom composer outside the feed, same-row icon controls, one-to-four-line sizing, icon controls, discussion DOM, XSS-safe text, avatars, reply/timestamp publish, editing, delete/restore, player persistence, repeated seeking, guest login and context isolation.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
 
 // Load the actual team modules against index.html to catch removed-ID/startup regressions.
