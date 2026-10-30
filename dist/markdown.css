@@ -56,11 +56,25 @@
  .md-format-actions button{min-height:40px}
  .drill-history-observations .light-markdown{line-height:1.8}
 }
-html.keyboard-open .discussion-view.has-format-panel>.discussion-feed{padding-top:0;padding-bottom:0}
-html.keyboard-open .discussion-composer.is-formatting textarea{max-height:70px;overflow-y:auto!important}
-html.keyboard-open .discussion-composer.is-formatting .discussion-context:not([hidden])~.discussion-compose-row textarea{max-height:46px}
+/* Keep the writing row the same size whether Aa is open or closed. Only the
+   feed/tool area above it changes; viewport changes must not anchor-scroll it. */
+.discussion-view,.discussion-composer{overflow-anchor:none;scroll-behavior:auto}
+html.keyboard-open .discussion-view>.discussion-feed{padding-top:0;padding-bottom:0}
+html.keyboard-open .discussion-composer{flex-shrink:1;max-height:100%}
+html.keyboard-open .discussion-composer textarea{max-height:70px;overflow-y:auto!important}
+html.keyboard-open .discussion-composer .discussion-context:not([hidden])~.discussion-compose-row textarea{max-height:46px}
+@media(max-width:850px),(pointer:coarse){
+ .discussion-composer :is(textarea,input,select){font-size:16px!important}
+ html.keyboard-open dialog#training-dialog[open],html.keyboard-open dialog#stats-game-dialog[open]{position:fixed;inset:auto 0 auto 0;top:var(--mobile-visual-top,0px);width:100%;max-width:100%;height:var(--mobile-visual-height,100dvh);max-height:var(--mobile-visual-height,100dvh);margin:0;transform:none;overflow:hidden;transition:none;overflow-anchor:none}
+ html.keyboard-open :is(#training-dialog,#stats-game-dialog) .stats-game-shell{height:100%;max-height:none;min-height:0}
+ html.keyboard-open :is(#training-dialog,#stats-game-dialog) .stats-game-body{padding-bottom:6px}
+ /* Very short landscape keyboards leave room for writing by temporarily
+    tucking away navigation, independently of the format panel's open state. */
+ html.keyboard-compact :is(#training-dialog,#stats-game-dialog):has(.stats-game-body[data-pane=comments],#training-body[data-training-view=comments]) :is(.stats-game-head,.stats-game-tabs){display:none}
+}
 @media(max-height:500px){
- .discussion-view.has-format-panel>.discussion-feed{padding-top:0;padding-bottom:0}
- .discussion-composer.is-formatting textarea{max-height:70px;overflow-y:auto!important}
- .discussion-composer.is-formatting .discussion-context:not([hidden])~.discussion-compose-row textarea{max-height:46px}
+ .discussion-view>.discussion-feed{padding-top:0;padding-bottom:0}
+ .discussion-composer{flex-shrink:1;max-height:100%}
+ .discussion-composer textarea{max-height:70px;overflow-y:auto!important}
+ .discussion-composer .discussion-context:not([hidden])~.discussion-compose-row textarea{max-height:46px}
 }

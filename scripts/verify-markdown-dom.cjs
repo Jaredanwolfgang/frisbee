@@ -1,7 +1,7 @@
 // NODE_PATH=/tmp/frisbee-discussion-dom/node_modules node scripts/verify-markdown-dom.cjs
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{parseHTML}=require('linkedom');
 const {document,window}=parseHTML('<html><body><div id="discussion"></div><div id="drills"></div><div id="history"></div></body></html>');
-window.HTMLElement.prototype.focus=function(){};window.HTMLElement.prototype.scrollIntoView=function(){};window.HTMLElement.prototype.getBoundingClientRect=()=>({top:0,bottom:100,left:0,right:320,width:320,height:100});
+let focused=null;Object.defineProperty(document,'activeElement',{get:()=>focused});window.HTMLElement.prototype.focus=function(options){focused=this;assert.equal(options?.preventScroll,true,'programmatic editor focus must not scroll the page');};window.HTMLElement.prototype.scrollIntoView=function(){};window.HTMLElement.prototype.getBoundingClientRect=()=>({top:0,bottom:100,left:0,right:320,width:320,height:100});
 Object.defineProperty(window.HTMLSelectElement.prototype,'value',{get(){return this.querySelector('option')?.value||'';},set(value){}});
 const cx={document,window,URL,URLSearchParams,Intl,Date,setTimeout:()=>0,clearTimeout(){}};vm.createContext(cx);
 vm.runInContext(['lite-markdown.js','markdown-editor.js','discussion-text.js','bili-video.js','discussion.js','drill-journal.js'].map(f=>fs.readFileSync('dist/'+f,'utf8')).join('\n')+'\nglobalThis.modules={TeamDiscussion,DrillJournal};',cx);
@@ -26,6 +26,14 @@ discussion=cx.modules.TeamDiscussion.init({getMe:()=>({id:1}),getPlayers:()=>[{i
  input.setSelectionRange(0,input.value.length);q('.md-format-toggle').onclick();q('.md-format-panel').onclick({target:q('[data-md="link"]')});assert(q('.md-editor-status').textContent.includes('@ 队友和视频节点'),'link tool cannot swallow an interactive anchor');
  q('.md-format-toggle').onclick();input.setSelectionRange(input.value.length,input.value.length);q('.md-format-toggle').onclick();q('.md-format-panel').onclick({target:q('[data-md="link"]')});q('[data-md-label]').value='训练说明';q('[data-md-url]').value='javascript:alert(1)';q('[data-md-insert]').onclick();assert(q('.md-editor-status').textContent.includes('有效'));
  q('[data-md-url]').value='https://example.com/training';q('[data-md-insert]').onclick();await q('[data-d="form"]').onsubmit({preventDefault(){}});assert(q('.discussion-copy a[href="https://example.com/training"]'));assert.equal(sent.mentions.length,1);assert.equal(sent.videoRefs.length,1);
+
+ // Closing Aa while its URL field owns focus must return to the draft, not
+ // leave focus in hidden content (which dismisses iOS's keyboard).
+ q('.md-format-toggle').onclick();q('.md-format-panel').onclick({target:q('[data-md="link"]')});
+ assert.equal(focused,q('[data-md-url]'));q('.md-format-toggle').onclick();assert.equal(focused,input);
+ q('[data-d="attach"]').onclick();assert.equal(focused,q('[data-d="time"]'));
+ q('.md-format-toggle').onclick();assert.equal(focused,input,'switching from time fields to Aa retains keyboard focus');
+ const press=new window.Event('pointerdown',{bubbles:true,cancelable:true});q('[data-d="submit"]').dispatchEvent(press);assert(press.defaultPrevented,'send must not blur the draft before click');
  assert(!q('input[type="file"]'),'formatting adds no upload field');discussion.stop(host);
  const drillHost=document.querySelector('#drills'),history=document.querySelector('#history'),d=s=>drillHost.querySelector(s);let notes=[],journal;
  const training={id:'t',drills:[{id:'drill',name:'Drill',noteCount:0,noteVersion:0}]};

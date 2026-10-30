@@ -280,3 +280,7 @@ Drill 添加选择器使用独立的有界容器与单列列表，长名称在�
 本功能不提供文件上传、图片插入或视频嵌入。网页链接只允许 HTTP/HTTPS；HTML 与其他未支持语法按普通文字显示，不加载外部媒体。Markdown 内容由 `dist/lite-markdown.js` 的小型渲染器转换，格式操作由 `dist/markdown-editor.js` 提供，不增加第三方运行依赖。
 
 验证：`node scripts/verify-markdown.cjs` 覆盖语法、安全链接、HTML/媒体排除、Unicode/CRLF 节点和格式操作；`NODE_PATH=/tmp/frisbee-discussion-dom/node_modules node scripts/verify-markdown-dom.cjs` 覆盖真实组件的格式按钮、@/视频节点发布编辑、链接校验、Drill 保存及历史回看。
+
+手机键盘适配：讨论页按 `visualViewport.height/offsetTop` 限制可见区域；键盘状态保持到可见高度恢复，不因格式、@、发送按钮短暂失焦而提前退出。格式面板开关不改变输入行高度，链接/时间输入返回正文时使用 `preventScroll`，回复不再滚动整个对话页。横屏输入同样使用 16px 字号；键盘剩余高度低于 340px 时，讨论页暂时收起导航，把空间留给输入和发送，键盘收起后恢复。保留手动双指缩放。
+
+`node scripts/verify-keyboard-viewport.cjs` 模拟键盘弹出/收起、焦点转移、视口偏移、候选词栏、旋转及双指缩放；Markdown DOM 测试同时检查格式/时间字段焦点恢复和发送按钮不抢焦点。窄屏布局验证覆盖训练讨论、训练赛赛后讨论、正式比赛赛后讨论；模拟视口不能替代真实 iPhone Chrome 的系统键盘验证。
