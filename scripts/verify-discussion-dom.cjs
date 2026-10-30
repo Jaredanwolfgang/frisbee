@@ -72,7 +72,7 @@ async function verifyStartup(){
  const state={players:[{id:1,number:1,name:'测试队员',gender:'male',avatar:'',loginReady:true}],games:[],trainings:[t],me:{id:1,name:'测试队员',number:1},revision:1};
  const errors=[];
  const cx={document:doc,window:win,URLSearchParams,Intl,Date,console,setInterval:()=>0,parseFloat,getComputedStyle:()=>({columnGap:'12px'}),MobileUI:{isPhone:()=>false},bindTap:(el,fn)=>el.onclick=fn};
- vm.createContext(cx);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js','team-metrics.js','team-hub.js','stats.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
+ vm.createContext(cx);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js','drill-journal.js','team-metrics.js','team-hub.js','stats.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
  cx.stats.init({api:async()=>clone(state),toast:e=>errors.push(e),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:fn=>fn?.(),getDrills:()=>[]});
  await new Promise(setImmediate);
  assert.equal(doc.querySelector('#stats-meta').textContent.includes('测试'),false);

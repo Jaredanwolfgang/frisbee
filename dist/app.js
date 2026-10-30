@@ -54,7 +54,7 @@ function syncSelectionToolbar(){
  $('#roster-slot').classList.toggle('has-selection',active);$('#roster-controls').inert=active;$('#roster-controls').setAttribute('aria-hidden',String(active));
 }
 function permissions(){
- $$('#discard-dialog button').forEach(b=>b.disabled=saving);const modify=canModifyDraft();$('#editor').classList.toggle('phone-viewing',MobileUI.isPhone()&&!mobileEdit);$('#mobile-edit-btn').disabled=saving||cacheShown&&!connected;$('#mobile-edit-btn').hidden=!MobileUI.isPhone()||mobileEdit;$('#close-editor').setAttribute('aria-label',MobileUI.isPhone()&&mobileEdit?'返回查看':'返回战术库');
+ $$('#discard-dialog button').forEach(b=>b.disabled=saving);const modify=canModifyDraft();$('#editor').classList.toggle('phone-viewing',MobileUI.isPhone()&&!mobileEdit);$('#mobile-edit-btn').disabled=saving||cacheShown&&!connected;$('#mobile-edit-btn').hidden=!MobileUI.isPhone()||mobileEdit;$('#close-editor').setAttribute('aria-label',MobileUI.isPhone()&&mobileEdit?'返回查看':$('#training-dialog').open?'返回训练':'返回战术库');
  document.body.classList.toggle('read-only',!canEdit);StatsUI.syncHeader();$('#access-btn').textContent=canEdit?'关闭编辑':'开启编辑';
  $('#editor-unlock-btn').hidden=canEdit;$('#save-btn').hidden=!modify;$('#save-btn').disabled=saving;$('#save-btn').textContent=saving?'保存中…':'保存';
  $('#delete-tactic').hidden=!modify||!draft||!state.tactics.some(t=>t.id===draft.id);
@@ -170,12 +170,12 @@ $$('[data-count-team]').forEach(b=>b.onclick=()=>{const off=current().players.fi
 $('#remove-player').onclick=()=>{if(!canModifyDraft()||saving||!selectedPlayer)return;try{const next=Roster.remove(draft,selectedPlayer);checkpoint();draft=next;selectedPlayer=null;renderBoard();}catch(error){toast(error.message);}};
 $('#give-disc').onclick=()=>{if(!canModifyDraft()||saving)return;const p=current().players.find(p=>p.id===selectedPlayer);if(!p)return;checkpoint();current().disc={x:Math.min(975,p.x+22),y:p.y};renderBoard();};
 $('#deselect-player').onclick=()=>{selectedPlayer=null;renderBoard();};
-function openTactic(id){const found=state.tactics.find(t=>t.id===id);if(!found){toast('这套战术已不存在，请刷新团队库。');return;}draft=clone(found);openDraft({editing:false});window.history.replaceState(window.history.state,'','#tactic='+encodeURIComponent(id));}
+function openTactic(id){const found=state.tactics.find(t=>t.id===id);if(!found){toast('这套战术已不存在，请刷新团队库。');return;}draft=clone(found);openDraft({editing:false});if(!$('#training-dialog').open)window.history.replaceState(window.history.state,'','#tactic='+encodeURIComponent(id));}
 function openDraft({editing=true}={}){mobileEdit=editing;$('#fullscreen-host').inert=false;$('.editor-shell').classList.remove('inspector-open');$('#inspector-toggle').setAttribute('aria-expanded','false');stop();playbackLoop=Roster.kind(draft)==='drill'&&draft.loop===true;playbackRound=0;frameIndex=0;tool='move';history=[];dirty=false;selectedPlayer=null;selectedMarker=null;selectedRoute=null;$('#edit-name').value=draft.name;$('#edit-category').value=draft.category;$('#edit-kind').value=Roster.kind(draft);$('#edit-level').value=draft.level;$('#edit-summary').value=draft.summary;$('#edit-tags').value=draft.tags.join(', ');$('#editor-title').textContent=draft.name||'新建战术';$('#edit-status').textContent=canEdit?'修改后保存到服务器':'服务器战术 · 只读查看';$('#delete-tactic').hidden=!state.tactics.some(t=>t.id===draft.id);setTool('move');renderBoard();if(!$('#editor').open)$('#editor').showModal();}
 function setTool(t){stop();selectedRoute=null;tool=t;if(t==='marker')selectedPlayer=null;if(t==='run'||t==='pass')selectedMarker=null;$$('[data-tool]').forEach(b=>b.classList.toggle('selected',b.dataset.tool===t));$('#tool-hint').textContent=t==='move'?'拖动队员调整站位 · 选中队员后可用方向键微调':t==='run'?'从队员身上拖向跑动终点 · 每名队员每步可绘制一条跑线':'从队员身上拖向接盘位置 · 每步一条传盘路线';}
 function renderBoard(){
  routeHold.cancel();drag=null;
- const isDrill=Roster.kind(draft)==='drill';if(!isDrill)playbackLoop=false;$('#loop-play').hidden=!isDrill;$('#loop-play').setAttribute('aria-pressed',String(playbackLoop));$('#loop-play').title=playbackLoop?(Playback.continuous(draft)?'循环开启 · 首尾衔接':'循环开启 · 每轮回到首步站位'):'循环关闭 · 只播放一次';
+ const isDrill=Roster.kind(draft)==='drill';$('#drill-history-btn').hidden=!isDrill||!state.tactics.some(t=>t.id===draft.id);StatsUI.renderDrillHistory($('#drill-history'),isDrill&&state.tactics.some(t=>t.id===draft.id)?draft.id:null);if(!isDrill)playbackLoop=false;$('#loop-play').hidden=!isDrill;$('#loop-play').setAttribute('aria-pressed',String(playbackLoop));$('#loop-play').title=playbackLoop?(Playback.continuous(draft)?'循环开启 · 首尾衔接':'循环开启 · 每轮回到首步站位'):'循环关闭 · 只播放一次';
  const selectedPass=current().routes.find(r=>r.id===selectedRoute&&r.kind==='pass');if(!selectedPass)selectedRoute=null;$('#route-controls').hidden=!selectedPass||!canEdit||playing;$('#straighten-route').disabled=!selectedPass?.bend&&!selectedPass?.points.length;
  const marker=(draft.markers||[]).find(m=>m.id===selectedMarker);if(!marker)selectedMarker=null;$('#marker-controls').hidden=!marker||!canModifyDraft();if(marker)$('#marker-label').value=marker.label;
  $('#edit-category').closest('label').hidden=Roster.kind(draft)==='drill';
@@ -243,7 +243,7 @@ async function saveDraft(){
  finally{saving=false;permissions();syncStatus();}
 }
 $('#save-btn').onclick=saveDraft;
-function closeEditor({discard=false}={}){if(saving)return false;if(boardFull){exitBoardFullscreen();return;}if(dirty&&!discard){if(!$('#discard-dialog').open)$('#discard-dialog').showModal();return false;}stop();$('#editor').close();draft=null;window.history.replaceState(window.history.state,'',location.pathname+location.search);}
+function closeEditor({discard=false}={}){if(saving)return false;if(boardFull){exitBoardFullscreen();return;}if(dirty&&!discard){if(!$('#discard-dialog').open)$('#discard-dialog').showModal();return false;}stop();$('#editor').close();StatsUI.renderDrillHistory($('#drill-history'),null);draft=null;window.history.replaceState(window.history.state,'',location.pathname+location.search+($('#training-dialog').open?'#team/trainings':''));}
 function clearFullscreenStyle(){
  boardFull=false;nativeFullscreen=false;$('#editor .editor-head').inert=false;$('.inspector').inert=false;
  $('.board-column').classList.remove('board-fullscreen');document.body.classList.remove('board-is-fullscreen');
@@ -265,6 +265,7 @@ document.addEventListener('fullscreenchange',()=>{if(boardFull&&nativeFullscreen
 function endMobileEdit(){stop();mobileEdit=false;selectedPlayer=null;selectedMarker=null;selectedRoute=null;closeInspector();renderBoard();}
 function editorBack(){if(saving)return;if(boardFull){exitBoardFullscreen();return;}if(MobileUI.isPhone()&&$('.editor-shell').classList.contains('inspector-open')){closeInspector();return;}if(MobileUI.isPhone()&&mobileEdit){endMobileEdit();return;}closeEditor();}
 $('#mobile-edit-btn').onclick=()=>requestEdit(()=>{mobileEdit=true;renderBoard();});
+$('#drill-history-btn').onclick=()=>{if(!draft||Roster.kind(draft)!=='drill')return;if(!$('.editor-shell').classList.contains('inspector-open'))$('#inspector-toggle').click();const details=$('#drill-history details');if(details){details.open=true;details.scrollIntoView({block:'start',behavior:'smooth'});}};
 $('#close-editor').onclick=editorBack;$('#editor').addEventListener('cancel',e=>{e.preventDefault();editorBack();});
 $('#discard-cancel').onclick=()=>{$('#discard-dialog').close();if(MobileUI.isPhone()){mobileEdit=true;renderBoard();}};
 $('#discard-confirm').onclick=()=>{dirty=false;$('#discard-dialog').close();closeEditor({discard:true});};

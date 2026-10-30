@@ -14,14 +14,14 @@ const training={id:'training',name:'训练',heldOn:'2026-10-29',status:'complete
 const catalog=[{id:'simple',name:'二人钟摆',summary:''},{id:'long',name:'三人四角 Drill 基础版：Handler 接应与竖排排头补位及后续交叉跑动',summary:'观察持盘人，轮流回切。'.repeat(20)}];
 const state={players,games:[],trainings:[training],me:null,revision:1};let seq=0;
 const calls=[],toasts=[];
-async function api(path,options){if(!options)return clone(state);const body=JSON.parse(options.body||'{}');calls.push({path,...options,body});
+async function api(path,options){if(!options&&path.includes('/notes'))return{notes:[],total:0,trainingCount:0,nextOffset:null};if(!options)return clone(state);const body=JSON.parse(options.body||'{}');calls.push({path,...options,body});
  if(path.endsWith('/events')){let event;if(options.method==='DELETE')return{removed:game.events.pop(),revision:++state.revision};if(body.kind==='point')event={seq:++seq,at:now,kind:'point',line:body.sides?[...body.sides.a,...body.sides.b]:body.line,start:body.sides?(body.sides.offense==='a'?'offense':'defense'):body.start,...(body.sides?{sides:body.sides}:{})};else{const point=game.events.filter(e=>e.kind==='point').at(-1);event={seq:++seq,at:now,kind:body.kind,from:body.from,to:body.to??null,side:point.sides.a.includes(body.from)?'a':'b'};}game.events.push(clone(event));return{event,revision:++state.revision};}
  if(options.method==='PUT'&&path.startsWith('stats/trainings/')){training.drills=body.drills.map(id=>catalog.find(d=>d.id===id));return{training:clone(training),revision:++state.revision};}
  if(options.method==='PUT'){Object.assign(game,body);return{game:clone(game),revision:++state.revision};}
  return clone(state);
 }
 const cx={document:doc,window:win,Intl,Date,URLSearchParams,console,parseFloat,setInterval:()=>0,getComputedStyle:()=>({columnGap:'12px'}),MobileUI:{isPhone:()=>true},bindTap:(el,fn)=>el.onclick=fn};
-vm.createContext(cx);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js','team-metrics.js','team-hub.js','stats.js'].map(f=>fs.readFileSync('dist/'+f,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
+vm.createContext(cx);vm.runInContext(['bili-video.js','discussion-text.js','discussion.js','drill-journal.js','team-metrics.js','team-hub.js','stats.js'].map(f=>fs.readFileSync('dist/'+f,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
 const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disabled '+s);el.click();};
 (async()=>{
  cx.stats.init({api,toast:t=>toasts.push(t),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:f=>f?.(),getDrills:()=>catalog});await tick();
@@ -29,6 +29,7 @@ const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disab
  assert($('#drill-picker-dialog').open);assert.equal($('#drill-picker-dialog .stats-players-content'),null,'picker does not inherit roster modal widths');
  const longRow=$('[data-drill-pick="long"]').closest('.drill-picker-item');assert.equal(longRow.querySelector('.drill-picker-copy strong').textContent,catalog[1].name);assert(longRow.querySelector('button'),'add stays in its own grid column');
  click('[data-drill-pick="long"]');await tick();assert(!$('#drill-picker-dialog').open);assert($('#training-drills').textContent.includes(catalog[1].name));
+ click('#training-drills [data-team-drill]');assert($('#training-dialog').open,'opening a Drill preserves the parent training for phone Back');
  click('#training-drill-add');assert.equal($('[data-drill-pick="long"]'),null,'already added Drills are filtered out');click('#drill-picker-close');
  click('#training-tab-games');click('#training-games [data-stats-game]');
  assert(!$('#stats-game-sub').textContent.includes('外部'));assert(!$('#stats-score-b-box').hidden);assert.equal($('#stats-score-label').textContent,'A 队');assert($('#rec-pass').disabled);

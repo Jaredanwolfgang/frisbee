@@ -10,7 +10,7 @@ const StatsUI=(()=>{
  let openGameId=null,sel={thrower:null,receiver:null},sort={key:'goals',dir:1},editingId=null,formGender='male';
  let pointMode=false,pointSel=new Set(),pointStart='offense',pointSide='a',pointSides={a:new Set(),b:new Set()},editingGameId=null;
  let openTrainingId=null,attendSel=new Set(),attendDirty=false,scrimmageTrainingId=null;
- let trainingPane='plan',gamePane='record',chipQuery='',showAllPlayers=false,teamHub=null,discussionUI=null;
+ let trainingPane='plan',gamePane='record',chipQuery='',showAllPlayers=false,teamHub=null,discussionUI=null,drillJournal=null;
 
  const metricGroups={attack:['goals','assists','passes'],defense:['turnovers','steals'],line:['points','oPoints','dPoints'],all:STATS.map(([k])=>k)};
  const clearChipSearch=()=>{chipQuery='';$('#stats-chip-search').value='';};
@@ -252,7 +252,7 @@ const StatsUI=(()=>{
   $('#training-warmup-save').textContent=dirty?'保存热身 ·':'保存热身';
  }
  function renderDrills(t){
-  $('#training-drills').innerHTML=t.drills.length?t.drills.map(d=>'<div class="stats-drill-row"><span class="stats-drill-icon" aria-hidden="true">▶</span><strong>'+esc(d.name)+'</strong><button type="button" class="quiet-btn" data-team-drill="'+esc(d.id)+'">查看演示</button>'+(canEdit()?'<button type="button" class="quiet-btn danger-text" data-drill-remove="'+esc(d.id)+'">移除</button>':'')+'</div>').join(''):'<p class="stats-empty">还没有安排 Drill。</p>';
+  drillJournal?.renderTraining($('#training-drills'),t,canEdit()&&!busy,revision);
   $('#training-drill-add').hidden=!canEdit();$('#training-drill-add').disabled=busy;
  }
  function renderTrainingGames(t){
@@ -576,7 +576,7 @@ const StatsUI=(()=>{
   };
   document.addEventListener('click',e=>{
    if(!active())return;
-   const drillLink=e.target.closest('[data-team-drill]');if(drillLink){$('#training-dialog').close();deps.openDrill?.(drillLink.dataset.teamDrill);return;}
+   const drillLink=e.target.closest('[data-team-drill]');if(drillLink){deps.openDrill?.(drillLink.dataset.teamDrill);return;}
    const trainingCard=e.target.closest('[data-training-card]');
    if(trainingCard){openTraining(trainingCard.dataset.trainingCard);return;}
    const attendChip=e.target.closest('[data-attend-chip]');
@@ -584,7 +584,7 @@ const StatsUI=(()=>{
    const drillRemove=e.target.closest('[data-drill-remove]');
    if(drillRemove){const t=currentTraining();if(!t||!canEdit()||busy)return;const drills=t.drills.filter(d=>d.id!==drillRemove.dataset.drillRemove).map(d=>d.id);mutate('stats/trainings/'+t.id,{method:'PUT',body:JSON.stringify({drills})},r=>{t.drills=r.training.drills;});return;}
    const drillPick=e.target.closest('[data-drill-pick]');
-   if(drillPick){const t=currentTraining();if(!t||busy)return;mutate('stats/trainings/'+t.id,{method:'PUT',body:JSON.stringify({drills:[...t.drills.map(d=>d.id),drillPick.dataset.drillPick]})},r=>{t.drills=r.training.drills;$('#drill-picker-dialog').close();deps.toast('已添加 Drill。');});return;}
+   if(drillPick){const t=currentTraining();if(!t||busy)return;mutate('stats/trainings/'+t.id,{method:'PUT',body:JSON.stringify({drills:[...t.drills.map(d=>d.id),drillPick.dataset.drillPick]})},r=>{t.drills=r.training.drills;$('#drill-picker-dialog').close();deps.toast('已添加 Drill，可记录本次练习的问题和进步。');}).then(result=>{if(result&&$('#training-dialog').open&&currentTraining()?.id===t.id)drillJournal?.expand($('#training-drills'),drillPick.dataset.drillPick);});return;}
    const sortBtn=e.target.closest('[data-stats-sort]');
    if(sortBtn){const key=sortBtn.dataset.statsSort;if(sort.key===key)sort.dir=-sort.dir;else sort={key,dir:1};renderAverages();return;}
    const chip=e.target.closest('[data-stats-chip]');
@@ -605,6 +605,7 @@ const StatsUI=(()=>{
     if(p)mutate('stats/players/'+p.id,{method:'DELETE'},r=>{data.players=data.players.filter(x=>x.id!==r.deleted);deps.toast('已删除 #'+p.number+' '+p.name);});
    }
   });
+  drillJournal=DrillJournal.init({api:deps.api,toast:deps.toast,getMe:()=>me,login,refresh});
   discussionUI=TeamDiscussion.init({api:deps.api,toast:deps.toast,canEdit,getMe:()=>me,login,refresh});
   teamHub=TeamHub.init({api:deps.api,toast:deps.toast,requestEdit:deps.requestEdit,canEdit,refresh,getState:()=>({data,me,loaded,error,busy}),login,toggleEdit:deps.toggleEdit,openTeam:deps.openTeam,currentTraining,openTraining,openReview:id=>{openGame(id);gamePane='comments';syncGamePane();renderComments(currentGame());},openTrainingReview:id=>{openTraining(id);trainingPane='comments';syncTrainingPane();renderTrainingComments(currentTraining());}});
   refresh();
@@ -613,5 +614,5 @@ const StatsUI=(()=>{
  }
  let timer=0;
  function localDate(){const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
- return {init,render,navigate:(section,updateURL=true)=>teamHub?.navigate(section,updateURL),syncHeader:()=>teamHub?.renderHeader()};
+ return {init,render,navigate:(section,updateURL=true)=>teamHub?.navigate(section,updateURL),syncHeader:()=>teamHub?.renderHeader(),renderDrillHistory:(host,id)=>drillJournal?.renderHistory(host,id)};
 })();

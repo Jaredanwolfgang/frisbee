@@ -488,6 +488,22 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
                     raise APIError(error.status,error.message) from None
                 return self.send(200,result)
 
+            if (len(segments)==3 and segments[0]=='drills' and segments[2]=='notes' and STATS_MODULE.TACTIC_ID.fullmatch(segments[1])) or (len(segments)==5 and segments[0]=='trainings' and segments[2]=='drills' and segments[4]=='notes' and STATS_MODULE.GAME_ID.fullmatch(segments[1]) and STATS_MODULE.TACTIC_ID.fullmatch(segments[3])):
+                training_id = segments[1] if len(segments)==5 else None
+                drill_id = segments[3] if training_id else segments[1]
+                try:
+                    if self.command=='GET':
+                        offset = parse_qs(urlparse(self.path).query).get('offset',['0'])[0]
+                        if not re.fullmatch(r'[0-9]{1,5}',offset): raise APIError(400,'记录页码无效。')
+                        return self.send(200,stats_store.drill_notes(drill_id,training_id,int(offset)))
+                    if self.command!='POST' or training_id is None: raise APIError(404,'练习备注接口不存在。')
+                    self.require_same_origin()
+                    pid = self.player_identity()
+                    if pid is None: raise APIError(401,'请先登录队员身份再写练习备注。')
+                    return self.send(200,stats_store.save_drill_note(pid,training_id,drill_id,self.body()))
+                except STATS_MODULE.StatsError as error:
+                    raise APIError(error.status,error.message) from None
+
             if len(segments) in (3,4) and segments[0] in ('games','trainings') and segments[2]=='discussion' and STATS_MODULE.GAME_ID.fullmatch(segments[1]):
                 if (len(segments)==3 and self.command!='POST') or (len(segments)==4 and (self.command not in ('PUT','DELETE') or not re.fullmatch(r'[1-9][0-9]{0,17}',segments[3]))):
                     raise APIError(404,'讨论接口不存在。')

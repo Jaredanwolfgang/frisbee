@@ -116,6 +116,8 @@ class StatsStore:
             db.execute('CREATE TABLE IF NOT EXISTS stats_events (game_id TEXT NOT NULL, seq INTEGER NOT NULL, kind TEXT NOT NULL, from_id INTEGER, to_id INTEGER, line TEXT, start TEXT, created INTEGER NOT NULL, PRIMARY KEY (game_id, seq))')
             db.execute('CREATE TABLE IF NOT EXISTS stats_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT, training_id TEXT, player_id INTEGER NOT NULL, text TEXT NOT NULL, author_name TEXT NOT NULL, author_number INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS stats_trainings (id TEXT PRIMARY KEY, name TEXT NOT NULL, warmup TEXT NOT NULL DEFAULT \'\', attendees TEXT NOT NULL DEFAULT \'[]\', drills TEXT NOT NULL DEFAULT \'[]\', created INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)')
+            db.execute('CREATE TABLE IF NOT EXISTS stats_drill_notes (id INTEGER PRIMARY KEY AUTOINCREMENT,training_id TEXT NOT NULL,drill_id TEXT NOT NULL,player_id INTEGER NOT NULL,problems TEXT NOT NULL,progress TEXT NOT NULL,author_name TEXT NOT NULL,author_number INTEGER NOT NULL,created INTEGER NOT NULL,updated INTEGER NOT NULL,UNIQUE(training_id,drill_id,player_id))')
+            db.execute('CREATE INDEX IF NOT EXISTS stats_drill_notes_drill ON stats_drill_notes(drill_id,training_id)')
             # Older databases keep their rows; new columns are added in place.
             for statement in ("ALTER TABLE stats_players ADD COLUMN gender TEXT NOT NULL DEFAULT ''",
                               'ALTER TABLE stats_events ADD COLUMN line TEXT',
@@ -260,7 +262,8 @@ class StatsStore:
         for drill_id in json.loads(row['drills'] or '[]'):
             found = db.execute('SELECT document FROM tactics WHERE id=?', (drill_id,)).fetchone()
             name = json.loads(found['document']).get('name') if found else None
-            drills.append({'id': drill_id, 'name': name or '已删除的 Drill'})
+            notes = db.execute('SELECT count(*),coalesce(max(updated),0) FROM stats_drill_notes WHERE training_id=? AND drill_id=?',(row['id'],drill_id)).fetchone()
+            drills.append({'id': drill_id, 'name': name or '已删除的 Drill','noteCount':notes[0],'noteVersion':notes[1]})
         return {'id': row['id'], 'name': row['name'], 'warmup': row['warmup'],
                 'attendees': json.loads(row['attendees'] or '[]'), 'drills': drills, 'heldOn': row['held_on'], 'status': row['status'],
                 'created': row['created'], 'updated': row['updated'],
@@ -529,6 +532,47 @@ class StatsStore:
                     db.execute('UPDATE stats_comments SET text=?,updated=?,video_game_id=?,video_key=?,video_second=?,video_page=?,video_refs=? WHERE id=?',(body,stamp,vg,vk,second,page,json.dumps(refs),comment_id))
             db.execute('UPDATE '+table+' SET updated=? WHERE id=?',(self.now(),context_id))
             return {'comments':self.comments(db,game_id,training_id), 'commentId':comment_id, 'revision':self.revision(db,True)}
+
+    def drill_notes(self, drill_id, training_id=None, offset=0):
+        if not isinstance(drill_id,str) or not TACTIC_ID.fullmatch(drill_id): raise StatsError(400,'Drill 编号无效。')
+        if type(offset) is not int or not 0 <= offset <= 20000: raise StatsError(400,'记录页码无效。')
+        db = self.connect()
+        try:
+            where = 'n.drill_id=? AND t.deleted=0'
+            params = [drill_id]
+            if training_id is not None:
+                if not db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0',(training_id,)).fetchone(): raise StatsError(404,'这次训练已不存在。')
+                where += ' AND n.training_id=?'
+                params.append(training_id)
+            total, sessions = db.execute('SELECT count(*),count(DISTINCT n.training_id) FROM stats_drill_notes n JOIN stats_trainings t ON t.id=n.training_id WHERE '+where,params).fetchone()
+            limit = 400 if training_id else 30
+            rows = db.execute('SELECT n.*,t.name AS training_name,t.held_on,p.name AS p_name,p.number AS p_number,p.avatar_digest AS p_avatar FROM stats_drill_notes n JOIN stats_trainings t ON t.id=n.training_id LEFT JOIN stats_players p ON p.id=n.player_id WHERE '+where+' ORDER BY t.held_on DESC,n.created DESC,n.id DESC LIMIT ? OFFSET ?',(*params,limit,offset)).fetchall()
+            notes = [{'id':r['id'],'trainingId':r['training_id'],'drillId':r['drill_id'],'player':r['player_id'],'name':r['p_name'] if r['p_name'] is not None else r['author_name'],'number':r['p_number'] if r['p_number'] is not None else r['author_number'],'avatar':('api/stats/avatars/'+str(r['player_id'])+'/'+r['p_avatar']) if r['p_avatar'] else '', 'problems':r['problems'],'progress':r['progress'],'created':r['created'],'updated':r['updated'],'trainingName':r['training_name'],'heldOn':r['held_on']} for r in rows]
+            return {'notes':notes,'total':total,'trainingCount':sessions,'nextOffset':offset+len(notes) if offset+len(notes)<total else None}
+        finally:
+            db.close()
+
+    def save_drill_note(self, player_id, training_id, drill_id, raw):
+        if not isinstance(raw,dict): raise StatsError(400,'练习备注格式无效。')
+        problems = text(raw.get('problems',''),800,'存在的问题',required=False)
+        progress = text(raw.get('progress',''),800,'相比上次的进步',required=False)
+        if not problems and not progress: raise StatsError(400,'请至少填写一个问题或一项进步。')
+        with self.transaction() as db:
+            training = db.execute('SELECT * FROM stats_trainings WHERE id=? AND deleted=0',(training_id,)).fetchone()
+            if not training or drill_id not in json.loads(training['drills'] or '[]'): raise StatsError(404,'这个 Drill 不在本次训练安排里。')
+            author = db.execute('SELECT * FROM stats_players WHERE id=?',(player_id,)).fetchone()
+            if not author: raise StatsError(401,'请先登录队员身份。')
+            if not db.execute('SELECT 1 FROM tactics WHERE id=?',(drill_id,)).fetchone(): raise StatsError(404,'这个 Drill 已从训练库移除。')
+            existing = db.execute('SELECT id FROM stats_drill_notes WHERE training_id=? AND drill_id=? AND player_id=?',(training_id,drill_id,player_id)).fetchone()
+            if not existing and db.execute('SELECT count(*) FROM stats_drill_notes WHERE training_id=?',(training_id,)).fetchone()[0]>=400: raise StatsError(400,'本次训练已达到 400 份 Drill 记录。')
+            stamp = self.now()
+            if existing:
+                db.execute('UPDATE stats_drill_notes SET problems=?,progress=?,author_name=?,author_number=?,updated=? WHERE id=?',(problems,progress,author['name'],author['number'],stamp,existing['id']))
+            else:
+                db.execute('INSERT INTO stats_drill_notes(training_id,drill_id,player_id,problems,progress,author_name,author_number,created,updated) VALUES (?,?,?,?,?,?,?,?,?)',(training_id,drill_id,player_id,problems,progress,author['name'],author['number'],stamp,stamp))
+            db.execute('UPDATE stats_trainings SET updated=? WHERE id=?',(stamp,training_id))
+            revision = self.revision(db,True)
+        return {**self.drill_notes(drill_id,training_id),'revision':revision}
 
     def training_updates(self, db, raw):
         if not isinstance(raw, dict):

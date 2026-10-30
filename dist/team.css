@@ -311,3 +311,42 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 
 .discussion-time-fields>[data-d=insert-time]{min-height:44px;white-space:nowrap}
 .discussion-replies details>summary{min-height:44px}
+/* Drill observations stay with the training occurrence; history is read inside the preview. */
+.training-drill-card{min-width:0;border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden}
+.training-drill-card>.stats-drill-row{border:0;border-radius:0;min-width:0;flex-wrap:wrap}
+.training-drill-card>.stats-drill-row>strong{flex:1;min-width:100px;white-space:normal;overflow-wrap:anywhere}
+.drill-note-details{border-top:1px solid var(--line);padding:0 12px 12px}
+.drill-note-details>summary,.drill-history-details>summary{min-height:44px;padding:11px 0;color:#4c7142;font-size:14px;cursor:pointer;line-height:1.5}
+.drill-note-details>summary small,.drill-history-details>summary small{font-size:12px;font-weight:400}
+.drill-note-details:not([open]){padding-bottom:0}
+.drill-note-list{display:grid;gap:14px;min-width:0}
+.drill-note{display:grid;grid-template-columns:36px minmax(0,1fr);gap:9px;min-width:0;padding:12px 0;border-top:1px solid #e9eee4}
+.drill-note:first-child{border-top:0}
+.drill-note-main{min-width:0}
+.drill-note header{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;line-height:1.6}
+.drill-note header strong{font-size:14px}
+.drill-note header small,.drill-note time{font-size:12px;color:var(--muted)}
+.drill-note time{flex-basis:100%}
+.drill-note section{margin-top:8px}
+.drill-note section>b{font-size:12px;color:#8b6949;font-weight:500}
+.drill-note section.drill-note-progress>b{color:#5a7a4b}
+.drill-note p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0;font-size:15px;line-height:1.75}
+.drill-note-edit{border:0;background:none;padding:8px 0;color:#557749;font-size:12px;min-height:44px}
+.drill-note-form{display:grid;gap:12px;padding-top:12px;border-top:1px solid var(--line);min-width:0}
+.drill-note-form label{font-size:14px;gap:6px;min-width:0}
+.drill-note-form textarea{width:100%;min-height:76px;resize:vertical;line-height:1.6;font-size:16px}
+.drill-note-form button{justify-self:end;min-height:44px}
+.drill-history{border:1px solid var(--line);padding:0 12px;border-radius:8px;margin-bottom:14px;min-width:0;background:#fff}
+.drill-history .drill-note p{font-size:14px}
+.drill-history [data-j=more]{width:100%;margin:8px 0 12px;min-height:44px;white-space:normal}
+.board-fullscreen #drill-history-btn{display:none}
+#drill-history-btn{flex:none;min-height:44px;white-space:nowrap}
+@media(max-width:600px){
+ .drill-note-details{padding-left:10px;padding-right:10px}
+ .drill-note p{font-size:16px}
+ .drill-note-form textarea{font-size:16px}
+ .drill-history{padding:0 10px}
+ #drill-history-btn{font-size:13px;min-height:44px;padding:8px}
+}
+.inspector .drill-history-details>summary{font-size:14px!important;font-weight:600}
+@media(max-width:600px){.drill-history .drill-note p{font-size:16px}}
