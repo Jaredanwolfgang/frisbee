@@ -211,6 +211,13 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .discussion-message.is-reply .discussion-avatar{width:30px;height:30px;font-size:14px}
 .discussion-replies details>summary{font-size:12px;color:#668355;min-height:36px;cursor:pointer}
 .discussion-replies details[open]>.discussion-message{margin-top:14px}
+.discussion-reply-group>summary{display:flex;align-items:center;gap:6px;list-style:none;font-weight:600}
+.discussion-reply-group>summary::-webkit-details-marker{display:none}
+.discussion-reply-group>summary:before{content:'›';font-size:18px;transition:transform .15s}
+.discussion-reply-group[open]>summary:before{transform:rotate(90deg)}
+.discussion-reply-group:not([open]) .reply-collapse,.discussion-reply-group[open] .reply-expand{display:none}
+.discussion-reply-target{color:var(--muted);font-size:13px}
+.discussion-reply-target b{color:#79608f;font-weight:600}
 @media(max-width:600px){
  .discussion-player{border-radius:7px}
  .discussion-time-fields{grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:10px}

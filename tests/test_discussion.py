@@ -71,15 +71,39 @@ class DiscussionTest(unittest.TestCase):
         self.assertFalse(next(c for c in restored if c['id']==root)['deleted'])
         self.assertEqual(self.request('POST',self.base,{'restore':True},auth=False,extra={'Cookie':self.ca})[0],400)
 
-    def test_replies_cannot_cross_context_or_target_a_reply(self):
+    def test_replies_are_flattened_and_cannot_cross_context(self):
         self.setup_thread();root=self.post()['commentId'];child=self.post(parentId=root)['commentId']
-        self.assertEqual(self.request('POST',self.base,{'text':'nested','parentId':child},auth=False,extra={'Cookie':self.ca})[0],400)
+        result=self.post('回复一个回复',self.cb,parentId=child)
+        saved=next(c for c in result['comments'] if c['id']==result['commentId'])
+        self.assertEqual(saved['parentId'],root)
+        self.assertEqual(saved['replyTo'],{'id':child,'player':self.a,'name':'甲','number':1})
+        follow=self.post('继续回复',parentId=saved['id'])
+        newest=next(c for c in follow['comments'] if c['id']==follow['commentId'])
+        self.assertEqual(newest['parentId'],root)
+        self.assertEqual(newest['replyTo']['id'],saved['id'])
+        self.assertEqual(fixture.API.STATS_MODULE.StatsStore(self.path).snapshot()['trainings'][0]['comments'],follow['comments'])
         self.assertEqual(self.request('PUT',self.base+'/%C2%B2',{'text':'bad id'},auth=False,extra={'Cookie':self.ca})[0],404)
         gid=self.game();other='/api/stats/games/'+gid+'/discussion'
         self.assertEqual(self.request('POST',other,{'text':'wrong target','parentId':root},auth=False,extra={'Cookie':self.ca})[0],400)
         self.assertEqual(self.request('PUT',other+'/'+str(root),{'text':'wrong context'},auth=False,extra={'Cookie':self.ca})[0],404)
         for body in [{'text':'x','parentId':10**100},{'text':'x','parentId':True},{'text':''},{'text':'a'*801},[],{'text':42}]:
             self.assertEqual(self.request('POST',self.base,body,auth=False,extra={'Cookie':self.ca})[0],400)
+
+    def test_existing_flat_replies_migrate_without_losing_target_or_rows(self):
+        self.setup_thread();root=self.post('旧主评论')['commentId'];child=self.post('旧回复',self.cb,parentId=root)['commentId']
+        with sqlite3.connect(self.path) as db:
+            db.execute('ALTER TABLE stats_comments DROP COLUMN reply_to_id')
+            db.execute('DELETE FROM stats_notifications')
+        migrated=fixture.API.STATS_MODULE.StatsStore(self.path)
+        messages=migrated.snapshot()['trainings'][0]['comments']
+        saved=next(c for c in messages if c['id']==child)
+        self.assertEqual((saved['text'],saved['parentId'],saved['replyTo']['id']),('旧回复',root,root))
+        self.assertEqual(self.request('PUT',self.base+'/'+str(child),{'text':'修改旧回复'},auth=False,extra={'Cookie':self.cb})[0],200)
+        self.assertEqual(migrated.notification_summary(self.a)['unread'],0,'editing legacy replies cannot backfill alerts')
+        result=self.post('继续讨论',parentId=child)
+        newest=next(c for c in result['comments'] if c['id']==result['commentId'])
+        self.assertEqual((newest['parentId'],newest['replyTo']['id']),(root,child))
+        with migrated.connect() as db:self.assertEqual(db.execute('PRAGMA integrity_check').fetchone()[0],'ok')
 
     def test_video_timestamps_validate_scope_and_remain_bound_to_the_original_video(self):
         self.setup_thread()

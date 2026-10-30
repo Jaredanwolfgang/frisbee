@@ -159,7 +159,7 @@ class StatsStore:
                 db.execute('INSERT INTO stats_comments_fixed(id,game_id,training_id,player_id,text,author_name,author_number,created,updated) SELECT id,game_id,training_id,player_id,text,author_name,author_number,created,updated FROM stats_comments')
                 db.execute('DROP TABLE stats_comments')
                 db.execute('ALTER TABLE stats_comments_fixed RENAME TO stats_comments')
-            for column in ["parent_id INTEGER", "deleted INTEGER NOT NULL DEFAULT 0", "is_discussion INTEGER NOT NULL DEFAULT 0", "video_game_id TEXT", "video_key TEXT", "video_second INTEGER", "video_page INTEGER", "video_refs TEXT NOT NULL DEFAULT '[]'", "mentions TEXT NOT NULL DEFAULT '[]'"]:
+            for column in ["parent_id INTEGER", "reply_to_id INTEGER", "deleted INTEGER NOT NULL DEFAULT 0", "is_discussion INTEGER NOT NULL DEFAULT 0", "video_game_id TEXT", "video_key TEXT", "video_second INTEGER", "video_page INTEGER", "video_refs TEXT NOT NULL DEFAULT '[]'", "mentions TEXT NOT NULL DEFAULT '[]'"]:
                 try:
                     db.execute('ALTER TABLE stats_comments ADD COLUMN '+column)
                 except sqlite3.OperationalError:
@@ -227,11 +227,13 @@ class StatsStore:
 
     def comment(self, db, row, video_cache=None):
         out = {'id':row['id'], 'parentId':row['parent_id'], 'player':row['player_id'],
-               'text':'' if row['deleted'] else row['text'], 'deleted':bool(row['deleted']),
+               'replyTo':None, 'text':'' if row['deleted'] else row['text'], 'deleted':bool(row['deleted']),
                'created':row['created'], 'at':row['updated'],
                'name':row['p_name'] if row['p_name'] is not None else row['author_name'],
                'number':row['p_number'] if row['p_number'] is not None else row['author_number'],
                'avatar':('api/stats/avatars/'+str(row['player_id'])+'/'+row['p_avatar']) if row['p_avatar'] else '', 'video':None}
+        if row['reply_target_id'] is not None:
+            out['replyTo'] = {'id':row['reply_target_id'], 'player':row['reply_player'], 'name':row['reply_name'], 'number':row['reply_number']}
         cache = video_cache if video_cache is not None else {}
         def resolved(ref):
             vg = ref['gameId']
@@ -249,7 +251,7 @@ class StatsStore:
         return out
 
     def comments(self, db, game_id=None, training_id=None):
-        rows = db.execute('SELECT c.*, p.name AS p_name, p.number AS p_number, p.avatar_digest AS p_avatar FROM stats_comments c LEFT JOIN stats_players p ON p.id=c.player_id WHERE c.game_id IS ? AND c.training_id IS ? ORDER BY c.created,c.id', (game_id,training_id))
+        rows = db.execute('SELECT c.*, p.name AS p_name, p.number AS p_number, p.avatar_digest AS p_avatar, r.id AS reply_target_id, r.player_id AS reply_player, COALESCE(rp.name,r.author_name) AS reply_name, COALESCE(rp.number,r.author_number) AS reply_number FROM stats_comments c LEFT JOIN stats_players p ON p.id=c.player_id LEFT JOIN stats_comments r ON r.id=COALESCE(c.reply_to_id,c.parent_id) AND r.game_id IS c.game_id AND r.training_id IS c.training_id LEFT JOIN stats_players rp ON rp.id=r.player_id WHERE c.game_id IS ? AND c.training_id IS ? ORDER BY c.created,c.id', (game_id,training_id))
         cache = {}
         return [self.comment(db,row,cache) for row in rows]
 
@@ -472,11 +474,17 @@ class StatsStore:
             else:
                 body = text(raw.get('text'),MAX_COMMENT,'评论')
                 parent = raw.get('parentId') if row is None else row['parent_id']
-                if parent is not None:
-                    if type(parent) is not int or not 1 <= parent <= 2**63-1: raise StatsError(400, '回复目标无效。')
-                    target = db.execute('SELECT * FROM stats_comments WHERE id=? AND game_id IS ? AND training_id IS ?',(parent,game_id,training_id)).fetchone()
-                    if not target or target['parent_id'] is not None or (target['deleted'] and row is None):
-                        raise StatsError(400, '请选择同一讨论区中尚未删除的主评论回复。')
+                reply_to = (row['reply_to_id'] or row['parent_id']) if row else parent
+                reply_author = None
+                if reply_to is not None:
+                    if type(reply_to) is not int or not 1 <= reply_to <= 2**63-1: raise StatsError(400, '回复目标无效。')
+                    target = db.execute('SELECT * FROM stats_comments WHERE id=? AND game_id IS ? AND training_id IS ?',(reply_to,game_id,training_id)).fetchone()
+                    if not target or (target['deleted'] and row is None):
+                        raise StatsError(400, '请选择同一讨论区中尚未删除的评论回复。')
+                    parent = target['parent_id'] or target['id']
+                    root = db.execute('SELECT parent_id FROM stats_comments WHERE id=? AND game_id IS ? AND training_id IS ?',(parent,game_id,training_id)).fetchone()
+                    if not root or root['parent_id'] is not None: raise StatsError(400, '这条讨论的回复关系无效，请刷新后重试。')
+                    reply_author = target['player_id']
                 video = raw.get('video')
                 vg = vk = second = page = None
                 refs = []
@@ -553,7 +561,11 @@ class StatsStore:
                     if row['deleted']: raise StatsError(409, '请先恢复这条评论再修改。')
                     db.execute('UPDATE stats_comments SET text=?,updated=?,video_game_id=?,video_key=?,video_second=?,video_page=?,video_refs=? WHERE id=?',(body,stamp,vg,vk,second,page,json.dumps(refs),comment_id))
                 db.execute('UPDATE stats_comments SET mentions=? WHERE id=?',(json.dumps(clean_mentions),comment_id))
-                self.sync_mentions(db,comment_id,player_id,{m['player'] for m in clean_mentions},stamp)
+                if row is None: db.execute('UPDATE stats_comments SET reply_to_id=? WHERE id=?',(reply_to,comment_id))
+                recipients = {m['player'] for m in clean_mentions}
+                # Editing a legacy reply must not create a retroactive unread alert.
+                if reply_author is not None and (row is None or row['reply_to_id'] is not None): recipients.add(reply_author)
+                self.sync_mentions(db,comment_id,player_id,recipients,stamp)
             db.execute('UPDATE '+table+' SET updated=? WHERE id=?',(self.now(),context_id))
             return {'comments':self.comments(db,game_id,training_id), 'commentId':comment_id, 'revision':self.revision(db,True)}
 
@@ -593,11 +605,11 @@ class StatsStore:
         try:
             query=self.notification_query()
             total=db.execute('SELECT count(*)'+query,(player_id,)).fetchone()[0]
-            rows=db.execute('SELECT n.id,n.created,n.read_at,c.id AS comment_id,c.player_id AS sender,c.text,c.author_name,c.author_number,t.id AS training_id,t.name AS training_name,g.id AS game_id,g.name AS game_name,COALESCE(NULLIF(g.held_on,\'\'),t.held_on) AS held_on'+query+' ORDER BY n.created DESC,n.id DESC LIMIT 30 OFFSET ?',(player_id,offset)).fetchall()
+            rows=db.execute('SELECT n.id,n.created,n.read_at,c.id AS comment_id,c.player_id AS sender,c.text,c.author_name,c.author_number,(SELECT r.player_id FROM stats_comments r WHERE r.id=COALESCE(c.reply_to_id,c.parent_id)) AS reply_player,t.id AS training_id,t.name AS training_name,g.id AS game_id,g.name AS game_name,COALESCE(NULLIF(g.held_on,\'\'),t.held_on) AS held_on'+query+' ORDER BY n.created DESC,n.id DESC LIMIT 30 OFFSET ?',(player_id,offset)).fetchall()
             messages=[]
             for r in rows:
                 sender=db.execute('SELECT name,number,avatar_digest FROM stats_players WHERE id=?',(r['sender'],)).fetchone()
-                messages.append({'id':r['id'],'commentId':r['comment_id'],'trainingId':r['training_id'],'trainingName':r['training_name'],'gameId':r['game_id'],'gameName':r['game_name'],'heldOn':r['held_on'],'sender':r['sender'],'name':sender['name'] if sender else r['author_name'],'number':sender['number'] if sender else r['author_number'],'avatar':('api/stats/avatars/'+str(r['sender'])+'/'+sender['avatar_digest']) if sender and sender['avatar_digest'] else '', 'text':r['text'][:240],'created':r['created'],'unread':r['read_at']==0})
+                messages.append({'type':'reply' if r['reply_player']==player_id else 'mention','id':r['id'],'commentId':r['comment_id'],'trainingId':r['training_id'],'trainingName':r['training_name'],'gameId':r['game_id'],'gameName':r['game_name'],'heldOn':r['held_on'],'sender':r['sender'],'name':sender['name'] if sender else r['author_name'],'number':sender['number'] if sender else r['author_number'],'avatar':('api/stats/avatars/'+str(r['sender'])+'/'+sender['avatar_digest']) if sender and sender['avatar_digest'] else '', 'text':r['text'][:240],'created':r['created'],'unread':r['read_at']==0})
             return {'messages':messages,'nextOffset':offset+len(messages) if offset+len(messages)<total else None,'summary':self.notification_summary(player_id)}
         finally: db.close()
 

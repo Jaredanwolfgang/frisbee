@@ -101,3 +101,54 @@ class MentionTest(unittest.TestCase):
         self.request('DELETE','/api/stats/games/'+formal)
         self.assertEqual(self.stats.notification_summary(self.b)['unread'],0)
         self.assertEqual(self.stats.notifications(self.b)['messages'],[])
+
+    def test_direct_and_targeted_replies_notify_only_the_recipient_and_deduplicate_mentions(self):
+        self.setup_mentions()
+        third=self.player('丙',3);cc=self.login('丙')
+        root=self.member('POST',self.base,{'text':'原观点'})[1]['commentId']
+        response=self.member('POST',self.base,{'text':'回复 @甲','parentId':root,'mentions':[{'player':self.a,'start':3,'end':5}]},cookie=self.cb)
+        self.assertEqual(response[0],200,response)
+        child=response[1]['commentId']
+        inbox=self.stats.notifications(self.a)
+        self.assertEqual(inbox['summary']['unread'],1,'reply plus mention generates only one message')
+        self.assertEqual((inbox['messages'][0]['commentId'],inbox['messages'][0]['type']),(child,'reply'))
+        self.assertEqual(self.stats.notification_summary(self.b)['unread'],0,'no self notifications')
+        body={'text':'回应 @丙','parentId':child,'mentions':[{'player':third,'start':3,'end':5}]}
+        follow=self.member('POST',self.base,body)[1]['commentId']
+        reply=next(c for c in self.stats.snapshot()['trainings'][0]['comments'] if c['id']==follow)
+        self.assertEqual((reply['parentId'],reply['replyTo']['id']),(root,child))
+        self.assertEqual(self.stats.notifications(self.b)['messages'][0]['type'],'reply')
+        self.assertEqual(self.stats.notifications(third)['messages'][0]['type'],'mention')
+        self.assertEqual(self.stats.notification_summary(self.a)['unread'],1,'replying to someone else does not notify the root author again')
+        self.member('POST','/api/stats/notifications/read',{'all':True},cookie=self.cb)
+        self.member('PUT',self.base+'/'+str(follow),{'text':'更新回应','mentions':[]})
+        self.assertEqual(self.stats.notification_summary(self.b)['unread'],0,'editing cannot create duplicate reply alerts')
+        self.assertEqual(len(self.stats.notifications(self.b)['messages']),1,'removing mentions retains the reply notification')
+        self.assertEqual(self.stats.notifications(third)['messages'],[])
+        self.member('DELETE',self.base+'/'+str(follow))
+        self.assertEqual(self.stats.notifications(self.b)['messages'],[])
+        self.member('PUT',self.base+'/'+str(follow),{'restore':True})
+        self.assertFalse(self.stats.notifications(self.b)['messages'][0]['unread'],'restoring a read reply preserves read state')
+        self.member('DELETE',self.base+'/'+str(child),cookie=self.cb)
+        self.assertEqual(self.member('POST',self.base,{'text':'不能回复已删除内容','parentId':child},cookie=cc)[0],400)
+        self.assertEqual(self.member('PUT',self.base+'/'+str(follow),{'text':'对方删除评论后仍可编辑自己的回复'})[0],200)
+        reopened=fixture.API.STATS_MODULE.StatsStore(self.path)
+        self.assertEqual(reopened.notifications(self.b)['messages'][0]['type'],'reply')
+
+    def test_reply_alerts_follow_training_scrimmage_and_formal_match_read_scopes(self):
+        self.setup_mentions()
+        scrim=self.request('POST','/api/stats/games',{'name':'队内对抗','trainingId':self.t})[1]['game']['id']
+        formal=self.request('POST','/api/stats/games',{'name':'正式比赛'})[1]['game']['id']
+        for path in [self.base,'/api/stats/games/'+scrim+'/discussion','/api/stats/games/'+formal+'/discussion']:
+            root=self.member('POST',path,{'text':'我的观察'},cookie=self.cb)[1]['commentId']
+            response=self.member('POST',path,{'text':'队友回复','parentId':root})
+            self.assertEqual(response[0],200,response)
+        self.assertEqual(self.stats.notification_summary(self.b),{'unread':3,'trainings':{self.t:2},'trainingComments':{self.t:1},'games':{scrim:1,formal:1}})
+        self.assertTrue(all(m['type']=='reply' for m in self.stats.notifications(self.b)['messages']))
+        self.member('POST','/api/stats/notifications/read',{'trainingId':self.t},cookie=self.cb)
+        self.assertEqual(self.stats.notification_summary(self.b)['games'],{scrim:1,formal:1})
+        self.member('POST','/api/stats/notifications/read',{'gameId':scrim},cookie=self.cb)
+        self.assertEqual(self.stats.notification_summary(self.b)['trainings'],{})
+        self.assertEqual(self.stats.notification_summary(self.b)['unread'],1)
+        self.member('POST','/api/stats/notifications/read',{'gameId':formal},cookie=self.cb)
+        self.assertEqual(self.stats.notification_summary(self.b)['unread'],0)
