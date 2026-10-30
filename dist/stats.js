@@ -195,7 +195,8 @@ const StatsUI=(()=>{
   const link=$('#stats-game-video-link');
   if(g.video){link.hidden=false;link.href='#';}else{link.hidden=true;link.removeAttribute('href');}
  }
- function renderComments(g){discussionUI?.render($('#game-discussion'),'games',g,gamePane==='comments'&&$('#stats-game-dialog').open);}
+ function discussionVisible(kind,pane){const dialog=$('#'+(kind==='games'?'stats-game-dialog':'training-dialog'));return pane==='comments'&&dialog.open&&active()&&!document.hidden&&!$$('dialog').some(other=>other.open&&other!==dialog&&!(kind==='games'&&other.id==='training-dialog'));}
+ function renderComments(g){discussionUI?.render($('#game-discussion'),'games',g,gamePane==='comments'&&$('#stats-game-dialog').open);discussionUI?.syncUnread($('#stats-tab-comments'),'games',g,discussionVisible('games',gamePane));}
  function renderGame(){
   const g=currentGame(),dlg=$('#stats-game-dialog');
   if(!g){openGameId=null;if(dlg.open){dlg.close();deps.toast('这场比赛已被删除。');}return;}
@@ -250,7 +251,7 @@ const StatsUI=(()=>{
   $('#training-games').innerHTML=t.games.length?TeamMetrics.gamesByDate(t.games).map(gameCard).join(''):'<p class="stats-empty">还没有训练赛。点「添加训练赛」记录队内对抗。</p>';
   $('#training-game-add').hidden=!canEdit();$('#training-game-add').disabled=busy;
  }
- function renderTrainingComments(t){discussionUI?.render($('#training-discussion'),'trainings',t,trainingPane==='comments'&&$('#training-dialog').open);}
+ function renderTrainingComments(t){discussionUI?.render($('#training-discussion'),'trainings',t,trainingPane==='comments'&&$('#training-dialog').open);discussionUI?.syncUnread($('#training-tab-comments'),'trainings',t,discussionVisible('trainings',trainingPane));}
  function renderTraining(){
   const t=currentTraining(),dlg=$('#training-dialog');
   if(!t){openTrainingId=null;if(dlg.open){dlg.close();deps.toast('这次训练已被删除。');}return;}

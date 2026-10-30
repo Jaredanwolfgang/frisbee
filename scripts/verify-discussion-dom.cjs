@@ -24,7 +24,7 @@ async function api(path,options){calls.push([path,options]);const body=options.b
 ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount++,toast:t=>toasts.push(t),api,refresh:async()=>{data=clone(data);ui.render(host,'trainings',data,true);}});
 (async()=>{
  ui.render(host,'trainings',data,true);
- assert.equal($('iframe').src.includes('player.bilibili.com'),true);
+ assert.equal($('iframe').src.includes('player.bilibili.com'),true);assert.equal($('.discussion-heading'),null);assert.equal($('.discussion-hint'),null);
  const children=[...host.children];assert(children.indexOf($('[data-d="list"]'))<children.indexOf($('[data-d="form"]')),'composer belongs after the comments');
  const text=$('[data-d="text"]');assert.equal(text.getAttribute('rows'),'1');
  Object.defineProperty(text,'scrollHeight',{configurable:true,get:()=>20+24*Math.max(1,text.value.split('\n').length)});
@@ -56,7 +56,7 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
  ui.stop(host);assert.equal($('iframe'),null,'closing a view stops embedded playback');
  me=null;ui.render(host,'trainings',data,true);assert($('[data-d="form"]').hidden);assert(!$('[data-action="login"]').hidden);
  await host.onclick({target:$('[data-action="reply"][data-comment="1"]')});assert.equal(loginCount,1);
- me={id:1};ui.render(host,'trainings',{id:'other-training',games:[],comments:[]},true);assert($('[data-d="attach"]').hidden,'no video means no timestamp button');$('[data-d="text"]').value='新训练的评论';const before=calls.length;await $('[data-d="form"]').onsubmit({preventDefault(){}});assert.equal(calls.length,before+1,'changing context must replace old event handlers');
+ me={id:1};ui.render(host,'trainings',{id:'other-training',games:[],comments:[]},true);assert($('[data-d="attach"]').hidden,'no video means no timestamp button');assert($('.discussion-media').hidden,'no video leaves no empty media explanation');$('[data-d="text"]').value='新训练的评论';const before=calls.length;await $('[data-d="form"]').onsubmit({preventDefault(){}});assert.equal(calls.length,before+1,'changing context must replace old event handlers');
  console.log('PASS: bottom composer, one-to-four-line sizing, icon controls, discussion DOM, XSS-safe text, avatars, reply/timestamp publish, editing, delete/restore, player persistence, repeated seeking, guest login and context isolation.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
 
@@ -78,14 +78,18 @@ async function verifyStartup(){
  assert.equal(doc.querySelector('#stats-meta').textContent.includes('测试'),false);
  assert.equal(doc.querySelector('#trainings-list [data-training-card]')?.textContent.includes('训练'),true,'stats must initialize against real HTML IDs');
  doc.querySelector('#trainings-list [data-training-card]').click();
+ assert(doc.querySelector('#training-tab-comments').classList.contains('has-unread'),'training discussion tab advertises unseen comments');
  doc.querySelector('#training-tab-comments').click();
+ assert(!doc.querySelector('#training-tab-comments').classList.contains('has-unread'),'entering discussion clears its dot');
  assert.equal(doc.querySelector('#training-dialog').open,true);
  assert(doc.querySelector('#training-discussion [data-d="text"]'));
  assert(!doc.querySelector('#training-discussion [data-d="form"]').hidden);
  doc.querySelector('#training-tab-games').click();
  assert.equal(doc.querySelector('#training-discussion iframe'),null);
  doc.querySelector('#training-games [data-stats-game]').click();
+ assert(doc.querySelector('#stats-tab-comments').classList.contains('has-unread'),'match discussion has a separate unread dot');
  doc.querySelector('#stats-game-video-link').click();
+ assert(!doc.querySelector('#stats-tab-comments').classList.contains('has-unread'));
  assert(doc.querySelector('#game-discussion iframe'));
  assert.equal(doc.querySelector('#game-discussion .discussion-video-editor').hidden,false);
  doc.querySelector('#stats-game-close').click();
@@ -115,3 +119,30 @@ async function verifyPendingNavigation(){
  console.log('PASS: a late submission response cannot overwrite another training discussion or clear its draft.');
 }
 verifyPendingNavigation().catch(error=>{console.error(error);process.exitCode=1;});
+
+// Read cursors are scoped to viewer and context, durable per browser, and safe without storage.
+function verifyUnread(){
+ const dom=parseHTML('<html><body><button role="tab">训练讨论</button></body></html>'),doc=dom.document,tab=doc.querySelector('button');
+ const saved=new Map();let reader={id:1},storageBlocked=false;
+ const cx={document:doc,localStorage:{getItem(key){if(storageBlocked)throw Error('blocked');return saved.get(key)||null;},setItem(key,value){if(storageBlocked)throw Error('blocked');saved.set(key,value);}}};
+ vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/discussion.js','utf8')+'\nglobalThis.discussion=TeamDiscussion;',cx);
+ const make=()=>cx.discussion.init({getMe:()=>reader}),has=()=>tab.classList.contains('has-unread');let ui=make();
+ const entry={id:'read-training',comments:[{id:100,player:1,deleted:false}]};
+ ui.syncUnread(tab,'trainings',entry,false);assert(!has(),'own messages do not trigger a dot');
+ entry.comments.push({id:101,player:2,deleted:false});ui.syncUnread(tab,'trainings',entry,false);assert(has());assert(tab.getAttribute('aria-label').includes('未读'));
+ ui.syncUnread(tab,'trainings',entry,true);assert(!has());assert.equal(saved.size,1);
+ ui=make();ui.syncUnread(tab,'trainings',entry,false);assert(!has(),'read state survives component/page reload');
+ entry.comments[1].at=Date.now();ui.syncUnread(tab,'trainings',entry,false);assert(!has(),'editing old comments does not create unread messages');
+ entry.comments.push({id:102,parentId:101,player:2,deleted:false});
+ doc.hidden=true;ui.syncUnread(tab,'trainings',entry,true);assert(has(),'a background view must not mark new replies read');
+ doc.hidden=false;ui.syncUnread(tab,'trainings',entry,false);assert(has(),'another tab leaves replies unread');
+ ui.syncUnread(tab,'trainings',entry,true);assert(!has());
+ entry.comments.push({id:103,player:2,deleted:true});ui.syncUnread(tab,'trainings',entry,false);assert(!has(),'deleted comments are not new-message alerts');
+ ui.syncUnread(tab,'games',entry,false);assert(has(),'match read state is separate from training');
+ reader={id:3};ui.syncUnread(tab,'trainings',entry,false);assert(has(),'different members have separate read state');
+ reader=null;ui.syncUnread(tab,'trainings',entry,false);assert(has(),'guest read state is separate');ui.syncUnread(tab,'trainings',entry,true);assert(!has());
+ storageBlocked=true;reader={id:4};ui.syncUnread(tab,'trainings',entry,true);ui.syncUnread(tab,'trainings',entry,false);assert(!has(),'blocked storage falls back to current-session memory');
+ entry.comments.push({id:104,player:2,deleted:false});ui.syncUnread(tab,'trainings',entry,false);assert(has());
+ console.log('PASS: unread roots/replies, own/deleted/edit exclusion, reading, background safety, per-member/context persistence and blocked-storage fallback.');
+}
+verifyUnread();
