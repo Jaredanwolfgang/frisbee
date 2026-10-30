@@ -485,9 +485,10 @@ input::placeholder,textarea::placeholder{color:#7b887e;opacity:1}
  body .header-actions>#new-btn{padding-left:10px;padding-right:10px}
 }
 @media(max-width:360px){
- body .topbar .workspace-nav{flex:1 1 150px;gap:6px}
+ body .workspace{padding-left:10px;padding-right:10px}
+ body .topbar .workspace-nav{flex:1 1 150px;gap:4px}
  body .tiga-brand{gap:4px}body .tiga-brand>span{font-size:20px}body .tiga-brand .tiga-mode-icon{width:22px;height:22px}
- body .workspace-switcher{padding-left:6px}body .workspace-toggle{width:76px;padding-left:4px;padding-right:4px}
+ body .workspace-switcher{padding-left:4px}body .workspace-toggle{width:72px;padding-left:4px;padding-right:4px;font-size:12px!important}
  body:not(.stats-mode):not(.trainings-mode) .team-account-actions{display:none}
  .card-open{grid-template-columns:108px minmax(0,1fr)}
  .card-preview{width:108px}

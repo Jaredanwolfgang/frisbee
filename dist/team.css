@@ -211,7 +211,7 @@ body:not(.stats-mode):not(.trainings-mode) #team-notifications{display:none}
 .discussion-message-actions button{border:0;background:none;color:#68845b;font-size:12px;line-height:1.4;padding:6px 8px;min-width:40px;min-height:32px;border-radius:5px}
 .discussion-message-actions button:hover{background:#f0f5ec}
 .discussion-timestamp{display:inline;border:0;background:#eaf2e3;color:#38692f;border-radius:4px;font:inherit;font-weight:600;line-height:inherit;white-space:nowrap;vertical-align:baseline;padding:1px 5px;margin:0 2px;min-height:0;text-decoration:underline;text-decoration-color:#a7bf9a;text-underline-offset:3px}
-.discussion-replies{margin:4px 0 0 12px;padding:0 0 0 12px;border-left:2px solid #e2eadb;display:grid;gap:10px}
+.discussion-replies{margin:16px 0 0 12px;padding:0 0 0 12px;border-left:2px solid #e2eadb;display:grid;gap:10px}
 .discussion-message.is-reply header .discussion-avatar{width:24px;height:24px;font-size:12px}
 .discussion-replies details>summary{font-size:12px;color:#668355;min-height:32px;cursor:pointer}
 .discussion-replies details[open]>.discussion-message{margin-top:8px}
@@ -353,7 +353,7 @@ body:not(.stats-mode):not(.trainings-mode) #team-notifications{display:none}
  .drill-note-form textarea{font-size:16px}
 }
 /* Keep member notices and the discussion composer compact on phones. */
-#team-notifications{position:relative;flex:none;min-width:44px;min-height:44px}
+#team-notifications{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:44px;min-height:44px;height:44px;padding:8px}
 #team-notifications svg{width:22px;height:22px}
 .notification-dot,.has-alert:after{width:7px;height:7px;border-radius:50%;background:#d64848;box-shadow:0 0 0 2px #fff;pointer-events:none}
 .notification-dot{position:absolute;right:7px;top:7px}
