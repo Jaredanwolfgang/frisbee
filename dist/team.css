@@ -282,3 +282,36 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .stats-drill-list{grid-template-columns:minmax(0,1fr);min-width:0}
 .stats-drill-list>.stats-drill-row{min-width:0}
 .stats-drill-list .stats-drill-row>strong{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+
+/* Consistent navigation, readable secondary text, and useful empty states. */
+.team-nav button svg{display:block;flex:none;width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.team-nav button[aria-current=page] svg{stroke-width:1.9}
+.team-eyebrow{color:#71836b}
+.team-page-heading p,.team-section-heading p,.team-metric>span,.team-metric>small,.team-feed-row small,.team-empty,.team-caption,.team-pending-note,.team-scroll-hint{color:#6f7f6b}
+.team-card,.team-metric,.team-player-card,.stats-game-card{border-color:#dce5d8;box-shadow:0 1px 2px #263b3004}
+.team-link{color:#54754a}
+.team-nav button{color:#708068}
+.team-nav button[aria-current=page]{color:#315f38}
+.stats-empty-action{max-width:580px;margin:8px 0 0;padding:34px 24px;border:1px dashed #cddac8;border-radius:14px;background:#f9fbf7;text-align:center;color:#6d7d68}
+.stats-empty-action strong{display:block;color:#35543b;font-size:17px;line-height:1.5}
+.stats-empty-action p{margin:8px 0 18px;line-height:1.75}
+.stats-empty-action .quiet-btn{min-height:44px;padding:10px 18px;color:#3e683c;background:#fff}
+.team-activity-meta{color:#70806b!important}
+@media(hover:hover) and (pointer:fine){
+ .team-nav button:hover{background:#edf3e8;color:#3e653d}
+ .team-feed-row:hover{background:#f7faf4}
+ .stats-game-card:hover{border-color:#bdceb5;box-shadow:0 5px 18px #263b3009}
+}
+@media(max-width:600px){
+ .team-nav{background:#fffffff7;box-shadow:0 -6px 22px #263b300b}
+ .team-nav button svg{width:21px;height:21px}
+ .team-nav button[aria-current=page]{background:#e7efdf}
+ .stats-empty-action{margin-top:4px;padding:30px 18px;border-radius:12px}
+ .stats-empty-action strong{font-size:16px}
+ .stats-empty-action p{font-size:14px}
+}
+@media(min-width:601px){
+ #stats-game-dialog .stats-game-shell,#training-dialog .stats-game-shell{height:auto;max-height:90dvh}
+ #stats-game-dialog .stats-game-body,#training-dialog .stats-game-body{min-height:230px}
+ #stats-game-dialog:has(.stats-game-body[data-pane=comments]) .stats-game-shell,#training-dialog:has(#training-body[data-training-view=comments]) .stats-game-shell{height:min(760px,90dvh)}
+}

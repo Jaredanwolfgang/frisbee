@@ -142,6 +142,11 @@ function render(){
 function closeMenus(){$$('.more-menu').forEach(d=>d.open=false);closeWorkspaceMenu();}
 document.addEventListener('click',e=>{const k=e.target.closest('[data-kind]');if(k){const next=k.dataset.kind;if((next==='rules')!==(kindFilter==='rules')){search='';$('#search').value='';}kindFilter=next;if(next==='rules')window.history.replaceState(window.history.state,'','#rules');else if(location.hash==='#rules'||location.hash.startsWith('#rule='))window.history.replaceState(window.history.state,'',location.pathname+location.search);category='全部';$('#category-filter').value=category;render();}const open=e.target.closest('[data-open]');if(open)openTactic(open.dataset.open);if(!e.target.closest('.more-menu,.workspace-switcher'))closeMenus();});
 $('#search').addEventListener('input',e=>{search=e.target.value.trim();if(kindFilter==='rules')rulesLimit=8;render();});$('#sort').addEventListener('change',e=>{sort=e.target.value;render();});$('#category-filter').addEventListener('change',e=>{category=e.target.value;if(category==='基础训练')kindFilter='drill';else if(category!=='全部')kindFilter='tactic';render();});
+document.addEventListener('keydown',e=>{
+ const input=$('#search'),typing=e.target.closest?.('input,textarea,select,[contenteditable="true"]');
+ if(!typing&&!document.querySelector('dialog[open]')&&(e.key==='/'&&!e.metaKey&&!e.ctrlKey&&!e.altKey||((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'))){e.preventDefault();input.focus();input.select();return;}
+ if(e.key==='Escape'&&document.activeElement===input&&input.value){e.preventDefault();input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));}
+});
 function current(){return draft.frames[frameIndex];}
 function holdsDisc(f,p){const closest=f.players.reduce((best,q)=>Math.hypot(q.x-f.disc.x,q.y-f.disc.y)<Math.hypot(best.x-f.disc.x,best.y-f.disc.y)?q:best);return closest.id===p.id&&Math.hypot(p.x-f.disc.x,p.y-f.disc.y)<40;}
 function stop(){onCancel();playing=false;cancelAnimationFrame(raf);$('#play-btn').textContent='▶';$('#play-btn').setAttribute('aria-label','播放跑位');$('#frame-hint').textContent='逐步看清每一次配合';}

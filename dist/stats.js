@@ -606,7 +606,7 @@ const StatsUI=(()=>{
    }
   });
   discussionUI=TeamDiscussion.init({api:deps.api,toast:deps.toast,canEdit,getMe:()=>me,login,refresh});
-  teamHub=TeamHub.init({api:deps.api,toast:deps.toast,canEdit,refresh,getState:()=>({data,me,loaded,error,busy}),login,toggleEdit:deps.toggleEdit,openTeam:deps.openTeam,currentTraining,openTraining,openReview:id=>{openGame(id);gamePane='comments';syncGamePane();renderComments(currentGame());},openTrainingReview:id=>{openTraining(id);trainingPane='comments';syncTrainingPane();renderTrainingComments(currentTraining());}});
+  teamHub=TeamHub.init({api:deps.api,toast:deps.toast,requestEdit:deps.requestEdit,canEdit,refresh,getState:()=>({data,me,loaded,error,busy}),login,toggleEdit:deps.toggleEdit,openTeam:deps.openTeam,currentTraining,openTraining,openReview:id=>{openGame(id);gamePane='comments';syncGamePane();renderComments(currentGame());},openTrainingReview:id=>{openTraining(id);trainingPane='comments';syncTrainingPane();renderTrainingComments(currentTraining());}});
   refresh();
   timer=setInterval(()=>{if(active()&&!document.hidden&&!busy)refresh();},8000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&active())refresh();});

@@ -1,0 +1,7 @@
+{
+  "name": "tiga-frisbee",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -B scripts/dev.py"
+  }
+}

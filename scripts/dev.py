@@ -1,4 +1,5 @@
 """Local full-stack preview; never use this development key for production."""
+import argparse
 import functools
 import http.client
 import importlib.util
@@ -8,6 +9,11 @@ import json
 import os
 import threading
 
+parser = argparse.ArgumentParser(description='Run the local Frisbee preview server.')
+parser.add_argument('--host', default=os.getenv('FRISBEE_PREVIEW_HOST', '127.0.0.1'))
+parser.add_argument('--port', type=int, default=int(os.getenv('FRISBEE_PREVIEW_PORT', '4175')))
+args = parser.parse_args()
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('frisbee_api', ROOT / 'server/app.py')
 api = importlib.util.module_from_spec(spec)
@@ -16,7 +22,8 @@ spec.loader.exec_module(api)
 preview_db = Path(os.getenv('FRISBEE_PREVIEW_DB', str(ROOT / 'data/dev.sqlite3')))
 store = api.Store(preview_db, json.loads((ROOT / 'server/seed.json').read_text()))
 stats_store = api.STATS_MODULE.StatsStore(preview_db)
-preview_port = int(os.getenv('FRISBEE_PREVIEW_PORT', '4175'))
+preview_host = args.host
+preview_port = args.port
 ai_service = None
 if os.getenv('AI_API_KEY'):
     ai_client = api.AI_MODULE.DeepSeekClient(os.environ['AI_API_KEY'], os.getenv('AI_BASE_URL', 'https://api.deepseek.com'), os.getenv('AI_RULES_MODEL', 'deepseek-flash'), os.getenv('AI_TACTIC_MODEL', 'deepseek-v4-pro'))
@@ -81,7 +88,7 @@ class Preview(SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     thread = threading.Thread(target=backend.serve_forever, daemon=True)
     thread.start()
-    frontend = ThreadingHTTPServer(('127.0.0.1', preview_port), functools.partial(Preview, directory=str(ROOT / 'dist')))
+    frontend = ThreadingHTTPServer((preview_host, preview_port), functools.partial(Preview, directory=str(ROOT / 'dist')))
     print(f'Local: http://127.0.0.1:{preview_port}/frisbee/', flush=True)
     try:
         frontend.serve_forever()
