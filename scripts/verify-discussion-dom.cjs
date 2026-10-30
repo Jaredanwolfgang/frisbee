@@ -25,6 +25,16 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
 (async()=>{
  ui.render(host,'trainings',data,true);
  assert.equal($('iframe').src.includes('player.bilibili.com'),true);
+ const children=[...host.children];assert(children.indexOf($('[data-d="list"]'))<children.indexOf($('[data-d="form"]')),'composer belongs after the comments');
+ const text=$('[data-d="text"]');assert.equal(text.getAttribute('rows'),'1');
+ Object.defineProperty(text,'scrollHeight',{configurable:true,get:()=>20+24*Math.max(1,text.value.split('\n').length)});
+ text.value='一行';text.oninput();assert.equal(text.style.height,'46px');
+ text.value='第一行\n第二行\n第三行';text.oninput();assert.equal(text.style.height,'94px');
+ text.value='一\n二\n三\n四\n五\n六';text.oninput();assert.equal(text.style.height,'118px');assert.equal(text.style.overflowY,'auto');
+ text.value='';text.oninput();assert.equal(text.style.height,'46px');assert.equal(text.style.overflowY,'hidden');
+ assert($('[data-d="submit"] svg'));assert.equal($('[data-d="submit"]').getAttribute('aria-label'),'发送评论');
+ assert(!$('[data-d="attach"]').hidden);$('[data-d="attach"]').onclick();assert.equal($('[data-d="attach"]').getAttribute('aria-expanded'),'true');assert(!$('[data-d="time-fields"]').hidden);
+ $('[data-d="attach"]').onclick();assert.equal($('[data-d="attach"]').getAttribute('aria-pressed'),'false');assert($('[data-d="time-fields"]').hidden);
  assert.equal($('[data-message="1"] .discussion-avatar img').getAttribute('src'),data.comments[0].avatar);
  assert.equal($('[data-message="1"] .discussion-message-main p').textContent,data.comments[0].text);
  assert.equal($('[data-message="1"] .discussion-message-main p img'),null,'comment HTML must remain text');
@@ -32,9 +42,9 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
  assert.equal($('iframe'),frame,'polling must not reset the player');assert.equal($('[data-d="text"]').value,'尚未发出的观察');
  await host.onclick({target:$('[data-action="reply"][data-comment="1"]')});
  assert.equal($('[data-d="reply-note"]').textContent,'回复 另一名队员 的评论');
- $('[data-d="text"]').value='补充：接盘前先观察。';$('[data-d="attach"]').checked=true;$('[data-d="attach"]').onchange({target:$('[data-d="attach"]')});
+ $('[data-d="text"]').value='补充：接盘前先观察。';$('[data-d="attach"]').onclick();
  $('[data-d="time"]').value='1:25';$('[data-d="page"]').value='1';await $('[data-d="form"]').onsubmit({preventDefault(){}});
- const posted=JSON.parse(calls.at(-1)[1].body);assert.equal(posted.parentId,1);assert.equal(posted.video.seconds,85);assert.equal(data.comments.length,3);assert.equal($('[data-d="text"]').value,'');
+ const posted=JSON.parse(calls.at(-1)[1].body);assert.equal(posted.parentId,1);assert.equal(posted.video.seconds,85);assert.equal(data.comments.length,3);assert.equal($('[data-d="text"]').value,'');assert.equal($('[data-d="text"]').style.height,'46px');assert($('[data-d="submit"] svg'));assert.equal($('[data-d="attach"]').getAttribute('aria-expanded'),'false');
  await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});
  assert.equal(new URL($('iframe').src).searchParams.get('t'),'85');const firstSeek=$('iframe');
  await host.onclick({target:$('[data-action="seek"][data-comment="1"]')});assert.notEqual($('iframe'),firstSeek,'clicking the same time point must seek again');
@@ -46,8 +56,8 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
  ui.stop(host);assert.equal($('iframe'),null,'closing a view stops embedded playback');
  me=null;ui.render(host,'trainings',data,true);assert($('[data-d="form"]').hidden);assert(!$('[data-action="login"]').hidden);
  await host.onclick({target:$('[data-action="reply"][data-comment="1"]')});assert.equal(loginCount,1);
- me={id:1};ui.render(host,'trainings',{id:'other-training',games:[],comments:[]},true);$('[data-d="text"]').value='新训练的评论';const before=calls.length;await $('[data-d="form"]').onsubmit({preventDefault(){}});assert.equal(calls.length,before+1,'changing context must replace old event handlers');
- console.log('PASS: discussion DOM, XSS-safe text, avatars, reply/timestamp publish, editing, delete/restore, player persistence, repeated seeking, guest login and context isolation.');
+ me={id:1};ui.render(host,'trainings',{id:'other-training',games:[],comments:[]},true);assert($('[data-d="attach"]').hidden,'no video means no timestamp button');$('[data-d="text"]').value='新训练的评论';const before=calls.length;await $('[data-d="form"]').onsubmit({preventDefault(){}});assert.equal(calls.length,before+1,'changing context must replace old event handlers');
+ console.log('PASS: bottom composer, one-to-four-line sizing, icon controls, discussion DOM, XSS-safe text, avatars, reply/timestamp publish, editing, delete/restore, player persistence, repeated seeking, guest login and context isolation.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
 
 // Load the actual team modules against index.html to catch removed-ID/startup regressions.
