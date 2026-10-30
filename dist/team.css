@@ -158,8 +158,8 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .discussion-video-select label{display:grid;gap:7px}
 .discussion-video-select{margin-bottom:12px}
 .discussion-video-select select{width:100%;max-width:100%}
-.discussion-player{position:relative;aspect-ratio:16/9;background:#14271d;border-radius:10px;overflow:hidden;margin-bottom:10px}
-.discussion-player iframe{display:block;width:100%;height:100%;border:0}
+.discussion-player{position:relative;height:0;padding-bottom:56.25%;background:#14271d;border-radius:10px;overflow:hidden;margin-bottom:10px}
+.discussion-player iframe{position:absolute;inset:0;display:block;width:100%;height:100%;border:0}
 .discussion-media>[data-d=media]>a{font-size:12px;margin-right:12px}
 .discussion-media>[data-d=media]>small{color:var(--muted)}
 .discussion-video-empty{margin:0;color:var(--muted);font-size:14px;line-height:1.7}
@@ -371,18 +371,18 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .team-message small{font-size:12px;color:var(--muted);font-weight:400;display:block;line-height:1.6}
 .team-message strong small{display:inline}
 .team-message p{font-size:15px;line-height:1.7;margin:8px 0 0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
-.discussion-mention{color:#27685a;background:#eaf3ed;border-radius:3px;padding:1px 2px;font-weight:600}
-.discussion-mention-picker{border:1px solid var(--line);border-radius:10px;background:#f9fbf7;padding:10px;margin-bottom:8px;min-height:0}
-.discussion-mention-picker label{font-size:12px;gap:5px}
+.discussion-mention{color:#76527f;background:#f5eff7;border-radius:3px;padding:1px 2px;font-weight:600;text-decoration:underline;text-decoration-color:#b595bd;text-underline-offset:3px;text-decoration-thickness:1.5px}
+.discussion-mention-picker{display:flex;flex-direction:column;flex:0 1 auto;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:#f9fbf7;padding:10px;margin-bottom:8px;min-height:0}
+.discussion-mention-picker label{flex:none;font-size:12px;gap:5px}
 .discussion-mention-picker input{width:100%;font-size:16px;min-height:42px}
-.discussion-mention-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;max-height:160px;overflow:auto;margin-top:8px}
-.discussion-mention-options button{display:flex;gap:5px;align-items:center;justify-content:space-between;padding:8px;font-size:14px;min-width:0;min-height:44px;white-space:normal;overflow-wrap:anywhere}
+.discussion-mention-options{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;gap:0;max-height:240px;max-height:min(240px,32dvh);overflow-y:auto;overscroll-behavior:contain;margin-top:8px;scrollbar-gutter:stable}
+.discussion-mention-options button{color:var(--ink);-webkit-text-fill-color:currentColor;-webkit-appearance:none;appearance:none;flex:none;width:100%;height:48px;border:0;border-bottom:1px solid #e6e0e9;border-radius:0;background:none;display:flex;gap:5px;align-items:center;justify-content:space-between;padding:8px;font-size:14px;min-width:0;min-height:44px;white-space:normal;overflow-wrap:anywhere}
 .discussion-mention-options small{font-size:12px;color:var(--muted)}
 .discussion-mention-trigger{font-size:21px!important;font-weight:500}
 /* One obvious preview target; secondary actions stay out of the title. */
 .training-drill-card{overflow:visible;border-radius:12px;background:#fff}
 .drill-card-header{display:flex;align-items:center;gap:8px;padding:10px;min-width:0}
-.drill-demo{display:flex;gap:12px;align-items:center;flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 4px;white-space:normal;min-height:58px}
+.drill-demo{color:var(--ink);-webkit-text-fill-color:currentColor;-webkit-appearance:none;appearance:none;display:flex;gap:12px;align-items:center;flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 4px;white-space:normal;min-height:58px}
 .drill-demo>span:last-child{min-width:0}
 .drill-demo strong{display:block;font-size:15px;line-height:1.55;overflow-wrap:anywhere}
 .drill-demo small{display:block;font-size:12px;color:var(--muted);margin-top:3px;font-weight:400}
@@ -398,10 +398,10 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .drill-note-panel{border-top:1px solid var(--line);padding:4px 14px 14px}
 .drill-note-panel>[data-j=write]{font-size:13px;margin-top:10px;min-height:44px}
 .drill-note-form-actions{display:flex;justify-content:flex-end;gap:8px}
-.discussion-video-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.discussion-video-controls{display:flex;flex-wrap:wrap;row-gap:0;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
 .discussion-video-controls a,.discussion-video-controls button{font-size:13px;min-height:44px;display:inline-flex;align-items:center}
 .discussion-video-status{display:block;font-size:12px;color:var(--muted);line-height:1.6}
-.discussion-video-start{border:0;border-radius:0;width:100%;height:100%;background:#eaf1e6;color:#3e6341;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;min-height:160px}
+.discussion-video-start{position:absolute;inset:0;border:0;border-radius:0;width:100%;height:100%;background:#eaf1e6;color:#3e6341;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;min-height:0}
 .discussion-video-start>span{display:grid;place-items:center;border:1px solid #9cb596;border-radius:50%;width:46px;height:46px;font-size:16px;padding-left:3px}
 .discussion-video-start strong{font-size:14px;font-weight:500}
 @media(max-width:600px){
@@ -412,7 +412,6 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
  .discussion-compose-row{gap:6px}
  .discussion-submit{gap:2px}
  .discussion-submit .discussion-icon{width:38px;min-width:38px;padding:7px;min-height:44px}
- .discussion-mention-options{grid-template-columns:repeat(2,minmax(0,1fr))}
  .drill-card-header{gap:4px;padding:8px}
  .drill-demo{gap:8px}
  .drill-demo strong{font-size:14px}
@@ -428,3 +427,11 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
  .drill-note-toggle{grid-column:1;grid-row:2;justify-self:start;margin:0 0 4px 38px}
  .drill-card-menu{grid-column:2;grid-row:1;align-self:start;margin-top:2px}
 }
+
+/* A native textarea keeps iPhone typing/caret behavior; a passive mirror colors anchored mentions. */
+.discussion-compose-row>label{position:relative}
+.discussion-draft-highlight{position:absolute;inset:0;box-sizing:border-box;overflow:hidden;pointer-events:none;border:1px solid transparent;border-radius:6px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;font-size:16px;line-height:24px;color:var(--ink);background:#fff}
+.discussion-draft-mention{color:#76527f;background:#f5eff7;text-decoration:underline;text-decoration-color:#b595bd;text-decoration-thickness:1.5px;text-underline-offset:3px}
+.discussion-composer textarea.has-mention-highlight{position:relative;background:transparent;color:transparent;-webkit-text-fill-color:transparent;caret-color:var(--ink)}
+.discussion-composer textarea.has-mention-highlight::selection{color:var(--ink);-webkit-text-fill-color:var(--ink);background:#e8dced}
+.discussion-mention-options button:hover,.discussion-mention-options button:focus-visible{background:#f5eff7}

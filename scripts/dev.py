@@ -7,6 +7,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
 import os
+import re
 import threading
 
 parser = argparse.ArgumentParser(description='Run the local Frisbee preview server.')
@@ -22,6 +23,8 @@ spec.loader.exec_module(api)
 preview_db = Path(os.getenv('FRISBEE_PREVIEW_DB', str(ROOT / 'data/dev.sqlite3')))
 store = api.Store(preview_db, json.loads((ROOT / 'server/seed.json').read_text()))
 stats_store = api.STATS_MODULE.StatsStore(preview_db)
+# Match the deployed frame policy so mobile player redirects are tested locally.
+content_security_policy = re.search(r'add_header Content-Security-Policy "([^"]+)" always;', (ROOT/'nginx.conf').read_text()).group(1)
 preview_host = args.host
 preview_port = args.port
 ai_service = None
@@ -35,6 +38,7 @@ class Preview(SimpleHTTPRequestHandler):
     def end_headers(self):
         # Preview source must never reuse a stale script or stylesheet after edits.
         self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Security-Policy', content_security_policy)
         super().end_headers()
 
     def proxy(self):

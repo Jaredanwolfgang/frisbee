@@ -36,3 +36,13 @@ class AssetTest(unittest.TestCase):
    self.assertNotEqual(assets.prepare(root),first)
    self.assertNotEqual((root/'index.html').read_text(),html)
    self.assertNotEqual((root/'assets'/first/'app.js').read_bytes(),(root/'app.js').read_bytes())
+
+ def test_bilibili_mobile_player_is_allowed_without_opening_arbitrary_frames(self):
+  policies=re.findall(r'add_header Content-Security-Policy "([^"]+)" always;', (ROOT/'nginx.conf').read_text())
+  self.assertEqual(len(policies),2,'main HTML and fingerprinted assets keep the same policy')
+  self.assertEqual(policies[0],policies[1])
+  for policy in policies:
+   directives={part.strip().split()[0]:part.strip().split()[1:] for part in policy.split(';') if part.strip()}
+   self.assertEqual(directives['frame-src'],['https://player.bilibili.com','https://www.bilibili.com/blackboard/webplayer/mbplayer.html'])
+   self.assertEqual(directives['default-src'],["'self'"])
+   self.assertEqual(directives['frame-ancestors'],["'self'"])
