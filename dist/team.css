@@ -173,10 +173,10 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 #stats-pane-comments,#training-pane-comments{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:0}
 .discussion-view{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;overflow:hidden}
 .discussion-feed{flex:1;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain;padding:14px 12px;scroll-padding-block:12px}
-.discussion-composer{display:grid;gap:8px;flex:none;min-width:0;max-height:75%;overflow-y:auto;margin:0;padding:10px;border-top:1px solid var(--line);background:#fff}
-.discussion-compose-row{display:flex;align-items:flex-end;gap:8px;min-width:0}
+.discussion-composer{display:flex;flex-direction:column;gap:8px;flex:none;min-width:0;max-height:75%;overflow-y:auto;margin:0;padding:10px;border-top:1px solid var(--line);background:#fff}
+.discussion-compose-row{flex:none;display:flex;align-items:flex-end;gap:8px;min-width:0}
 .discussion-compose-row>label{flex:1;min-width:0;gap:0}
-.discussion-context{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+.discussion-context{flex:none;display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
 .discussion-context .discussion-replying{flex:1;min-width:0}
 .discussion-context>button{flex:none;min-height:44px}
 .discussion-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
@@ -184,7 +184,7 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .discussion-composer textarea{display:block;box-sizing:border-box;width:100%;height:46px;min-height:46px;max-height:118px;resize:none;line-height:24px;padding:10px 12px;overflow-y:hidden}
 .discussion-attach{margin:0}
 .discussion-attach[aria-pressed=true]{background:#e8f1e2;border-color:#8eae80;color:#24583e}
-.discussion-time-fields{display:grid;grid-template-columns:minmax(0,1fr) 100px 72px;gap:10px;align-items:start;padding:12px;border:1px solid var(--line);background:#f6f9f1;border-radius:8px}
+.discussion-time-fields{flex:0 1 auto;min-height:0;overflow:auto;display:grid;grid-template-columns:minmax(0,1fr) 100px 72px;gap:10px;align-items:start;padding:12px;border:1px solid var(--line);background:#f6f9f1;border-radius:8px}
 .discussion-time-fields label,.discussion-time-fields input,.discussion-time-fields select{width:100%;min-width:0}
 .discussion-time-fields small{grid-column:1/-1;font-size:12px;color:var(--muted);line-height:1.6}
 .discussion-submit{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex:none}
@@ -193,7 +193,7 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 .discussion-icon svg{display:block;flex:none}
 .discussion-submit [aria-busy=true] svg{opacity:.5}
 .discussion-replying{border-left:3px solid #87a775;padding:7px 10px;background:#f1f6e9;color:#56704b;font-size:13px;line-height:1.6}
-.discussion-status{margin:0;color:#94603d;font-size:12px;line-height:1.6}
+.discussion-status{flex:none;margin:0;color:#94603d;font-size:12px;line-height:1.6}
 .discussion-status:empty{display:none}
 .discussion-list{display:grid;gap:20px}
 .discussion-thread{border-top:1px solid var(--line);padding-top:16px;min-width:0}

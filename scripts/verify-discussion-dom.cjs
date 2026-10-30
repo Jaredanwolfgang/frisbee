@@ -25,7 +25,7 @@ ui=context.discussion.init({getMe:()=>me,canEdit:()=>admin,login:()=>loginCount+
 (async()=>{
  ui.render(host,'trainings',data,true);
  assert.equal($('iframe').src.includes('player.bilibili.com'),true);assert.equal($('.discussion-heading'),null);assert.equal($('.discussion-hint'),null);
- const children=[...host.children];assert(children.indexOf($('[data-d="feed"]'))<children.indexOf($('[data-d="form"]')),'composer stays outside and after the scrolling feed');assert.equal($('[data-d="list"]').parentElement,$('[data-d="feed"]'));assert.equal($('[data-d="text"]').closest('.discussion-compose-row'),$('[data-d="submit"]').closest('.discussion-compose-row'));assert.equal($('[data-d="attach"]').closest('.discussion-compose-row'),$('[data-d="submit"]').closest('.discussion-compose-row'));
+ const children=[...host.children];assert(children.indexOf($('[data-d="feed"]'))<children.indexOf($('[data-d="form"]')),'composer stays outside and after the scrolling feed');assert.equal($('[data-d="list"]').parentElement,$('[data-d="feed"]'));assert.equal($('[data-d="text"]').closest('.discussion-compose-row'),$('[data-d="submit"]').closest('.discussion-compose-row'));assert.equal($('[data-d="attach"]').closest('.discussion-compose-row'),$('[data-d="submit"]').closest('.discussion-compose-row'));assert.equal($('[data-d="form"]').lastElementChild,$('.discussion-compose-row'),'time fields expand above the bottom input row');
  const text=$('[data-d="text"]');assert.equal(text.getAttribute('rows'),'1');
  Object.defineProperty(text,'scrollHeight',{configurable:true,get:()=>20+24*Math.max(1,text.value.split('\n').length)});
  text.value='一行';text.oninput();assert.equal(text.style.height,'46px');
