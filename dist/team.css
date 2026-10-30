@@ -225,3 +225,28 @@ body:not(.stats-mode):not(.trainings-mode) .team-account-actions .team-user{disp
 /* Absolute positioning keeps tab labels centered when a new message arrives. */
 .stats-game-tabs [role=tab]{position:relative}
 .stats-game-tabs [role=tab].has-unread::after{content:"";position:absolute;top:10px;right:10px;width:6px;height:6px;border-radius:50%;background:#c65542;pointer-events:none}
+
+/* Internal scrimmages share one roster picker; side summaries keep a stable height. */
+.scrimmage-team-setup{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;min-width:0}
+.scrimmage-team-setup>button{display:flex;flex-direction:column;gap:4px;min-width:0;height:82px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);text-align:left}
+.scrimmage-team-setup>button[aria-pressed=true]{border-color:#24583e;box-shadow:inset 0 0 0 1px #24583e;background:#f3f7ef}
+.scrimmage-team-setup>button[data-pick-side=b][aria-pressed=true]{border-color:#54778d;box-shadow:inset 0 0 0 1px #54778d;background:#f0f5f9}
+.scrimmage-team-setup strong{display:flex;justify-content:space-between;gap:8px;font-size:14px;line-height:20px;width:100%}
+.scrimmage-team-setup strong small{font-size:12px;font-weight:400}
+.scrimmage-team-setup>button>span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;font-size:12px;line-height:18px;min-height:36px;color:var(--muted)}
+.stats-chip.side-a{border-color:#8da77c;background:#f1f6ea}
+.stats-chip.side-b{border-color:#94b0c0;background:#f0f5f9}
+.stats-chip.side-b i{background:#54778d}
+.stats-chip.side-a.is-thrower,.stats-chip.side-b.is-thrower{border-color:#24583e;background:#dfecd5;box-shadow:inset 0 0 0 1px #24583e}
+.stats-chip.side-a.is-receiver,.stats-chip.side-b.is-receiver{border-color:#527e99;background:#e1edf5;box-shadow:inset 0 0 0 1px #527e99}
+.scrimmage-score-b{border-color:#c4d5df;background:#f1f6f9}
+.scrimmage-score-b strong{color:#54778d}
+#stats-score-unassigned{font-size:12px;line-height:1.5}
+#stats-recorder.scrimmage-setting .stats-score-row,#stats-recorder.scrimmage-setting .stats-point-bar{display:none}
+@media(max-width:600px){
+ .scrimmage-team-setup>button{height:80px;padding:8px}
+ #stats-point-setup .stats-point-start button{min-height:44px;font-size:14px;padding:8px 5px}
+ .stats-chip.side-a i,.stats-chip.side-b i{font-size:10px;max-width:calc(100% - 6px);overflow:hidden;text-overflow:ellipsis}
+}
+
+.discussion-playing{margin:0 0 10px;padding:9px 11px;border-left:3px solid #7c9c69;background:#eef5e8;color:#43633c;font-size:13px;line-height:1.6;overflow-wrap:anywhere}

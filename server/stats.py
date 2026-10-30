@@ -134,6 +134,8 @@ class StatsStore:
                 "ALTER TABLE stats_trainings ADD COLUMN held_on TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE stats_games ADD COLUMN held_on TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE stats_games ADD COLUMN video_meta TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE stats_events ADD COLUMN sides TEXT",
+                "ALTER TABLE stats_events ADD COLUMN side TEXT",
                 "ALTER TABLE stats_trainings ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'",
             ]
             for statement in additions:
@@ -205,6 +207,10 @@ class StatsStore:
             except ValueError:
                 out['line'] = []
             out['start'] = row['start'] or 'offense'
+        if row['sides']:
+            out['sides'] = json.loads(row['sides'])
+        if row['side']:
+            out['side'] = row['side']
         return out
 
     @staticmethod
@@ -235,7 +241,7 @@ class StatsStore:
 
     def game(self, db, row):
         events = db.execute('SELECT * FROM stats_events WHERE game_id=? ORDER BY seq', (row['id'],))
-        return {'id': row['id'], 'name': row['name'], 'opponent': row['opponent'], 'video': row['video'], 'status': row['status'], 'heldOn': row['held_on'], 'videoMeta':self.video_meta(row),
+        return {'id': row['id'], 'trainingId': row['training_id'], 'name': row['name'], 'opponent': row['opponent'], 'video': row['video'], 'status': row['status'], 'heldOn': row['held_on'], 'videoMeta':self.video_meta(row),
                 'created': row['created'], 'updated': row['updated'], 'events': [self.event(e) for e in events],
                 'comments': self.comments(db, game_id=row['id'])}
 
@@ -347,6 +353,8 @@ class StatsStore:
             if training_id is not None:
                 if not db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (training_id,)).fetchone():
                     raise StatsError(404, '这场训练不存在或已删除。')
+            if training_id is not None:
+                opponent = ''
             id_, stamp = str(uuid.uuid4()), self.now()
             db.execute("INSERT INTO stats_games(id,name,opponent,video,video_meta,held_on,training_id,status,created,updated) VALUES (?,?,?,?,?,?,?,'live',?,?)", (id_, name, opponent, video, json.dumps(meta) if meta else '', held_on, training_id, stamp, stamp))
             row = db.execute('SELECT * FROM stats_games WHERE id=?', (id_,)).fetchone()
@@ -372,8 +380,11 @@ class StatsStore:
         if not updates:
             raise StatsError(400, '没有要修改的内容。')
         with self.transaction() as db:
-            if not db.execute('SELECT 1 FROM stats_games WHERE id=? AND deleted=0', (game_id,)).fetchone():
+            game = db.execute('SELECT * FROM stats_games WHERE id=? AND deleted=0', (game_id,)).fetchone()
+            if not game:
                 raise StatsError(404, '这场比赛不存在或已删除。')
+            if game['training_id'] is not None and 'opponent' in updates:
+                updates['opponent'] = ''
             assignments = ', '.join(key+'=?' for key in updates)
             db.execute('UPDATE stats_games SET '+assignments+', updated=? WHERE id=?', (*updates.values(), self.now(), game_id))
             row = db.execute('SELECT * FROM stats_games WHERE id=?', (game_id,)).fetchone()
@@ -644,10 +655,24 @@ class StatsStore:
             raise StatsError(400, '记录类型无效。')
         kind = raw['kind']
         from_id = to_id = None
-        line_json = start = None
+        line_json = start = sides_json = side = None
+        sides = None
         if kind == 'point':
-            line = line_ids(raw)
-            start = raw.get('start')
+            if 'sides' in raw:
+                sides = raw['sides']
+                if not isinstance(sides, dict) or set(sides) != {'a','b','offense'} or sides['offense'] not in ('a','b'):
+                    raise StatsError(400, '请选择 A、B 两队阵容，以及哪队进攻开。')
+                a = id_values(sides, 'a', 1, 7, 'A 队上场队员')
+                b = id_values(sides, 'b', 1, 7, 'B 队上场队员')
+                if set(a) & set(b):
+                    raise StatsError(400, '同一分里，一名队员只能属于一队。')
+                sides = {'a':a, 'b':b, 'offense':sides['offense']}
+                line, start = a+b, 'offense' if sides['offense']=='a' else 'defense'
+                if ('line' in raw and raw['line'] != line) or ('start' in raw and raw['start'] != start):
+                    raise StatsError(400, '上场阵容或攻防身份与两队设置不一致。')
+                sides_json = json.dumps(sides)
+            else:
+                line, start = line_ids(raw), raw.get('start')
             if start not in POINT_START:
                 raise StatsError(400, '请选择这一分由进攻还是防守开。')
             line_json = json.dumps(line)
@@ -662,7 +687,26 @@ class StatsStore:
             if to_id == from_id:
                 raise StatsError(400, '传盘人和接盘人不能是同一人。')
         with self.transaction() as db:
-            self.live_game(db, game_id)
+            game = self.live_game(db, game_id)
+            if game['training_id'] is not None:
+                training = db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (game['training_id'],)).fetchone()
+                if not training:
+                    raise StatsError(404, '这次训练不存在或已删除。')
+                if kind == 'point':
+                    if sides is None:
+                        raise StatsError(400, '训练赛请分别选择 A、B 两队本分上场队员。')
+                else:
+                    point = db.execute("SELECT * FROM stats_events WHERE game_id=? AND kind='point' ORDER BY seq DESC LIMIT 1", (game_id,)).fetchone()
+                    if not point or not point['sides']:
+                        raise StatsError(409, '请先为这一分设置两队阵容与进攻方；历史记录会保留。')
+                    if db.execute("SELECT 1 FROM stats_events WHERE game_id=? AND seq>? AND kind='goal'", (game_id,point['seq'])).fetchone():
+                        raise StatsError(409, '这一分已得分，请先开始新的一分，或撤销上一条得分。')
+                    lineup = json.loads(point['sides'])
+                    side = 'a' if from_id in lineup['a'] else 'b' if from_id in lineup['b'] else None
+                    if side is None or (to_id is not None and to_id not in lineup[side]):
+                        raise StatsError(400, '只能记录本分上场队员；传盘人与接盘人必须属于同一队。')
+            elif sides is not None:
+                raise StatsError(400, '两队队内阵容仅用于训练赛。')
             player_ids = {from_id, to_id} - {None} | (set(line) if kind == 'point' else set())
             for pid in player_ids:
                 if not db.execute('SELECT 1 FROM stats_players WHERE id=?', (pid,)).fetchone():
@@ -671,8 +715,8 @@ class StatsStore:
             if last >= MAX_EVENTS:
                 raise StatsError(400, f'单场最多记录 {MAX_EVENTS} 条，请新建比赛。')
             stamp = self.now()
-            db.execute('INSERT INTO stats_events(game_id,seq,kind,from_id,to_id,line,start,created) VALUES (?,?,?,?,?,?,?,?)',
-                       (game_id, last + 1, kind, from_id, to_id, line_json, start, stamp))
+            db.execute('INSERT INTO stats_events(game_id,seq,kind,from_id,to_id,line,start,sides,side,created) VALUES (?,?,?,?,?,?,?,?,?,?)',
+                       (game_id, last + 1, kind, from_id, to_id, line_json, start, sides_json, side, stamp))
             db.execute('UPDATE stats_games SET updated=? WHERE id=?', (stamp, game_id))
             row = db.execute('SELECT * FROM stats_events WHERE game_id=? AND seq=?', (game_id, last + 1)).fetchone()
             return {'event': self.event(row), 'revision': self.revision(db, True)}

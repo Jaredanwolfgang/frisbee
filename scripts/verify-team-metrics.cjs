@@ -21,3 +21,13 @@ const dated=[{id:'unknown',created:999},{id:'older',heldOn:'2026-09-01',created:
 assert.deepEqual(M.gamesByDate(dated).map(g=>g.id),['newer','older','unknown']);
 assert.deepEqual(dated.map(g=>g.id),['unknown','older','newer'],'sorting must not mutate API records');
 console.log('PASS: game chronology uses actual match dates, leaves unknown dates last and preserves input order.');
+
+const twoSides={kind:'point',line:[1,2,3,4],start:'offense',sides:{a:[1,2],b:[3,4],offense:'a'}};
+assert.equal(M.tally([{events:[twoSides]}],1).oPoints,1);
+assert.equal(M.tally([{events:[twoSides]}],3).dPoints,1);
+assert.equal(M.sideOf(twoSides,3),'b');assert.equal(M.sideOf(twoSides,9),null);
+assert.deepEqual(M.score({events:[twoSides,{kind:'goal',side:'a'},{kind:'goal',side:'b'},{kind:'goal'}]}),{a:1,b:1,unassigned:1});
+const swapped={...twoSides,start:'defense',sides:{a:[1,3],b:[2,4],offense:'b'}};
+assert.equal(M.tally([{events:[twoSides,swapped]}],2).oPoints,2);
+assert.equal(M.tally([{events:[twoSides,swapped]}],1).dPoints,1);
+console.log('PASS: per-player A/B opening roles, per-point lineup changes and explicit/unassigned team scores.');

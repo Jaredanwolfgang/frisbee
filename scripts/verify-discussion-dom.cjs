@@ -146,3 +146,25 @@ function verifyUnread(){
  console.log('PASS: unread roots/replies, own/deleted/edit exclusion, reading, background safety, per-member/context persistence and blocked-storage fallback.');
 }
 verifyUnread();
+
+async function verifyMultipleVideos(){
+ const iso=document.createElement('div');iso.id='multiple-videos';document.body.append(iso);
+ const clips=[{id:'first-game',name:'第一场对抗',video:'https://www.bilibili.com/video/av123',videoMeta:{key:'av123',page:1}},{id:'second-game',name:'第二场对抗',video:'https://www.bilibili.com/video/BV1B7411m7LV?p=2',videoMeta:{key:'BV1B7411m7LV',page:2}}];
+ const entry={id:'multi-training',games:clips,comments:[{id:1,parentId:null,player:2,name:'队员',number:2,text:'第一场的节点',created:stamp,at:stamp,video:{gameId:clips[0].id,key:'av123',seconds:15,page:1,available:true,name:clips[0].name}}]};
+ let payload,scroll,animated=false,multi;
+ multi=context.discussion.init({getMe:()=>({id:1}),canEdit:()=>false,toast(){},login(){},api:async(path,options)=>{payload=JSON.parse(options.body);entry.comments.push({id:2,parentId:null,player:1,name:'我',number:1,text:payload.text,created:stamp,at:stamp,video:{...payload.video,available:true,name:clips[1].name}});return{comments:clone(entry.comments)};},refresh:async()=>multi.render(iso,'trainings',entry,true)});
+ const q=s=>iso.querySelector(s);multi.render(iso,'trainings',entry,true);
+ assert(!q('.discussion-video-select').hidden);assert.equal(q('[data-d="attach-video"]').options.length,2);
+ q('[data-d="attach"]').onclick();q('[data-d="time"]').value='00:15';q('[data-d="attach-video"]').value=clips[1].id;q('[data-d="attach-video"]').onchange({target:q('[data-d="attach-video"]')});
+ assert.equal(q('[data-d="time"]').value,'','changing videos clears stale time input');assert.equal(Number(q('[data-d="page"]').value),2);
+ q('[data-d="time"]').value='01:25';q('[data-d="text"]').value='第二场的走位';await q('[data-d="form"]').onsubmit({preventDefault(){}});
+ assert.deepEqual(payload.video,{gameId:clips[1].id,key:clips[1].videoMeta.key,seconds:85,page:2});
+ q('.discussion-media').scrollIntoView=options=>scroll=options;q('.discussion-media').animate=()=>animated=true;
+ await iso.onclick({target:q('[data-action="seek"][data-comment="2"]')});
+ const params=new URL(q('iframe').src).searchParams;assert.equal(params.get('bvid'),'BV1B7411m7LV');assert.equal(params.get('t'),'85');assert.equal(params.get('p'),'2');assert.equal(q('[data-d="watch-video"]').value,'second-game');
+ assert(q('[data-d="media-current"]').textContent.includes('第二场对抗 · P2 · 1:25'));assert.equal(scroll.behavior,'smooth');assert(animated);
+ const frame=q('iframe');multi.render(iso,'trainings',clone(entry),true);assert.equal(q('iframe'),frame,'refresh preserves the chosen clip');
+ await iso.onclick({target:q('[data-action="seek"][data-comment="1"]')});assert.equal(new URL(q('iframe').src).searchParams.get('aid'),'123');assert.equal(new URL(q('iframe').src).searchParams.get('t'),'15');assert(q('[data-d="media-current"]').textContent.includes('第一场对抗'));
+ console.log('PASS: multiple scrimmage videos, selected source and part submission, timestamp-driven source switching, playback offset, smooth scroll/highlight and polling persistence.');
+}
+verifyMultipleVideos().catch(error=>{console.error(error);process.exitCode=1;});

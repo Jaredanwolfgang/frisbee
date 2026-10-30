@@ -241,3 +241,16 @@ AI 还会拒绝无实际位移的跑线，避免把“原地站住”画成已�
 新增讨论接口为 `POST /api/stats/{games|trainings}/{id}/discussion`、`PUT/DELETE .../discussion/{commentId}`；恢复使用 `PUT {restore:true}`。评论写入要求队员会话，添加或替换视频仍要求编辑会话；两者独立。回复只接受同一场次的主评论，不能跨训练引用视频或修改别人的评论。数据库在既有 `stats_comments` 上新增父评论、删除状态与视频引用字段，保留原 ID、内容及作者；旧单人心得 API 保持兼容。头像从当前队员资料读取，已离开名单的作者使用历史盘名与默认头像。
 
 验证：完整 Python 测试覆盖讨论权限、历史唯一约束迁移、评论恢复和视频归属；`node scripts/verify-discussion.cjs` 验证时间格式及播放器参数。组件与页面初始化可运行 `npm install --prefix /tmp/frisbee-discussion-dom linkedom`，再运行 `NODE_PATH=/tmp/frisbee-discussion-dom/node_modules node scripts/verify-discussion-dom.cjs`；该临时依赖不参与部署或运行。
+
+
+## 队内训练赛 A / B 两队
+
+训练赛固定作为队内对抗，创建、修改及详情不显示外部对手字段。开始每一分时，先点 A / B 队卡片，再从同一名单点选该队本分上场队员；每队 1–7 人，同一人不能同时属于两队，点另一队已选队员可直接换队。选 A 进攻开时 B 自动防守开，反之亦然。两张队伍卡片固定高度，手机选人时隐藏重复比分和状态，共用搜索与可滚动名单，确认/取消按钮保持在底部。
+
+下一分沿用两队上一分阵容，可直接换人；若上一分有明确得分方，默认由另一队进攻开，也能手动调整。新训练赛记录只允许本分上场队员，同队之间记录传盘/得分；切选另一队队员时改为选择该队持盘/防守队员，不组成跨队传盘。A / B 得分分别累计，得分后开始新一分才继续记录，也可撤销误记。每人的进攻开/防守开按其本分所在队计算；正式比赛与训练赛统计继续隔离。
+
+数据库为 `stats_events` 增加可空 `sides`（本分两队与进攻方 JSON）及 `side`（记录归属队）列，旧记录原样保留。训练赛新点分记录格式为 `{kind:"point",sides:{a:[队员ID],b:[队员ID],offense:"a"或"b"}}`，返回的 `line` 为两队合并名单，`start` 为 A 队本分攻防身份；后续事件归属由服务端根据当前阵容推导，忽略客户端队伍归属。历史未分队得分单独标注，不猜测归属，不修改历史阵容或评论。
+
+一次训练内的多个训练赛录像可在评论引用时选择对应场次视频与分 P，再填写时间点。点击评论节点后切换至该视频、分 P 及秒数，平滑滚动到播放器，并显示“正在回看”的场次与节点；支持动画时短暂淡入提示，减弱动态效果设置下直接定位。每场训练赛目前对应一个录像链接，B 站合集/分 P 可通过 P 编号引用不同片段。
+
+验证：`tests/test_scrimmage.py` 覆盖双队阵容与每队人数限制、重复队员、比分归属、换队、撤销、权限及旧表迁移；`node scripts/verify-team-metrics.cjs` 验证两队每人攻防开统计。前端流程可执行 `NODE_PATH=/tmp/frisbee-discussion-dom/node_modules node scripts/verify-scrimmage-dom.cjs`，多视频节点切换由 `verify-discussion-dom.cjs` 覆盖。

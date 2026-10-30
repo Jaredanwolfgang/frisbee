@@ -89,6 +89,12 @@ class DiscussionTest(unittest.TestCase):
         root=self.post('85秒时可以提前回切',video=point)['commentId']
         saved=next(c for c in self.stats.snapshot()['trainings'][0]['comments'] if c['id']==root)
         self.assertTrue(saved['video']['available']);self.assertEqual(saved['video']['seconds'],85)
+        second=self.request('POST','/api/stats/games',{'name':'第二场对抗','trainingId':self.t,'video':OTHER})[1]['game']
+        second_point={'gameId':second['id'],'key':second['videoMeta']['key'],'seconds':85,'page':3}
+        second_id=self.post('第二场的同一时刻',video=second_point)['commentId']
+        second_saved=next(c for c in self.stats.snapshot()['trainings'][0]['comments'] if c['id']==second_id)
+        self.assertEqual((second_saved['video']['gameId'],second_saved['video']['page']),(second['id'],3))
+        self.assertNotEqual(second_saved['video']['key'],saved['video']['key'])
         game_base='/api/stats/games/'+game['id']+'/discussion'
         self.assertEqual(self.request('POST',game_base,{'text':'赛后片段','video':point},auth=False,extra={'Cookie':self.ca})[0],200)
         for changes in [{'seconds':True},{'seconds':-1},{'seconds':86401},{'seconds':'1:25'},{'page':0},{'page':False}]:

@@ -8,7 +8,7 @@ const StatsUI=(()=>{
  const GENDER_MARK={male:'♂',female:'♀'};
  let deps=null,data={players:[],games:[],trainings:[]},revision=-1,loaded=false,error='',inflight=null,busy=false,me=null;
  let openGameId=null,sel={thrower:null,receiver:null},sort={key:'goals',dir:1},editingId=null,formGender='male';
- let pointMode=false,pointSel=new Set(),pointStart='offense',editingGameId=null;
+ let pointMode=false,pointSel=new Set(),pointStart='offense',pointSide='a',pointSides={a:new Set(),b:new Set()},editingGameId=null;
  let openTrainingId=null,attendSel=new Set(),attendDirty=false,scrimmageTrainingId=null;
  let trainingPane='plan',gamePane='record',chipQuery='',showAllPlayers=false,teamHub=null,discussionUI=null;
 
@@ -31,7 +31,9 @@ const StatsUI=(()=>{
  function activityCard({attribute,id,name,status,label,heldOn,meta,count,unit}){
   return '<button type="button" class="stats-game-card" '+attribute+'="'+esc(id)+'"><span class="stats-badge '+esc(status)+'">'+esc(label)+'</span><span class="stats-game-card-main"><strong>'+esc(name)+'</strong><span class="team-activity-date"><time'+(/^\d{4}-\d{2}-\d{2}$/.test(heldOn)?' datetime="'+esc(heldOn)+'"':'')+'>'+esc(heldOn)+'</time></span><span class="team-activity-meta">'+esc(meta)+'</span></span><span class="stats-game-card-side"><b>'+count+'</b><small>'+esc(unit)+'</small></span><span class="row-arrow" aria-hidden="true">›</span></button>';
  }
- function gameCard(g){return activityCard({attribute:'data-stats-game',id:g.id,name:g.name,status:g.status,label:g.status==='live'?'进行中':'已结束',heldOn:gameDate(g),meta:(g.opponent?'vs '+g.opponent+' · ':'')+g.events.length+' 条记录'+(g.video?' · ▶ 视频':''),count:g.events.filter(e=>e.kind==='goal').length,unit:'得分'});}
+ const isScrimmage=g=>!!g&&(!!g.trainingId||data.trainings.some(t=>t.games.some(x=>x.id===g.id)));
+ const sideName=side=>side==='a'?'A 队':'B 队';
+ function gameCard(g){const internal=isScrimmage(g),score=TeamMetrics.score(g);return activityCard({attribute:'data-stats-game',id:g.id,name:g.name,status:g.status,label:g.status==='live'?'进行中':'已结束',heldOn:gameDate(g),meta:(internal?'队内对抗 · ':g.opponent?'vs '+g.opponent+' · ':'')+g.events.length+' 条记录'+(g.video?' · ▶ 视频':'')+(internal&&score.unassigned?' · '+score.unassigned+' 次历史得分未分队':''),count:internal?score.a+' : '+score.b:g.events.filter(e=>e.kind==='goal').length,unit:internal?'A 队 / B 队':'得分'});}
  function metricView(target,value){const select=$('#stats-'+target+'-view'),table=$('#'+(target==='average'?'stats-averages':'stats-boxscore'));select.value=metricGroups[value]?value:'attack';table.closest('.stats-table-wrap').dataset.statsView=select.value;document.querySelector('[data-scroll-for="'+table.id+'"]').hidden=select.value!=='all';if(target==='average'&&!metricGroups[select.value].includes(sort.key)&&sort.key!=='name'&&sort.key!=='attendance'){sort={key:metricGroups[select.value][0],dir:1};renderAverages();}}
  const pad=n=>String(n).padStart(2,'0');
  const clock=ms=>{const d=new Date(ms||Date.now());return pad(d.getHours())+':'+pad(d.getMinutes());};
@@ -46,7 +48,7 @@ const StatsUI=(()=>{
   else if(e.kind==='goal'){tally(totals,e.from,'passes');tally(totals,e.from,'assists');tally(totals,e.to,'goals');}
   else if(e.kind==='turnover')tally(totals,e.to??e.from,'turnovers');
   else if(e.kind==='defense')tally(totals,e.from,'steals');
-  else if(e.kind==='point'){const key=e.start==='defense'?'dPoints':'oPoints';(e.line||[]).forEach(id=>{tally(totals,id,'points');tally(totals,id,key);});}
+  else if(e.kind==='point'){(e.line||[]).forEach(id=>{tally(totals,id,'points');tally(totals,id,TeamMetrics.pointStart(e,id)==='defense'?'dPoints':'oPoints');});}
  }
  const gameTotals=game=>{const t={};(game.events||[]).forEach(e=>applyEvent(t,e));return t;};
  const seasonTotals=()=>{const finished=data.games.filter(g=>g.status==='finished'),t={};finished.forEach(g=>g.events.forEach(e=>applyEvent(t,e)));return{totals:t,games:finished.length};};
@@ -106,41 +108,46 @@ const StatsUI=(()=>{
  }
 
  function renderChips(editable){
-  const box=$('#stats-chips'),scroll=box.scrollTop,g=currentGame(),line=g?pointState(g).point?.line:null,all=$('#stats-show-all');
-  all.hidden=pointMode||!line?.length;all.setAttribute('aria-pressed',String(showAllPlayers));all.textContent=showAllPlayers?'仅本分阵容':'全部 '+data.players.length+' 人';
+  const box=$('#stats-chips'),scroll=box.scrollTop,g=currentGame(),line=g?pointState(g).point?.line:null,internal=isScrimmage(g),all=$('#stats-show-all');
+  all.hidden=internal||pointMode||!line?.length;all.setAttribute('aria-pressed',String(showAllPlayers));all.textContent=showAllPlayers?'仅本分阵容':'全部 '+data.players.length+' 人';
   if(!data.players.length){box.innerHTML='<p class="stats-empty">名单为空，先在「管理队员」里添加队员。</p>';return;}
   $('#stats-chip-search').placeholder=!pointMode&&line?.length&&!showAllPlayers?'搜索本分队员':'搜索盘名或号码';
   const players=data.players.filter(p=>(pointMode||showAllPlayers||!line?.length||line.includes(p.id))&&(!chipQuery||(p.name+' '+p.number).toLowerCase().includes(chipQuery)));
   box.innerHTML=players.map(p=>{
    const role=pointMode?(pointSel.has(p.id)?'line':''):(p.id===sel.thrower?'thrower':p.id===sel.receiver?'receiver':'');
-   const badge=role==='thrower'?(sel.receiver!=null?'传盘':'持盘'):role==='receiver'?'接盘':role==='line'?'场上':'';
-   return '<button type="button" class="stats-chip'+(role?' is-'+role:'')+'" data-stats-chip="'+p.id+'" aria-label="#'+p.number+' '+esc(p.name)+(badge?'，'+badge:'')+'" title="'+esc(p.name)+'" aria-pressed="'+(!!role)+'"'+(editable?'':' disabled')+'><span class="stats-number">#'+p.number+'</span><span class="stats-chip-name">'+esc(p.name)+'</span>'+genderMark(p)+(badge?'<i>'+badge+'</i>':'')+'</button>';
+   const side=internal?(pointMode?(pointSides.a.has(p.id)?'a':pointSides.b.has(p.id)?'b':null):TeamMetrics.sideOf(pointState(g).point,p.id)):null;
+   const badge=(side?side.toUpperCase()+'队'+(!pointMode&&role?'·':''):'')+(pointMode?(internal?'':role==='line'?'场上':''):role==='thrower'?(sel.receiver!=null?'传盘':'持盘'):role==='receiver'?'接盘':role==='line'?'场上':'');
+   return '<button type="button" class="stats-chip'+(side?' side-'+side:'')+(role?' is-'+role:'')+'" data-stats-chip="'+p.id+'" aria-label="#'+p.number+' '+esc(p.name)+(badge?'，'+badge:'')+'" title="'+esc(p.name)+'" aria-pressed="'+(!!role)+'"'+(editable&&(!internal||pointMode||(pointState(g).open&&!!pointState(g).point?.sides))?'':' disabled')+'><span class="stats-number">#'+p.number+'</span><span class="stats-chip-name">'+esc(p.name)+'</span>'+genderMark(p)+(badge?'<i>'+badge+'</i>':'')+'</button>';
   }).join('')||'<p class="stats-empty">没有匹配的队员，试试盘名或号码。</p>';
   box.scrollTop=scroll;
  }
  function renderPointUI(g,editable){
   const state=pointState(g),info=$('#stats-point-info'),btn=$('#rec-point'),setup=$('#stats-point-setup');
-  info.innerHTML=!state.point?'尚未记录上场阵容；不影响传盘记录':state.open
+  const internal=isScrimmage(g);$('#scrimmage-team-setup').hidden=!internal;$('#stats-recorder').classList.toggle('scrimmage-setting',internal&&pointMode);
+  info.innerHTML=internal?(!state.point?.sides?'先选择两队本分上场队员与进攻方':state.open?'<b>第 '+state.count+' 分</b> · '+sideName(state.point.sides.offense)+'进攻开 · '+state.point.sides.a.length+' vs '+state.point.sides.b.length:'第 '+state.count+' 分已结束，可沿用阵容开始下一分'):!state.point?'尚未记录上场阵容；不影响传盘记录':state.open
    ?'<b>第 '+state.count+' 分</b> · '+(state.point.start==='defense'?'防守开':'进攻开')+' · 场上 '+state.point.line.length+' 人'
    :'第 '+state.count+' 分已结束，点「新的一分」记录下一分阵容';
-  btn.hidden=!editable||pointMode;
+  btn.textContent=internal&&!state.point?.sides?'选择两队阵容':'＋ 新的一分';btn.hidden=!editable||pointMode;
   setup.hidden=!pointMode;
   $('.stats-point-actions').hidden=!pointMode;
   if(pointMode){
+   $$('[data-pick-side]').forEach(button=>{const side=button.dataset.pickSide,ids=[...pointSides[side]];button.disabled=!editable;button.setAttribute('aria-pressed',String(pointSide===side));button.setAttribute('aria-label','调整'+sideName(side)+'阵容，已选 '+ids.length+' 人');button.innerHTML='<strong>'+sideName(side)+' <small>'+ids.length+'/7</small></strong><span>'+esc(ids.map(id=>data.players.find(p=>p.id===id)?.name||'').join('、')||'点选下方队员')+'</span>';});
+   $('#point-offense').textContent=internal?'A 攻 · B 防':'进攻开';$('#point-defense').textContent=internal?'B 攻 · A 防':'防守开';$('#point-offense').disabled=$('#point-defense').disabled=!editable;
    $('#point-offense').setAttribute('aria-pressed',String(pointStart==='offense'));
    $('#point-defense').setAttribute('aria-pressed',String(pointStart==='defense'));
-   $('#point-setup-note').textContent='点选本分上场队员（已选 '+pointSel.size+' 人）'+(state.point?' · 上一分'+(state.point.start==='defense'?'防守':'进攻')+'开':'');
-   $('#point-confirm').disabled=!pointSel.size;
+   $('#point-setup-note').textContent=internal?'正在选 '+sideName(pointSide)+'：点队员加入或移除，可直接换队。':'点选本分上场队员（已选 '+pointSel.size+' 人）'+(state.point?' · 上一分'+(state.point.start==='defense'?'防守':'进攻')+'开':'');
+   $('#point-confirm').disabled=busy||(internal?(!pointSides.a.size||!pointSides.b.size):!pointSel.size);$('#point-confirm').textContent=internal?'开始这一分':'确认上场';
   }
  }
  function renderActions(editable,g){
+  const state=pointState(g),internal=isScrimmage(g),canUndo=editable;if(internal&&(!state.open||!state.point?.sides))editable=false;
   const t=sel.thrower!=null,r=sel.receiver!=null,pair=t&&r;
   $('.stats-actions').hidden=pointMode;$('.stats-undo-row').hidden=pointMode;
   $('#rec-pass').disabled=!editable||!pair;$('#rec-goal').disabled=!editable||!pair;
   $('#rec-turn').disabled=!editable||!t;$('#rec-defense').disabled=!editable||!t||r;
-  $('#rec-undo').disabled=!editable||!g.events.length;$('#rec-clear').disabled=!t;
+  $('#rec-undo').disabled=!canUndo||!g.events.length;$('#rec-clear').disabled=!t;
   $('#rec-turn-note').textContent=pair?'记在接盘人（掉盘）':'记在持盘人（传丢）';
-  $('#stats-recorder-hint').textContent=!canEdit()?'开启编辑后可记录':g.status!=='live'?'比赛已结束；在「比赛操作」中点「重新开始」可继续记录':pointMode?'选择上场队员和进攻 / 防守开，确认后开始记录这一分':!t?'点一名队员作为持盘人；记 D 防守成功也先点防守队员':!r?playerName(sel.thrower)+'：再点接盘人，或直接记失误 / D':playerName(sel.thrower)+' → '+playerName(sel.receiver)+'：记传盘、得分，或接盘失误';
+  $('#stats-recorder-hint').textContent=!canEdit()?'开启编辑后可记录':g.status!=='live'?'比赛已结束；在「比赛操作」中点「重新开始」可继续记录':pointMode?(internal?'分别选好两队，再选谁进攻开':'选择上场队员和进攻 / 防守开，确认后开始记录这一分'):internal&&(!state.open||!state.point?.sides)?'先设置新一分的两队阵容，再记录传盘与得分':!t?'点一名队员作为持盘人；记 D 防守成功也先点防守队员':!r?playerName(sel.thrower)+'：再点接盘人，或直接记失误 / D':playerName(sel.thrower)+' → '+playerName(sel.receiver)+'：记传盘、得分，或接盘失误';
  }
  function renderBoxScore(g){
   const totals=gameTotals(g),table=$('#stats-boxscore'),empty=$('#stats-boxscore-empty');
@@ -159,6 +166,7 @@ const StatsUI=(()=>{
   return esc(playerName(e.from))+'<em class="d">D 防守成功</em>';
  }
  function describePlain(e,pointNumber){
+  if(e.kind==='point'&&e.sides)return '第 '+pointNumber+' 分阵容（A 队 '+e.sides.a.length+' 人，B 队 '+e.sides.b.length+' 人，'+sideName(e.sides.offense)+'进攻开）';
   if(e.kind==='point')return '第 '+pointNumber+' 分阵容（'+(e.start==='defense'?'防守开':'进攻开')+'，'+(e.line||[]).length+' 人）';
   if(e.kind==='pass')return playerName(e.from)+' → '+playerName(e.to)+' 传盘';
   if(e.kind==='goal')return playerName(e.from)+' → '+playerName(e.to)+' 得分';
@@ -180,13 +188,13 @@ const StatsUI=(()=>{
   let html='';
   if(loose.length)html+='<details class="stats-point-group loose"><summary><span class="stats-point-title">未记录阵容的记录</span><span class="stats-point-meta">'+loose.length+' 条</span></summary><div class="stats-point-body">'+loose.map(eventRow).join('')+'</div></details>';
   groups.forEach((grp,i)=>{
-   const n=i+1,hasGoal=grp.events.some(e=>e.kind==='goal'),isLast=i===groups.length-1;
+   const n=i+1,goal=grp.events.find(e=>e.kind==='goal'),hasGoal=!!goal,isLast=i===groups.length-1;
    const live=!hasGoal&&isLast&&g.status==='live';
-   const result=hasGoal?'<em class="us">我方得分</em>':live?'<em class="livebit">进行中</em>':'<em class="unrecorded">未记录结果</em>';
-   const start=grp.point.start==='defense'?'防守开':'进攻开';
+   const result=hasGoal?'<em class="us">'+(isScrimmage(g)?(goal.side?sideName(goal.side)+'得分':'未分队得分'):'我方得分')+'</em>':live?'<em class="livebit">进行中</em>':'<em class="unrecorded">未记录结果</em>';
+   const start=grp.point.sides?sideName(grp.point.sides.offense)+'进攻开':grp.point.start==='defense'?'防守开':'进攻开';
    const key=String(grp.point.seq),open=expanded.has(key)?expanded.get(key):live;
    html+='<details class="stats-point-group" data-point-key="'+key+'"'+(open?' open':'')+'><summary><span class="stats-point-no">'+pad(n)+'</span><span class="stats-point-title">第 '+n+' 分</span>'+result+'<span class="stats-point-meta">'+start+' · '+grp.point.line.length+' 人 · '+grp.events.length+' 条记录</span></summary>'
-    +'<div class="stats-point-body"><div class="stats-point-line"><b>上场</b>'+(grp.point.line.map(id=>esc(playerName(id))).join('、')||'未记录')+'<b>本分起始</b>'+start+'</div>'
+    +'<div class="stats-point-body">'+(grp.point.sides?['a','b'].map(side=>'<div class="stats-point-line"><b>'+sideName(side)+' · '+(grp.point.sides.offense===side?'进攻开':'防守开')+'</b>'+grp.point.sides[side].map(id=>esc(playerName(id))).join('、')+'</div>').join(''):'<div class="stats-point-line"><b>上场</b>'+(grp.point.line.map(id=>esc(playerName(id))).join('、')||'未记录')+'<b>本分起始</b>'+start+'</div>')
     +(grp.events.length?grp.events.map(eventRow).join(''):'<p class="stats-empty">这一分没有记录传递。</p>')+'</div></details>';
   });
   box.innerHTML=html;
@@ -203,11 +211,11 @@ const StatsUI=(()=>{
   const editable=canEdit()&&g.status==='live'&&!busy;
   syncGamePane();
   $('#stats-game-title').textContent=g.name;
-  $('#stats-game-sub').textContent=gameDate(g)+(g.opponent?' · vs '+g.opponent:'')+' · '+(g.status==='live'?'进行中':'已结束');
+  $('#stats-game-sub').textContent=gameDate(g)+(isScrimmage(g)?' · 队内对抗':g.opponent?' · vs '+g.opponent:'')+' · '+(g.status==='live'?'进行中':'已结束');
   renderVideo(g);
   $('#stats-game-status').textContent=g.status==='live'?'结束比赛':'重新开始';
   $('#stats-game-status').hidden=!canEdit();$('#stats-game-date-edit').hidden=!canEdit();$('#stats-game-unlock').hidden=canEdit();$('.stats-game-more').hidden=!canEdit();
-  $('#stats-score-us').textContent=g.events.filter(e=>e.kind==='goal').length;
+  const internal=isScrimmage(g),score=TeamMetrics.score(g);$('#stats-score-label').textContent=internal?'A 队':'我们';$('#stats-score-b-box').hidden=!internal;$('#stats-score-b').textContent=score.b;$('#stats-score-us').textContent=internal?score.a:g.events.filter(e=>e.kind==='goal').length;$('#stats-score-unassigned').hidden=!internal||!score.unassigned;$('#stats-score-unassigned').textContent=score.unassigned+' 次历史得分未分队';
   $('#stats-event-count').textContent=g.events.length+' 条记录 · '+pointState(g).count+' 分';
   renderChips(editable);renderPointUI(g,editable);renderActions(editable,g);renderBoxScore(g);renderLog(g);renderComments(g);
  }
@@ -313,8 +321,9 @@ const StatsUI=(()=>{
  const sortPlayers=()=>data.players.sort((a,b)=>a.number-b.number||a.id-b.id);
 
  function tapChip(id){
-  id=Number(id);
-  if(pointMode){pointSel.has(id)?pointSel.delete(id):pointSel.add(id);}
+  if(busy||!canEdit())return;id=Number(id);
+  if(pointMode){if(isScrimmage(currentGame())){const chosen=pointSides[pointSide],other=pointSides[pointSide==='a'?'b':'a'];if(chosen.has(id))chosen.delete(id);else{if(chosen.size>=7){deps.toast('每队每分最多上场 7 人。');return;}const moved=other.delete(id);chosen.add(id);if(moved)deps.toast('已将 '+playerName(id)+' 移到'+sideName(pointSide));}pointSel=new Set([...pointSides.a,...pointSides.b]);}else pointSel.has(id)?pointSel.delete(id):pointSel.add(id);}
+  else if(isScrimmage(currentGame())&&sel.thrower!=null&&TeamMetrics.sideOf(pointState(currentGame()).point,sel.thrower)!==TeamMetrics.sideOf(pointState(currentGame()).point,id))sel={thrower:id,receiver:null};
   else if(sel.receiver===id)sel.receiver=null;
   else if(sel.thrower===id){if(sel.receiver!=null)sel.receiver=null;else sel.thrower=null;}
   else if(sel.thrower==null)sel.thrower=id;
@@ -324,19 +333,20 @@ const StatsUI=(()=>{
  }
  function beginPoint(){
   const g=currentGame();
-  if(!g||g.status!=='live')return;
+  if(!g||g.status!=='live'||busy||!canEdit())return;
   const state=pointState(g),last=state.point;
-  pointMode=true;pointSel=new Set(last?.line||[]);clearChipSearch();
+  pointMode=true;pointSide='a';pointSides={a:new Set(last?.sides?.a||[]),b:new Set(last?.sides?.b||[])};pointSel=new Set(isScrimmage(g)?[...pointSides.a,...pointSides.b]:last?.line||[]);clearChipSearch();
   const lastIsGoal=g.events.length&&g.events[g.events.length-1].kind==='goal';
-  pointStart=lastIsGoal?'defense':(last?last.start:'offense');
+  pointStart=isScrimmage(g)?(lastIsGoal&&g.events[g.events.length-1].side?(g.events[g.events.length-1].side==='a'?'defense':'offense'):(last?.start||'offense')):lastIsGoal?'defense':(last?last.start:'offense');
   sel={thrower:null,receiver:null};
   renderGame();
  }
  async function confirmPoint(){
   const g=currentGame();
+  const internal=isScrimmage(g);if(internal&&(!pointSides.a.size||!pointSides.b.size)){deps.toast('请分别为 A、B 两队选择至少一名上场队员。');return;}
   if(!g||!pointSel.size){deps.toast('请至少选择一名上场队员。');return;}
-  const line=[...pointSel],start=pointStart;
-  const res=await mutate('stats/games/'+g.id+'/events',{method:'POST',body:JSON.stringify({kind:'point',line,start})},r=>{g.events.push(r.event);pointMode=false;pointSel=new Set();showAllPlayers=false;clearChipSearch();});
+  const line=[...pointSel],start=pointStart,body=internal?{kind:'point',sides:{a:[...pointSides.a],b:[...pointSides.b],offense:start==='offense'?'a':'b'}}:{kind:'point',line,start};
+  const res=await mutate('stats/games/'+g.id+'/events',{method:'POST',body:JSON.stringify(body)},r=>{g.events.push(r.event);pointMode=false;pointSel=new Set();showAllPlayers=false;clearChipSearch();});
   if(res)deps.toast('已记录第 '+pointState(g).count+' 分阵容，开始记录传盘。');
  }
  function cancelPoint(){pointMode=false;pointSel=new Set();clearChipSearch();renderGame();}
@@ -351,7 +361,7 @@ const StatsUI=(()=>{
    g.events.push(r.event);
    if(kind==='pass')sel={thrower:wasReceiver,receiver:null};else sel={thrower:null,receiver:null};
   });
-  if(res&&kind==='goal')deps.toast('得分！'+playerName(wasReceiver)+' · 当前 '+g.events.filter(e=>e.kind==='goal').length+' 分');
+  if(res&&kind==='goal')deps.toast(isScrimmage(g)?sideName(res.event.side)+'得分！· '+TeamMetrics.score(g).a+' : '+TeamMetrics.score(g).b:'得分！'+playerName(wasReceiver)+' · 当前 '+g.events.filter(e=>e.kind==='goal').length+' 分');
  }
  function undoEvent(){
   const g=currentGame();
@@ -382,11 +392,12 @@ const StatsUI=(()=>{
   editingGameId=g?g.id:null;
   if(!g)return;
   document.querySelectorAll('.more-menu').forEach(m=>m.open=false);
-  $('#stats-new-game-title').textContent='修改比赛信息';
-  $('#stats-new-game-note').textContent='设置实际比赛日期，修改名称、对手和录像链接。';
+  const internal=isScrimmage(g);scrimmageTrainingId=internal?(g.trainingId||data.trainings.find(t=>t.games.some(x=>x.id===g.id))?.id):null;$('#stats-opponent-field').hidden=internal;$('#stats-game-opponent').disabled=internal;
+  $('#stats-new-game-title').textContent=internal?'修改训练赛信息':'修改比赛信息';
+  $('#stats-new-game-note').textContent=internal?'队内 A / B 两队对抗，每一分可重新选上场阵容。':'设置实际比赛日期，修改名称、对手和录像链接。';
   $('#stats-new-game-submit').textContent='保存';
   $('#stats-game-date').value=g.heldOn||'';$('#stats-game-name').value=g.name;$('#stats-game-opponent').value=g.opponent;$('#stats-game-video').value=g.video||'';
-  $('#stats-new-game-dialog').showModal();focusStatsForm('#stats-new-game-dialog','#stats-game-opponent');
+  $('#stats-new-game-dialog').showModal();focusStatsForm('#stats-new-game-dialog',internal?'#stats-game-name':'#stats-game-opponent');
  }
 
  function init(deps_){
@@ -402,7 +413,7 @@ const StatsUI=(()=>{
   $('#stats-unlock').onclick=()=>deps.requestEdit();
   $('#stats-players-btn').onclick=()=>deps.requestEdit(openPlayers);
   $('#stats-new-game').onclick=()=>deps.requestEdit(()=>{
-   editingGameId=null;scrimmageTrainingId=null;
+   editingGameId=null;scrimmageTrainingId=null;$('#stats-opponent-field').hidden=false;$('#stats-game-opponent').disabled=false;
    $('#stats-new-game-title').textContent='新建比赛';$('#stats-new-game-note').textContent='创建后进入实时记录；可以随时结束，结束后计入场均。';
    $('#stats-new-game-submit').textContent='开始记录';
    $('#stats-new-game-form').reset();
@@ -435,7 +446,7 @@ const StatsUI=(()=>{
    const heldOn=$('#stats-game-date').value;
    if(!heldOn){deps.toast('请选择实际比赛日期。');return;}
    const fallback=heldOn+' '+(scrimmageTrainingId?'训练赛':'比赛');
-   const name=$('#stats-game-name').value.trim()||fallback,opponent=$('#stats-game-opponent').value.trim();
+   const name=$('#stats-game-name').value.trim()||fallback,opponent=scrimmageTrainingId?'':$('#stats-game-opponent').value.trim();
    let video=BiliVideo.extractURL($('#stats-game-video').value);
    if(video&&!/^https?:\/\//i.test(video))video='https://'+video;
    if(editingGameId){
@@ -444,7 +455,7 @@ const StatsUI=(()=>{
      const g=findGameContainer(id);if(g){Object.assign(g,r.game);}
     });
     if(!res)return;
-    editingGameId=null;$('#stats-new-game-dialog').close();
+    editingGameId=null;scrimmageTrainingId=null;$('#stats-new-game-dialog').close();
     deps.toast('比赛信息已更新。');
     return;
    }
@@ -488,7 +499,7 @@ const StatsUI=(()=>{
    const finishing=g.status==='live';
    mutate('stats/games/'+g.id+'/status',{method:'POST',body:JSON.stringify({status:finishing?'finished':'live'})},r=>{
     const game=currentGame();if(game){game.status=r.game.status;game.updated=r.game.updated;}
-    deps.toast(finishing?'比赛已结束；场均数据已计入这场。':'已重新开始记录。');
+    deps.toast(finishing?(isScrimmage(g)?'训练赛已结束；仅计入训练赛数据。':'比赛已结束；场均数据已计入这场。'):'已重新开始记录。');
    });
   };
   $('#stats-game-delete').onclick=()=>{
@@ -510,6 +521,7 @@ const StatsUI=(()=>{
   $('#rec-point').onclick=beginPoint;
   $('#point-offense').onclick=()=>{pointStart='offense';renderGame();};
   $('#point-defense').onclick=()=>{pointStart='defense';renderGame();};
+  $$('[data-pick-side]').forEach(button=>button.onclick=()=>{if(busy||!canEdit())return;pointSide=button.dataset.pickSide;renderGame();});
   $('#point-confirm').onclick=confirmPoint;
   $('#point-cancel').onclick=cancelPoint;
   $('#rec-pass').onclick=()=>record('pass');
@@ -545,8 +557,8 @@ const StatsUI=(()=>{
   $('#drill-picker-close').onclick=()=>$('#drill-picker-dialog').close();
   $('#training-game-add').onclick=()=>{
    const t=currentTraining();if(!t)return;
-   scrimmageTrainingId=t.id;editingGameId=null;
-   $('#stats-new-game-title').textContent='添加训练赛';$('#stats-new-game-note').textContent='记录队内对抗；训练赛数据不计入场均数据。';
+   scrimmageTrainingId=t.id;editingGameId=null;$('#stats-opponent-field').hidden=true;$('#stats-game-opponent').disabled=true;
+   $('#stats-new-game-title').textContent='添加训练赛';$('#stats-new-game-note').textContent='A、B 两队队内对抗，下一步选择上场队员与进攻方。';
    $('#stats-new-game-submit').textContent='开始记录';
    $('#stats-new-game-form').reset();$('#stats-game-date').value=t.heldOn||'';
    $('#stats-new-game-dialog').showModal();focusStatsForm('#stats-new-game-dialog','#stats-game-name');
