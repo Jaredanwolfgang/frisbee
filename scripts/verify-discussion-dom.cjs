@@ -190,7 +190,7 @@ async function verifyMultipleVideos(){
  const clips=[{id:'first-game',name:'第一场对抗',video:'https://www.bilibili.com/video/av123',videoMeta:{key:'av123',page:1}},{id:'second-game',name:'第二场对抗',video:'https://www.bilibili.com/video/BV1B7411m7LV?p=2',videoMeta:{key:'BV1B7411m7LV',page:2}}];
  const entry={id:'multi-training',games:clips,comments:[{id:1,parentId:null,player:2,name:'队员',number:2,text:'第一场的节点',created:stamp,at:stamp,video:{gameId:clips[0].id,key:'av123',seconds:15,page:1,available:true,name:clips[0].name}}]};
  let payload,scroll,animated=false,multi;
- multi=context.discussion.init({getMe:()=>({id:1}),canEdit:()=>false,toast(){},login(){},api:async(path,options)=>{payload=JSON.parse(options.body);entry.comments.push({id:2,parentId:null,player:1,name:'我',number:1,text:payload.text,created:stamp,at:stamp,video:null,videoRefs:payload.videoRefs.map(r=>({...r,available:true,name:clips.find(g=>g.id===r.gameId).name}))});return{comments:clone(entry.comments)};},refresh:async()=>multi.render(iso,'trainings',entry,true)});
+ multi=context.discussion.init({getMe:()=>({id:1}),canEdit:()=>false,toast(){},login(){},api:async(path,options)=>{if(path.includes('/video-part?'))return{key:'BV1B7411m7LV',page:2,cid:2345};payload=JSON.parse(options.body);entry.comments.push({id:2,parentId:null,player:1,name:'我',number:1,text:payload.text,created:stamp,at:stamp,video:null,videoRefs:payload.videoRefs.map(r=>({...r,available:true,name:clips.find(g=>g.id===r.gameId).name}))});return{comments:clone(entry.comments)};},refresh:async()=>multi.render(iso,'trainings',entry,true)});
  const q=s=>iso.querySelector(s);multi.render(iso,'trainings',entry,true);
  assert(!q('.discussion-video-select').hidden);assert.equal(q('[data-d="attach-video"]').options.length,2);
  q('[data-d="attach"]').onclick();q('[data-d="time"]').value='00:15';q('[data-d="attach-video"]').value=clips[1].id;q('[data-d="attach-video"]').onchange({target:q('[data-d="attach-video"]')});
@@ -200,7 +200,8 @@ async function verifyMultipleVideos(){
  assert.equal(payload.videoRefs.length,2);assert.equal(payload.videoRefs[1].gameId,clips[1].id);assert.equal(payload.videoRefs[1].seconds,85);assert.equal(payload.videoRefs[1].page,2);assert.equal(q('[data-message="2"] p').querySelectorAll('button').length,2,'both nodes flow inside the same paragraph');assert.equal(q('[data-message="2"] p').textContent.includes('P2'),false);
  q('.discussion-media').scrollIntoView=options=>scroll=options;q('.discussion-media').animate=()=>animated=true;
  await iso.onclick({target:q('[data-action="seek"][data-comment="2"][data-ref="1"]')});
- const direct=q('.discussion-video-controls a[aria-label]');assert.equal(new URL(direct.href).searchParams.get('t'),'85');assert.equal(new URL(direct.href).searchParams.get('p'),'2');assert.equal(direct.target,'_blank');const params=new URL(q('iframe').src).searchParams;assert.equal(params.get('bvid'),'BV1B7411m7LV');assert.equal(params.get('t'),'85');assert.equal(params.get('p'),'2');assert.equal(q('[data-d="watch-video"]').value,'second-game');
+ await new Promise(setImmediate);
+ const direct=q('.discussion-video-controls a[aria-label]');assert.equal(new URL(direct.href).searchParams.get('cid'),'2345');assert.equal(new URL(direct.href).searchParams.get('t'),'85');assert.equal(new URL(direct.href).searchParams.get('p'),'2');assert.equal(direct.target,'_blank');const params=new URL(q('iframe').src).searchParams;assert.equal(params.get('bvid'),'BV1B7411m7LV');assert.equal(params.get('t'),'85');assert.equal(params.get('p'),'2');assert.equal(q('[data-d="watch-video"]').value,'second-game');
  assert(q('[data-d="media-current"]').textContent.includes('第二场对抗 · 1:25'));assert.equal(scroll.behavior,'smooth');assert(animated);
  const frame=q('iframe');multi.render(iso,'trainings',clone(entry),true);assert.equal(q('iframe'),frame,'refresh preserves the chosen clip');
  await iso.onclick({target:q('[data-action="seek"][data-comment="1"]')});assert.equal(new URL(q('iframe').src).searchParams.get('aid'),'123');assert.equal(new URL(q('iframe').src).searchParams.get('t'),'15');assert(q('[data-d="media-current"]').textContent.includes('第一场对抗'));
@@ -223,3 +224,32 @@ async function verifyMentionsAndMobileVideo(){
  console.log('PASS: typed teammate mentions, selection and Unicode anchors coexist with inline video nodes; mobile deliberate loading, retry and polling preservation.');
 }
 verifyMentionsAndMobileVideo().catch(e=>{console.error(e);process.exitCode=1;});
+
+async function verifySameUploadParts(){
+ const key='BV1PE4u6KECn',clip=(id,page)=>({id,name:id,video:'https://www.bilibili.com/video/'+key+'?p='+page,videoMeta:{key,page},comments:[]});
+ const host=document.createElement('div');host.id='same-upload';document.body.append(host);
+ const q=s=>host.querySelector(s),tick=()=>new Promise(setImmediate);
+ let resolve,fail=false;
+ const ui=context.discussion.init({getMe:()=>null,toast(){},login(){},api:async()=>{
+  if(fail)throw Error('暂时无法确认分 P');
+  return new Promise(done=>{resolve=done;});
+ }});
+ const first=clip('match',1),second=clip('match',2);
+ ui.render(host,'games',first,true);
+ assert.equal(new URL(q('iframe').src).searchParams.get('p'),'1');
+ ui.render(host,'games',second,true);
+ assert(!q('iframe'),'same BV configured from P1 to P2 must wait for P2');
+ resolve({key,page:2,cid:43282794064});await tick();
+ assert.equal(new URL(q('iframe').src).searchParams.get('cid'),'43282794064');
+ const practice={id:'practice',games:[clip('scrim-2',2),clip('scrim-1',1)],comments:[]};
+ ui.render(host,'trainings',practice,true);
+ const choose=q('[data-d="watch-video"]');
+ choose.onchange({target:{value:'scrim-1'}});const frame=q('iframe');assert.equal(new URL(frame.src).searchParams.get('p'),'1');
+ resolve({key,page:2,cid:43282794064});await tick();
+ assert.equal(q('iframe'),frame,'late P2 lookup cannot replace the selected P1 scrimmage');
+ choose.onchange({target:{value:'scrim-2'}});await tick();assert.equal(new URL(q('iframe').src).searchParams.get('cid'),'43282794064');
+ fail=true;ui.render(host,'games',clip('unavailable',2),true);await tick();
+ assert(!q('iframe'));assert(q('.discussion-video-controls a[aria-label]').hidden);assert.equal(new URL(q('.discussion-video-controls a').href).searchParams.get('p'),'2');
+ console.log('PASS: same-BV match edit, two scrimmages, stale lookup isolation and explicit P2 fallback.');
+}
+verifySameUploadParts().catch(error=>{console.error(error);process.exitCode=1;});

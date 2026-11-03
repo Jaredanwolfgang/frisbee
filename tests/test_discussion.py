@@ -20,6 +20,30 @@ class DiscussionTest(unittest.TestCase):
     login=fixture.StatsAPITest.login
     game=fixture.StatsAPITest.game
 
+    def test_same_upload_second_part_for_match_and_scrimmage(self):
+        import io
+        key='BV1PE4u6KECn'
+        link=f'https://www.bilibili.com/video/{key}/?spm_id_from=share&p=2'
+        p2={'key':key,'page':2,'cid':43282794064}
+        tid=self.request('POST','/api/stats/trainings',{'name':'比赛录像'})[1]['training']['id']
+        payload=json.dumps({'code':0,'data':[{'page':1,'cid':43282402746},{'page':2,'cid':43282794064}]}).encode()
+        VIDEO._parts.cache_clear()
+        self.addCleanup(VIDEO._parts.cache_clear)
+        with patch.object(VIDEO,'build_opener') as opener:
+            opener.return_value.open.return_value=io.BytesIO(payload)
+            for setup in ({},{'trainingId':tid}):
+                g=self.request('POST','/api/stats/games',{'name':'第二场','video':link,**setup})[1]['game']
+                self.assertEqual(g['videoMeta'],{'key':key,'page':2})
+                route='/api/stats/games/'+g['id']+'/video-part?key='
+                self.assertEqual(self.request('GET',route+key+'&page=2',auth=False),(200,p2))
+                self.assertEqual(self.request('GET',route+key+'&page=1')[1]['cid'],43282402746)
+                self.assertEqual(self.request('GET',route+key+'&page=3')[0],502)
+                self.assertEqual(self.request('GET',route+'BV1B7411m7LV&page=2')[0],404)
+                self.assertEqual(self.request('GET',route+key+'&page=0')[0],400)
+            self.assertEqual(opener.return_value.open.call_count,1)
+            self.request('DELETE','/api/stats/trainings/'+tid)
+            self.assertEqual(self.request('GET',route+key+'&page=2')[0],404)
+
     def setup_thread(self):
         a=self.player('甲',1);b=self.player('乙',2)
         self.a,self.b=a,b;self.ca=self.login('甲');self.cb=self.login('乙')

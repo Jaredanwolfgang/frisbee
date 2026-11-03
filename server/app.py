@@ -462,6 +462,15 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
                 same_viewer = viewer_hint == str(pid or 0)
                 return self.send(200, {**stats_store.snapshot(int(known) if known and same_viewer else None, viewer=pid), 'canEdit': self.authorized(), 'me': stats_store.player_brief(pid) if pid else None,'notifications':stats_store.notification_summary(pid)})
             segments = [unquote(s) for s in path[len('/api/stats/'):].split('/') if s]
+            if self.command=='GET' and len(segments)==3 and segments[0]=='games' and segments[2]=='video-part':
+                query=parse_qs(urlparse(self.path).query)
+                page=query.get('page',[''])[0]
+                if not re.fullmatch(r'[1-9][0-9]{0,3}',page) or int(page)>1000:
+                    raise APIError(400,'分 P 编号无效。')
+                try:
+                    return self.send(200,stats_store.video_part(segments[1],query.get('key',[''])[0],int(page)))
+                except STATS_MODULE.StatsError as error:
+                    raise APIError(error.status,error.message) from None
             if segments == ['login'] and self.command == 'POST':
                 return self.stats_login()
             if segments == ['logout'] and self.command == 'POST':

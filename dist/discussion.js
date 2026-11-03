@@ -32,13 +32,62 @@ const TeamDiscussion=(()=>{
     const previous=$('[data-d="attach-video"]').value;$('[data-d="attach-video"]').innerHTML=ps.map(g=>'<option value="'+esc(g.id)+'">'+esc(g.name)+'</option>').join('');$('[data-d="attach-video"]').value=ps.some(g=>g.id===previous)?previous:ps.some(g=>g.id===selected)?selected:ps[0]?.id||'';
     $('.discussion-attach').hidden=!ps.length;if(!ps.length){attached=false;attachment();}
    }
-   function media(){const g=gameMode?entry:findVideo(selected);if(g?.videoMeta&&watchedKey&&watchedKey!==g.videoMeta.key){playRequested=false;mediaRequested=false;mediaTime=0;mediaPage=g.videoMeta.page;}if(g?.videoMeta)watchedKey=g.videoMeta.key;const next=active&&g?.videoMeta?JSON.stringify([g.id,g.videoMeta,mediaTime,mediaPage,playRequested,mediaRequested]):'';
+   const sourceKey=g=>g?.videoMeta?JSON.stringify([g.id,g.videoMeta.key,g.videoMeta.page]):'';
+   let partLookup=null;
+   function lookupPart(g,page){
+    const key=g.videoMeta.key,id=key+':'+page;
+    if(partLookup?.id===id)return partLookup.promise;
+    const promise=d.api('stats/games/'+encodeURIComponent(g.id)+'/video-part?key='+encodeURIComponent(key)+'&page='+page)
+     .then(part=>{
+      if(part.key!==key||part.page!==page||!Number.isSafeInteger(part.cid)||part.cid<=0)throw Error('分 P 信息无效，请重试。');
+      return part.cid;
+     }).catch(error=>{if(partLookup?.promise===promise)partLookup=null;throw error;});
+    partLookup={id,promise};return promise;
+   }
+   function media(){
+    const g=gameMode?entry:findVideo(selected),source=sourceKey(g);
+    if(source&&source!==watchedKey){
+     playRequested=false;mediaRequested=false;mediaTime=0;mediaPage=g.videoMeta.page||1;
+    }
+    watchedKey=source;
+    const next=active&&source?JSON.stringify([source,mediaTime,mediaPage,playRequested,mediaRequested]):'';
     if(next!==mediaKey){mediaKey=next;clearTimeout(mediaTimer);mediaTimer=null;
-     if(next){const wrap=document.createElement('div');wrap.className='discussion-player';const link=document.createElement('a');link.href=BiliVideo.link(g.videoMeta,mediaTime,mediaPage);link.target='_blank';link.rel='noopener noreferrer';link.textContent='在 B 站打开 ↗';const hint=document.createElement('small');hint.className='discussion-video-status';hint.setAttribute('role','status');const controls=document.createElement('div');controls.className='discussion-video-controls';const retry=document.createElement('button');retry.type='button';retry.className='team-link';retry.textContent='重新加载';retry.onclick=()=>{mediaRequested=true;mediaKey='';media();};const separate=document.createElement('a');separate.href=BiliVideo.embed(g.videoMeta,mediaTime,mediaPage,false);separate.target='_blank';separate.rel='noopener noreferrer';separate.textContent='独立播放 ↗';separate.setAttribute('aria-label','在独立播放器打开 '+g.name+' '+BiliVideo.formatTime(mediaTime));controls.append(link,separate,retry);
-      const phone=typeof window!=='undefined'&&window.matchMedia?.('(max-width:600px)').matches;
-      if(phone&&!mediaRequested&&!playRequested){const start=document.createElement('button');start.type='button';start.className='discussion-video-start';start.innerHTML='<span aria-hidden="true">▶</span><strong>加载训练视频</strong>';start.onclick=()=>{mediaRequested=true;mediaKey='';media();};wrap.append(start);retry.hidden=true;hint.textContent='点击加载视频；页内播放受限时可独立播放。';}
-      else{const frame=document.createElement('iframe');frame.title=g.name+' · B 站训练视频';frame.width='640';frame.height='360';frame.loading='eager';frame.allow='autoplay; fullscreen; picture-in-picture';frame.referrerPolicy='strict-origin-when-cross-origin';frame.allowFullscreen=true;frame.setAttribute('scrolling','no');hint.textContent='正在连接 B 站播放器…';frame.onload=()=>{if(wrap.isConnected)hint.textContent='页内无法播放时，可尝试独立播放。';};frame.onerror=()=>{if(wrap.isConnected)hint.textContent='播放器未能加载，请重试或在 B 站打开。';};frame.src=BiliVideo.embed(g.videoMeta,mediaTime,mediaPage,false);wrap.append(frame);mediaTimer=setTimeout(()=>{if(wrap.isConnected)hint.textContent='仍未显示视频？可独立播放，保留此时间点。';},12000);}
+     if(next){
+      const page=mediaPage,seconds=mediaTime,meta=g.videoMeta;
+      const wrap=document.createElement('div');wrap.className='discussion-player';
+      const link=document.createElement('a');link.href=BiliVideo.link(meta,seconds,page);link.target='_blank';link.rel='noopener noreferrer';link.textContent='在 B 站打开 ↗';
+      const hint=document.createElement('small');hint.className='discussion-video-status';hint.setAttribute('role','status');
+      const controls=document.createElement('div');controls.className='discussion-video-controls';
+      const retry=document.createElement('button');retry.type='button';retry.className='team-link';retry.textContent='重新加载';retry.onclick=()=>{mediaRequested=true;mediaKey='';media();};
+      const separate=document.createElement('a');separate.target='_blank';separate.rel='noopener noreferrer';separate.textContent='独立播放 ↗';
+      separate.setAttribute('aria-label','在独立播放器打开 '+g.name+' '+BiliVideo.formatTime(seconds));
+      separate.hidden=true;controls.append(link,separate,retry);
       $('[data-d="media"]').replaceChildren(wrap,controls,hint);
+      const here=()=>active&&wrap.parentElement===$('[data-d="media"]');
+      const phone=typeof window!=='undefined'&&window.matchMedia?.('(max-width:600px)').matches;
+      const deferred=phone&&!mediaRequested&&!playRequested;
+      if(deferred){
+       const start=document.createElement('button');start.type='button';start.className='discussion-video-start';
+       start.innerHTML='<span aria-hidden="true">▶</span><strong>加载训练视频'+(page>1?' · P'+page:'')+'</strong>';
+       start.onclick=()=>{mediaRequested=true;mediaKey='';media();};wrap.append(start);
+      }
+      function ready(cid){
+       if(!here())return;
+       const url=BiliVideo.embed(meta,seconds,page,false,cid);
+       separate.href=url;separate.hidden=false;
+       if(deferred){retry.hidden=true;hint.textContent='点击加载视频；页内播放受限时可独立播放。';return;}
+       const frame=document.createElement('iframe');frame.title=g.name+' · P'+page;frame.width='640';frame.height='360';frame.loading='eager';
+       frame.allow='autoplay; fullscreen; picture-in-picture';frame.referrerPolicy='strict-origin-when-cross-origin';frame.allowFullscreen=true;frame.setAttribute('scrolling','no');
+       hint.textContent='正在连接 B 站播放器 · P'+page+'…';
+       frame.onload=()=>{if(here())hint.textContent='P'+page+' · 页内无法播放时，可尝试独立播放。';};
+       frame.onerror=()=>{if(here())hint.textContent='播放器未能加载，请重试或在 B 站打开。';};
+       frame.src=url;wrap.append(frame);mediaTimer=setTimeout(()=>{if(here())hint.textContent='仍未显示视频？可独立播放，保留此时间点。';},12000);
+      }
+      if(page===1)ready(null);
+      else{
+       hint.textContent='正在定位 P'+page+'…';
+       lookupPart(g,page).then(ready).catch(error=>{if(here())hint.textContent=error.message+' 可在 B 站打开 P'+page+'。';});
+      }
      }else $('[data-d="media"]').replaceChildren();}
     if(!next&&active){$('[data-d="media"]').innerHTML=g?.video?'<p class="discussion-video-empty">这条链接可在原站观看。 <a href="'+esc(g.video)+'" target="_blank" rel="noopener noreferrer">打开视频 ↗</a></p>':'';}
     const now=$('[data-d="media-current"]');now.hidden=!playRequested||!g?.videoMeta;now.textContent=playRequested&&g?.videoMeta?'正在回看：'+g.name+' · '+BiliVideo.formatTime(mediaTime):'';$('.discussion-media').hidden=!g?.video;
@@ -78,13 +127,13 @@ const TeamDiscussion=(()=>{
    $('[data-d="privacy"]').onclick=()=>{limitToMentions=!limitToMentions;privacyControls();};
    function composer(){const me=d.getMe();$('[data-d="form"]').hidden=!me;$('[data-action="login"]').hidden=!!me;$('[data-d="submit"]').disabled=pending;const sendLabel=pending?'正在发送…':editing?'保存修改':reply?'发送回复':'发送评论';$('[data-d="submit"]').setAttribute('aria-label',sendLabel);$('[data-d="submit"]').title=sendLabel;$('[data-d="submit"]').setAttribute('aria-busy',String(pending));$('[data-d="context"]').hidden=!reply&&!editing;$('[data-action="cancel"]').hidden=!reply&&!editing;mentionPicker();const target=entry.comments.find(c=>c.id===reply);$('[data-d="reply-note"]').hidden=!target;$('[data-d="reply-note"]').textContent=target?'回复 '+target.name+' 的评论':'';$('[data-d="composer-label"]').textContent=editing?'编辑我的评论':reply?'补充你的观点':'写评论';privacyControls();}
    function reset(){markdownEditor.close();reply=editing=null;limitToMentions=false;attached=false;refs=[];mentions=[];mentionRange=null;mentionOpen=false;lastText='';caret=null;mentionPicker();$('[data-d="text"]').value='';$('[data-d="time"]').value='';attachment();$('[data-d="status"]').textContent='';resize();composer();}
-   function seek(ref){if(!ref?.available){d.toast('这个时间点关联的视频已更换或移除。');return;}selected=ref.gameId;mediaRequested=true;playRequested=true;mediaTime=ref.seconds;mediaPage=ref.page;watchedKey=ref.key;updateOptions();mediaKey='';media();const target=$('.discussion-media'),reduced=typeof window!=='undefined'&&window.matchMedia?.('(prefers-reduced-motion:reduce)')?.matches;target.scrollIntoView({block:'start',behavior:reduced?'auto':'smooth'});if(!reduced)target.animate?.([{opacity:.6,transform:'translateY(6px)'},{opacity:1,transform:'translateY(0)'}],{duration:260,easing:'ease-out'});}
+   function seek(ref){if(!ref?.available){d.toast('这个时间点关联的视频已更换或移除。');return;}selected=ref.gameId;mediaRequested=true;playRequested=true;mediaTime=ref.seconds;mediaPage=ref.page;watchedKey=sourceKey(findVideo(selected));updateOptions();mediaKey='';media();const target=$('.discussion-media'),reduced=typeof window!=='undefined'&&window.matchMedia?.('(prefers-reduced-motion:reduce)')?.matches;target.scrollIntoView({block:'start',behavior:reduced?'auto':'smooth'});if(!reduced)target.animate?.([{opacity:.6,transform:'translateY(6px)'},{opacity:1,transform:'translateY(0)'}],{duration:260,easing:'ease-out'});}
    async function mutate(path,options){if(pending)return null;pending=true;if(current()){composer();$('[data-d="status"]').textContent='';}try{const result=await d.api(path,options);if(current()&&result.comments)entry.comments=result.comments;await d.refresh(true);return result;}catch(error){if(current())$('[data-d="status"]').textContent=error.message;d.toast(error.message);return null;}finally{pending=false;if(current()){composer();list();}}}
    function syncText(){const value=$('[data-d="text"]').value;refs=DiscussionText.rebase(lastText,value,refs);mentions=DiscussionText.rebase(lastText,value,mentions);lastText=value;resize();}
    function insertTime(focus=true){if(refs.length>=20){d.toast('每条评论最多插入 20 个时间节点。');return false;}const seconds=BiliVideo.parseTime($('[data-d="time"]').value),g=findVideo($('[data-d="attach-video"]').value);
     if(seconds===null||!g?.videoMeta){$('[data-d="status"]').textContent='请选择视频并输入有效时间，如 01:25。';return false;}
-    if(attachmentKey&&g.videoMeta.key!==attachmentKey){$('[data-d="status"]').textContent='视频已更换，请重新选择时间点。';return false;}
-    syncText();const input=$('[data-d="text"]'),range=caret||{start:input.value.length,end:input.value.length};const next=DiscussionText.insert(input.value,refs,Math.min(range.start,input.value.length),Math.min(range.end,input.value.length),{gameId:g.id,key:g.videoMeta.key,seconds,page:g.videoMeta.page||1},BiliVideo.formatTime(seconds));
+    if(attachmentKey&&sourceKey(g)!==attachmentKey){$('[data-d="status"]').textContent='视频已更换，请重新选择时间点。';return false;}
+    syncText();const input=$('[data-d="text"]'),range=caret||{start:input.value.length,end:input.value.length};const next=DiscussionText.insert(input.value,refs,Math.min(range.start,input.value.length),Math.min(range.end,input.value.length),{gameId:g.id,key:g.videoMeta.key,seconds,page:g.id===selected&&playRequested?mediaPage:g.videoMeta.page||1},BiliVideo.formatTime(seconds));
     if(next.text.length>800){d.toast('评论最多 800 字，请精简后插入。');return false;}
     mentions=DiscussionText.replace(input.value,mentions,Math.min(range.start,input.value.length),Math.min(range.end,input.value.length),' '+BiliVideo.formatTime(seconds)+' ');input.value=lastText=next.text;refs=next.refs;caret={start:next.caret,end:next.caret};input.setSelectionRange?.(next.caret,next.caret);attached=false;attachment();$('[data-d="time"]').value='';$('[data-d="status"]').textContent='';resize();if(focus)input.focus({preventScroll:true});return true;
    }
@@ -112,8 +161,8 @@ const TeamDiscussion=(()=>{
    $('[data-d="text"]').oncompositionend=()=>{syncText();updateMention();};
    $('[data-d="text"]').onclick=updateMention;
    $('[data-d="text"]').onkeyup=event=>{if(!['Escape','ArrowDown','ArrowUp'].includes(event.key))updateMention();};
-   $('[data-d="attach"]').onclick=()=>{markdownEditor.close();mentionOpen=false;mentionPicker();attached=!attached;if(attached){const input=$('[data-d="text"]');caret={start:input.selectionStart??input.value.length,end:input.selectionEnd??input.value.length};const g=findVideo($('[data-d="attach-video"]').value)||findVideo(selected);if(g)attachmentKey=g.videoMeta?.key;$('[data-d="time"]').value='';}attachment();if(attached)$('[data-d="time"]').focus({preventScroll:true});else $('[data-d="text"]').focus({preventScroll:true});};
-   $('[data-d="attach-video"]').onchange=event=>{attachmentKey=findVideo(event.target.value)?.videoMeta?.key;$('[data-d="time"]').value='';};
+   $('[data-d="attach"]').onclick=()=>{markdownEditor.close();mentionOpen=false;mentionPicker();attached=!attached;if(attached){const input=$('[data-d="text"]');caret={start:input.selectionStart??input.value.length,end:input.selectionEnd??input.value.length};const g=findVideo($('[data-d="attach-video"]').value)||findVideo(selected);if(g)attachmentKey=sourceKey(g);$('[data-d="time"]').value='';}attachment();if(attached)$('[data-d="time"]').focus({preventScroll:true});else $('[data-d="text"]').focus({preventScroll:true});};
+   $('[data-d="attach-video"]').onchange=event=>{attachmentKey=sourceKey(findVideo(event.target.value));$('[data-d="time"]').value='';};
    $('[data-d="watch-video"]').onchange=event=>{selected=event.target.value;mediaRequested=false;playRequested=false;mediaTime=0;mediaPage=findVideo(selected)?.videoMeta?.page||1;media();};
    const markdownEditor=MarkdownEditor.mount($('[data-d="text"]'),{inline:true,toggleHost:$('[data-d="format-tools"]'),overlay:$('[data-d="highlight"]'),labelElement:$('[data-d="composer-label"]'),onOpen(){if($('[data-d="time-fields"]').contains(document.activeElement))$('[data-d="text"]').focus({preventScroll:true});host.classList.add('has-format-panel');mentionOpen=false;mentionPicker();attached=false;attachment();},onClose(){host.classList.remove('has-format-panel');},canLink(range){const start=DiscussionText.cp($('[data-d="text"]').value.slice(0,range.start)).length,end=DiscussionText.cp($('[data-d="text"]').value.slice(0,range.end)).length;return ![...refs,...mentions].some(r=>r.start<end&&r.end>start);},onEdit(before,changes,next){let value=before;for(const change of changes){refs=DiscussionText.replace(value,refs,change.from,change.to,change.text);mentions=DiscussionText.replace(value,mentions,change.from,change.to,change.text);value=value.slice(0,change.from)+change.text+value.slice(change.to);}lastText=next;caret=null;}});
    host.onclick=async event=>{const button=event.target.closest('[data-action]');if(!button)return;const action=button.dataset.action,c=entry.comments.find(c=>c.id===Number(button.dataset.comment));if(action==='login'){d.login();return;}if(action==='cancel'){reset();return;}if(action==='seek'){if(c){const ref=DiscussionText.draft(c,BiliVideo.formatTime).refs[Number(button.dataset.ref)];if(ref)seek(ref);}return;}if(!d.getMe()){d.login();return;}if(pending||!c)return;

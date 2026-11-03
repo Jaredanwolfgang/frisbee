@@ -258,6 +258,21 @@ class StatsStore:
         except (ValueError, TypeError):
             return None
 
+    def video_part(self, game_id, key, page):
+        db = self.connect()
+        try:
+            game = db.execute("""SELECT g.* FROM stats_games g LEFT JOIN stats_trainings t ON t.id=g.training_id
+                              WHERE g.id=? AND g.deleted=0 AND (g.training_id IS NULL OR t.deleted=0)""",(game_id,)).fetchone()
+            meta = self.video_meta(game) if game else None
+        finally:
+            db.close()
+        if not meta or meta['key'] != key:
+            raise StatsError(404, '录像已更换或移除，请刷新。')
+        try:
+            return VIDEO.video_part(key,page)
+        except ValueError as error:
+            raise StatsError(502,str(error)) from None
+
     def comment(self, db, row, video_cache=None):
         out = {'id':row['id'], 'parentId':row['parent_id'], 'player':row['player_id'],
                'privateAudience':json.loads(row['private_audience']) if row['private_audience'] else None,

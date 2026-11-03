@@ -1,5 +1,8 @@
 """Bilibili embeds: parse IDs locally; resolve only allowlisted short-link redirects."""
+import json
 import re
+import time
+from functools import lru_cache
 from urllib.parse import urlparse, parse_qs, urljoin
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
@@ -57,3 +60,28 @@ def resolve_video(url):
         if not target: break
         current = urljoin(current,target)
     raise ValueError('无法识别这个短链接，请粘贴 B 站完整 BV 视频链接。')
+
+@lru_cache(maxsize=128)
+def _parts(key, time_bucket):
+    # The time bucket expires replaced uploads without fetching on every seek.
+    param = 'bvid='+key if BVID.fullmatch(key) else 'aid='+key[2:]
+    request = Request('https://api.bilibili.com/x/player/pagelist?'+param,
+                      headers={'User-Agent':'Mozilla/5.0','Referer':'https://www.bilibili.com/'})
+    try:
+        with build_opener(NoRedirect()).open(request, timeout=5) as response:
+            payload = json.loads(response.read(1024*1024))
+        if payload.get('code') != 0 or not isinstance(payload.get('data'),list):
+            raise ValueError()
+        return {p['page']: p['cid'] for p in payload['data'] if isinstance(p,dict)
+                and type(p.get('page')) is int and type(p.get('cid')) is int and 0 < p['cid'] < 2**53}
+    except (ValueError, OSError, AttributeError) as error:
+        raise ValueError('暂时无法从 B 站获取分 P，请重试或在 B 站打开。') from error
+
+
+def video_part(key, page):
+    if not (BVID.fullmatch(key) or re.fullmatch(r'av[1-9][0-9]{0,15}',key)):
+        raise ValueError('视频编号无效。')
+    cid = _parts(key, int(time.time())//600).get(page)
+    if not cid:
+        raise ValueError(f'B 站未返回 P{page}，请核对录像链接。')
+    return {'key':key,'page':page,'cid':cid}
