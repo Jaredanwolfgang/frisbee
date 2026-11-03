@@ -971,6 +971,83 @@ class StatsStore:
             saved = db.execute('SELECT * FROM stats_events WHERE game_id=? AND seq=?',(game_id,seq)).fetchone()
             return {'event':self.event(saved),'revision':self.revision(db,True)}
 
+    def update_pass(self, game_id, seq, raw):
+        if not isinstance(raw, dict):
+            raise StatsError(400, '传接盘记录格式无效。')
+        thrower = match_player_id(raw.get('from'))
+        receiver = match_player_id(raw.get('to'))
+        if thrower == receiver:
+            raise StatsError(400, '传盘人和接盘人不能是同一人。')
+        with self.transaction() as db:
+            game = self.live_game(db, game_id)
+            if game['training_id'] and not db.execute(
+                'SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (game['training_id'],)
+            ).fetchone():
+                raise StatsError(404, '这次训练已删除。')
+            row = db.execute("SELECT * FROM stats_events WHERE game_id=? AND seq=? AND kind IN ('pass','goal')",
+                             (game_id,seq)).fetchone()
+            if not row:
+                raise StatsError(404, '这条传盘或得分记录已不存在。')
+            event = self.event(row)
+            if raw.get('expected') != event:
+                raise StatsError(409, '这条记录已经变化，请取消并重新打开。')
+            self.validate_participants(db, game_id, [thrower, receiver])
+            point_row = db.execute("SELECT * FROM stats_events WHERE game_id=? AND seq<? AND kind='point' ORDER BY seq DESC LIMIT 1",
+                                   (game_id,seq)).fetchone()
+            point = self.event(point_row) if point_row else None
+            if raw.get('expectedPoint') != point:
+                raise StatsError(409, '这分阵容已经变化，请取消并重新打开。')
+
+            side = row['side']
+            sides = point.get('sides') if point else None
+            if sides:
+                teams = [team for team in ('a','b') if thrower in sides[team] or receiver in sides[team]]
+                if len(teams) > 1:
+                    raise StatsError(400, '传盘人和接盘人必须属于本分的同一队。')
+                if teams:
+                    side = teams[0]
+                if side not in ('a','b'):
+                    raise StatsError(409, '请先在这分阵容中指定队员所属的队伍。')
+            lineup = list(sides[side] if sides else point['line']) if point else []
+            added, removed = [], []
+            if point and (thrower not in lineup or receiver not in lineup):
+                # A replacement must preserve all other events in THIS point.
+                used = {thrower,receiver}
+                for play in db.execute('SELECT * FROM stats_events WHERE game_id=? AND seq>? ORDER BY seq',
+                                       (game_id,point['seq'])):
+                    if play['kind'] == 'point':
+                        break
+                    if play['seq'] != seq:
+                        used.update((play['from_id'],play['to_id']))
+                for old, new in ((event['from'],thrower),(event['to'],receiver)):
+                    if new in lineup:
+                        continue
+                    replace = next((pid for pid in (old,event['from'],event['to']) if pid in lineup and pid not in used), None)
+                    if replace is not None:
+                        lineup.remove(replace)
+                        removed.append(replace)
+                    lineup.append(new)
+                    added.append(new)
+                if len(lineup) > (7 if sides else MAX_LINE):
+                    raise StatsError(409, '本分阵容已满，请先在「修改阵容」中换下一名没有动作记录的队员。')
+            change = {'added':added,'removed':removed,'side':side}
+            if (added or side != row['side']) and raw.get('confirm') != change:
+                return {'preview':change}
+            if added:
+                if sides:
+                    sides[side] = lineup
+                    lineup = sides['a'] + sides['b']
+                db.execute('UPDATE stats_events SET line=?,sides=? WHERE game_id=? AND seq=?',
+                           (json.dumps(lineup),json.dumps(sides) if sides else None,game_id,point['seq']))
+                point['line'] = lineup
+            db.execute('UPDATE stats_events SET from_id=?,to_id=?,side=? WHERE game_id=? AND seq=?',
+                       (thrower,receiver,side,game_id,seq))
+            db.execute('UPDATE stats_games SET updated=? WHERE id=?',(self.now(),game_id))
+            event.update({'from':thrower,'to':receiver})
+            if side:
+                event['side'] = side
+            return {'event':event,'point':point if added else None,'revision':self.revision(db,True)}
+
     def add_event(self, game_id, raw):
         if not isinstance(raw, dict) or raw.get('kind') not in EVENT_KINDS:
             raise StatsError(400, '记录类型无效。')
@@ -1082,6 +1159,8 @@ class StatsStore:
                 return self.add_game_guest(game_id, data)
             if method == 'PUT' and len(rest) == 2 and rest[0] == 'points' and re.fullmatch(r'[1-9][0-9]{0,8}',rest[1]):
                 return self.update_point(game_id,int(rest[1]),data)
+            if method == 'PUT' and len(rest) == 2 and rest[0] == 'events' and re.fullmatch(r'[1-9][0-9]{0,8}',rest[1]):
+                return self.update_pass(game_id,int(rest[1]),data)
             if rest == ['events'] and method == 'POST':
                 return self.add_event(game_id, data)
             if rest == ['events'] and method == 'DELETE':

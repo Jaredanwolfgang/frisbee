@@ -9,6 +9,7 @@ const StatsUI=(()=>{
  let deps=null,data={players:[],games:[],trainings:[]},revision=-1,loaded=false,error='',inflight=null,busy=false,me=null;
  let openGameId=null,sel={thrower:null,receiver:null},sort={key:'goals',dir:1},editingId=null,formGender='male';
  let pointMode=false,pointSel=new Set(),pointStart='offense',pointSide='a',pointSides={a:new Set(),b:new Set()},editingGameId=null;
+ let playEdit=null;
  let editingPoint=null,pointReturnPane='record';
  let openTrainingId=null,attendSel=new Set(),attendDirty=false,scrimmageTrainingId=null;
  let trainingPane='plan',gamePane='record',chipQuery='',showAllPlayers=false,teamHub=null,discussionUI=null,drillJournal=null,messagesUI=null,notifications={unread:0,trainings:{}},readingTraining=null;
@@ -195,9 +196,80 @@ const StatsUI=(()=>{
   return playerName(e.from)+' D 防守成功';
  }
  const pointOrdinal=(g,seq)=>g.events.filter(e=>e.kind==='point'&&e.seq<=seq).length;
- const eventRow=e=>'<div class="stats-event-row"><span class="stats-desc">'+describe(e)+'</span><time>'+clock(e.at)+'</time></div>';
+ function eventRow(e){
+  const editable=canEdit()&&currentGame()?.status==='live'&&['pass','goal'].includes(e.kind);
+  const button=editable?'<button type="button" class="quiet-btn play-edit-trigger" data-edit-play="'+e.seq+'" aria-label="修改'+esc(describePlain(e))+'">修改</button>':'';
+  return '<div class="stats-event-row"><span class="stats-desc">'+describe(e)+'</span><time>'+clock(e.at)+'</time>'+button+'</div>';
+ }
+ function openPlayEditor(seq){
+  const game=currentGame(),event=game?.events.find(e=>e.seq===seq);
+  if(!canEdit()||busy||game?.status!=='live'||!event||!['pass','goal'].includes(event.kind))return;
+  const point=game.events.filter(e=>e.kind==='point'&&e.seq<seq).pop()||null;
+  const container=$('#stats-game-dialog .stats-game-body');
+  playEdit={gameId:game.id,event,point,scroll:container.scrollTop,confirm:null};
+  const options=gameRoster(game).map(p=>'<option value="'+p.id+'">'+esc(matchBadge(p)+' '+p.name)+'</option>').join('');
+  for(const [id,value] of [['#play-thrower',event.from],['#play-receiver',event.to]]){
+   $(id).innerHTML=options;$(id).value=String(value);
+  }
+  $('#play-receiver-label').textContent=event.kind==='goal'?'得分队员':'接盘人';
+  $('#play-edit-title').textContent=(point?'第 '+pointOrdinal(game,seq)+' 分 · ':'')+(event.kind==='goal'?'修改得分记录':'修改传盘记录');
+  $('#play-edit-note').textContent='';
+  $('#play-edit-save').textContent='保存修改';
+  renderLog(game);
+  container.scrollTop=0;
+  $('#play-edit-title').focus({preventScroll:true});
+ }
+ function closePlayEditor(){
+  const draft=playEdit;
+  playEdit=null;
+  if(!draft||currentGame()?.id!==draft.gameId)return;
+  renderLog(currentGame());
+  $('#stats-game-dialog .stats-game-body').scrollTop=draft.scroll;
+  $('[data-edit-play="'+draft.event.seq+'"]')?.focus({preventScroll:true});
+ }
+ async function savePlay(event){
+  event.preventDefault();
+  const draft=playEdit,game=currentGame();
+  if(!draft||busy||game?.id!==draft.gameId||!canEdit())return;
+  const from=Number($('#play-thrower').value),to=Number($('#play-receiver').value);
+  const note=$('#play-edit-note');
+  if(from===to){note.textContent='传盘人和接盘人不能是同一人。';return;}
+  if(from===draft.event.from&&to===draft.event.to){closePlayEditor();return;}
+  const body={from,to,expected:draft.event,expectedPoint:draft.point,confirm:draft.confirm};
+  const result=await mutate('stats/games/'+game.id+'/events/'+draft.event.seq,{method:'PUT',body:JSON.stringify(body)},r=>{
+   if(r.preview||!r.event)return;
+   const match=findGameContainer(game.id);
+   if(!match)return;
+   match.events=match.events.map(e=>{
+    if(e.seq===r.event.seq)return r.event;
+    if(r.point&&e.seq===r.point.seq)return r.point;
+    return e;
+   });
+   if(currentGame()?.id===game.id&&match.events.at(-1)?.seq===r.event.seq&&r.event.kind==='pass'&&sel.thrower===draft.event.to&&sel.receiver===null){
+    sel.thrower=r.event.to;
+   }
+  },false,error=>{if(playEdit===draft)note.textContent=error.message;});
+  if(!result||playEdit!==draft)return;
+  if(result.preview){
+   const change=result.preview,lines=[];
+   draft.confirm=change;
+   if(change.removed.length)lines.push('移出本分阵容：'+change.removed.map(playerName).join('、'));
+   if(change.added.length)lines.push('加入本分阵容：'+change.added.map(playerName).join('、'));
+   if(change.side&&change.side!==draft.event.side)lines.push('这条记录将计入'+sideName(change.side));
+   note.textContent=lines.join('。')+'。';
+   $('#play-edit-save').textContent='确认并保存';
+  }else{
+   closePlayEditor();
+   deps.toast('已更新这条记录和本场统计。');
+  }
+ }
  function renderLog(g){
   const box=$('#stats-event-log');
+  if(playEdit&&(playEdit.gameId!==g.id||g.status!=='live'||!canEdit()))playEdit=null;
+  $('#stats-play-edit').hidden=!playEdit;
+  box.hidden=!!playEdit;
+  for(const selector of ['#play-edit-save','#play-edit-cancel','#play-thrower','#play-receiver'])$(selector).disabled=busy;
+  if(playEdit)return;
   const expanded=new Map([...box.querySelectorAll('[data-point-key]')].map(el=>[el.dataset.pointKey,el.open]));
   if(!g.events.length){box.innerHTML='<p class="stats-empty">每一分的得分结果会显示在这里；点开一分可看上场阵容和每一手传递。</p>';return;}
   const groups=[];let loose=[];
@@ -207,7 +279,7 @@ const StatsUI=(()=>{
    else loose.push(e);
   }
   let html='';
-  if(loose.length)html+='<details class="stats-point-group loose"><summary><span class="stats-point-title">未记录阵容的记录</span><span class="stats-point-meta">'+loose.length+' 条</span></summary><div class="stats-point-body">'+loose.map(eventRow).join('')+'</div></details>';
+  if(loose.length)html+='<details class="stats-point-group loose" data-point-key="loose"'+(expanded.get('loose')?' open':'')+'><summary><span class="stats-point-title">未记录阵容的记录</span><span class="stats-point-meta">'+loose.length+' 条</span></summary><div class="stats-point-body">'+loose.map(eventRow).join('')+'</div></details>';
   groups.forEach((grp,i)=>{
    const n=i+1,goal=grp.events.find(e=>e.kind==='goal'),hasGoal=!!goal,isLast=i===groups.length-1;
    const live=!hasGoal&&isLast&&g.status==='live';
@@ -450,7 +522,7 @@ const StatsUI=(()=>{
  }
  function openGame(id){
   $('#stats-guest-form').hidden=true;
-  editingPoint=null;openGameId=id;sel={thrower:null,receiver:null};pointMode=false;pointSel=new Set();
+  playEdit=null;editingPoint=null;openGameId=id;sel={thrower:null,receiver:null};pointMode=false;pointSel=new Set();
   gamePane=currentGame()?.status==='finished'?'box':'record';chipQuery='';showAllPlayers=false;$('#stats-chip-search').value='';$('#stats-event-log').innerHTML='';
   renderGame();
   if(!currentGame())return;
@@ -631,7 +703,16 @@ const StatsUI=(()=>{
    const game=currentGame(),point=game&&pointState(game).point;
    if(point)beginPoint(point);
   };
+  $('#play-edit-cancel').onclick=closePlayEditor;
+  $('#stats-play-edit').onsubmit=savePlay;
+  $('#stats-play-edit').onchange=()=>{
+   if(playEdit)playEdit.confirm=null;
+   $('#play-edit-save').textContent='保存修改';
+   $('#play-edit-note').textContent='';
+  };
   $('#stats-event-log').onclick=event=>{
+   const play=event.target.closest('[data-edit-play]');
+   if(play){openPlayEditor(Number(play.dataset.editPlay));return;}
    const button=event.target.closest('[data-edit-line]');
    if(!button)return;
    const point=currentGame()?.events.find(e=>e.kind==='point'&&e.seq===Number(button.dataset.editLine));

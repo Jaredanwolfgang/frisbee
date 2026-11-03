@@ -529,3 +529,12 @@ body:not(.stats-mode):not(.trainings-mode) #team-notifications{display:none}
 
 #point-error:empty{display:none}
 #point-error{color:#974b31}
+
+#stats-play-edit{display:grid;gap:12px;max-width:36rem}
+#stats-play-edit[hidden],#stats-event-log[hidden]{display:none}
+#stats-play-edit h4,#play-edit-note{margin:0}
+#stats-play-edit .guest-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+#stats-play-edit select{min-width:0;width:100%;min-height:44px;font-size:16px!important}
+#play-edit-note{color:var(--muted);overflow-wrap:anywhere}
+#play-edit-note:empty{display:none}
+.stats-event-row .play-edit-trigger{flex:none;padding:4px 8px;min-height:38px}

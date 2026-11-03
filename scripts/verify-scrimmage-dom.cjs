@@ -16,6 +16,16 @@ const formal={...game,id:'formal',name:'联赛',trainingId:null,events:[],guests
 const state={players,games:[formal],trainings:[training],me:null,revision:1};let seq=0;
 const calls=[],toasts=[];
 async function api(path,options){if(!options&&path.includes('/notes'))return{notes:[],total:0,trainingCount:0,nextOffset:null};if(!options)return clone(state);const body=JSON.parse(options.body||'{}');calls.push({path,...options,body});
+ if(path==='stats/games/formal/events/2'){
+  assert.equal(options.method,'PUT');assert.deepEqual(body.expected,formal.events[1]);
+  assert.deepEqual(body.expectedPoint,formal.events[0]);
+  const preview={added:[3],removed:[body.expected.from],side:null};
+  if(body.from===3&&!body.confirm)return{preview};
+  let point=null;
+  if(body.from===3){assert.deepEqual(body.confirm,preview);point=formal.events[0];point.line=point.line.map(id=>id===preview.removed[0]?3:id);}
+  Object.assign(formal.events[1],{from:body.from,to:body.to});
+  return{event:clone(formal.events[1]),point:clone(point),revision:++state.revision};
+ }
  if(path==='stats/games/formal/points/1'){
   assert.equal(options.method,'PUT');assert.deepEqual(body.expected,formal.events[0]);
   Object.assign(formal.events[0],{line:body.line,start:body.start});
@@ -50,6 +60,22 @@ const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disab
  assert.equal(formal.events.length,2);assert.equal(formal.events[1].kind,'goal');
  click('#stats-tab-record');assert(!$('#rec-edit-point').hidden);click('#rec-edit-point');click('[data-stats-chip="2"]');click('#point-cancel');
  assert.deepEqual(formal.events[0].line,[1,-1,2],'cancel leaves saved lineup intact');
+ click('#stats-tab-log');click('[data-edit-play="2"]');
+ assert.equal($('#play-edit-title').textContent,'第 1 分 · 修改得分记录');
+ assert.equal($('#play-receiver-label').textContent,'得分队员');
+ assert.equal($('#play-thrower').value,'1');assert.equal($('#play-receiver').value,'-1');
+ $('#play-thrower').value='2';
+ await $('#stats-play-edit').onsubmit({preventDefault(){}});
+ assert($('#stats-play-edit').hidden);assert.equal(formal.events[1].from,2);
+ click('[data-edit-play="2"]');$('#play-thrower').value='3';
+ await $('#stats-play-edit').onsubmit({preventDefault(){}});
+ assert(!$('#stats-play-edit').hidden);assert($('#play-edit-note').textContent.includes('队员3'));
+ assert.equal(formal.events[1].from,2);assert.equal($('#play-edit-save').textContent,'确认并保存');
+ await $('#stats-play-edit').onsubmit({preventDefault(){}});
+ assert.deepEqual(formal.events[0].line,[1,-1,3]);assert.equal(formal.events[1].from,3);
+ assert.equal(formal.events.length,2);assert($('#stats-event-log').textContent.includes('队员3'));
+ click('#stats-tab-box');assert($('#stats-boxscore').textContent.includes('队员3'));
+
  click('#stats-game-close');
  click('[data-training-card]');click('#training-drill-add');
  assert($('#drill-picker-dialog').open);assert.equal($('#drill-picker-dialog .stats-players-content'),null,'picker does not inherit roster modal widths');

@@ -59,6 +59,57 @@ class ScrimmageTest(unittest.TestCase):
         self.assertEqual(self.request('PUT',path,{'line':[a,b],'start':'defense','expected':updated})[0],409)
         self.assertEqual(self.stats.snapshot()['games'][0]['events'],[updated,play])
 
+    def test_correct_past_goal_and_lineup_atomically(self):
+        (a,b,c,d,bench),tid,g = self.prepare()
+        point=self.point(g,[a,b],[c,d])['event']
+        goal=self.event(g,'goal',a,b)['event']
+        next_point=self.point(g,[a,bench],[c,d])['event']
+        later=self.event(g,'pass',a,bench)['event']
+        url=f'/api/stats/games/{g}/events/{goal["seq"]}'
+        body={'from':a,'to':bench,'expected':goal,'expectedPoint':point}
+        def events():
+            return self.stats.snapshot()['trainings'][0]['games'][0]['events']
+        self.assertEqual(self.request('PUT',url,body,auth=False)[0],401)
+        self.assertEqual(self.request('PUT',url,{**body,'to':a})[0],400)
+        self.assertEqual(self.request('PUT',url,{**body,'to':c})[0],400)
+        preview=self.request('PUT',url,body)[1]['preview']
+        self.assertEqual(preview,{'added':[bench],'removed':[b],'side':'a'})
+        self.assertEqual(events(),[point,goal,next_point,later])
+        result=self.request('PUT',url,{**body,'confirm':preview})[1]
+        self.assertEqual(result['point']['sides']['a'],[a,bench])
+        self.assertEqual(result['event'],{**goal,'to':bench})
+        self.assertEqual(events(),[result['point'],result['event'],next_point,later])
+        self.assertEqual(self.request('PUT',url,body)[0],409)
+        # Reassigning a goal across teams requires explicit confirmation.
+        change={'expected':result['event'],'expectedPoint':result['point'],'from':c,'to':d}
+        cross=self.request('PUT',url,change)[1]['preview']
+        self.assertEqual(cross,{'added':[],'removed':[],'side':'b'})
+        self.assertEqual(self.request('PUT',url,{**change,'confirm':cross})[1]['event']['side'],'b')
+        self.assertEqual(events()[2:],[next_point,later])
+        self.request('POST',f'/api/stats/games/{g}/status',{'status':'finished'})
+        self.assertEqual(self.request('PUT',url,change)[0],409)
+
+    def test_correct_pass_with_guest_and_without_recorded_lineup(self):
+        (a,b,c,_,_),_,_=self.prepare()
+        g=self.request('POST','/api/stats/games',{'name':'正式赛'})[1]['game']['id']
+        base=f'/api/stats/games/{g}'
+        guest=self.request('POST',base+'/guests',{'name':'本场外援'})[1]['guest']['id']
+        loose=self.event(g,'pass',a,b)['event']
+        result=self.request('PUT',base+'/events/1',{'expected':loose,'from':guest,'to':a})[1]
+        self.assertEqual(result['event'],{**loose,'from':guest,'to':a})
+        self.assertIsNone(result['point'])
+        p=self.event(g,'point',None,line=[a,b,c],start='offense')['event']
+        old=self.event(g,'pass',a,b)['event']
+        other=self.event(g,'goal',a,c)['event']
+        body={'from':guest,'to':b,'expected':old,'expectedPoint':p}
+        url=base+'/events/'+str(old['seq'])
+        preview=self.request('PUT',url,body)[1]['preview']
+        self.assertEqual(preview,{'added':[guest],'removed':[],'side':None},'keep the thrower who assisted on another play')
+        saved=self.request('PUT',url,{**body,'confirm':preview})[1]
+        self.assertEqual(saved['point']['line'],[a,b,c,guest])
+        self.assertEqual(self.stats.snapshot()['games'][0]['events'][-1],other)
+        self.assertEqual(self.request('PUT',base+'/events/'+str(p['seq']),body)[0],404)
+
     def test_both_sides_record_score_undo_and_persist(self):
         (a,b,c,d,bench), tid, game = self.prepare()
         self.event(game,'pass',a,b,expect=409)
