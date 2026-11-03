@@ -180,6 +180,38 @@ class StatsAPITest(unittest.TestCase):
         self.event(game, 'pass', thrower, receiver)
         self.assertEqual(len(next(g for g in self.request('GET', '/api/stats', auth=False)[1]['games'])['events']), 5)
 
+    def test_opponent_scores_live_historical_and_without_lineups(self):
+        a,b=self.player('甲',1),self.player('乙',2)
+        game=self.game()
+        url=f'/api/stats/games/{game}/events'
+        def away(point,tail,**extra):
+            return {'kind':'opponent_goal','pointSeq':point,'expectedTail':tail,**extra}
+        self.assertEqual(self.request('POST',url,away(None,0),auth=False)[0],401)
+        self.assertEqual(self.request('POST',url,away(None,0,**{'from':a}))[0],400)
+        loose=self.request('POST',url,away(None,0))[1]['event']
+        self.assertEqual((loose['pointSeq'],loose['from'],loose['to']),(None,None,None))
+        self.assertEqual(self.request('POST',url,away(None,0))[0],409)
+        p=self.event(game,'point',None,line=[a,b],start='offense')['event']
+        play=self.event(game,'pass',a,b)['event']
+        next_point=self.event(game,'point',None,line=[a,b],start='defense')['event']
+        prior=self.request('POST',url,away(p['seq'],next_point['seq']))[1]['event']
+        self.assertEqual(prior['pointSeq'],p['seq'])
+        self.assertEqual(self.request('POST',url,away(p['seq'],prior['seq']))[0],409)
+        self.assertEqual(self.request('POST',url,away(play['seq'],prior['seq']))[0],404)
+        self.assertEqual(self.request('POST',url,away(None,prior['seq']))[0],409)
+        live=self.request('POST',url,away(next_point['seq'],prior['seq']))[1]['event']
+        self.event(game,'goal',a,b,expect=409)
+        events=API.STATS_MODULE.StatsStore(self.path).snapshot()['games'][0]['events']
+        self.assertEqual(events,[loose,p,play,next_point,prior,live])
+        self.assertEqual(self.request('DELETE',url)[1]['removed'],live)
+        self.event(game,'goal',a,b)
+        self.assertEqual(self.request('POST',url,away(next_point['seq'],live['seq']))[0],409)
+        self.request('POST',f'/api/stats/games/{game}/status',{'status':'finished'})
+        self.assertEqual(self.request('POST',url,away(p['seq'],live['seq']))[0],409)
+        tid=self.request('POST','/api/stats/trainings',{'name':'训练'})[1]['training']['id']
+        scrim=self.request('POST','/api/stats/games',{'name':'队内赛','trainingId':tid})[1]['game']['id']
+        self.assertEqual(self.request('POST',f'/api/stats/games/{scrim}/events',away(None,0))[0],400)
+
     def test_point_line_records_gendered_lineups_and_player_protection(self):
         players = [self.player('疾风', 7), self.player('芒果', 3, 'female'), self.player('铁柱', 21), self.player('阿', 0, 'female')]
         game = self.game()

@@ -32,7 +32,7 @@ async function api(path,options){if(!options&&path.includes('/notes'))return{not
   return{event:clone(formal.events[0]),revision:++state.revision};
  }
  if(path==='stats/games/formal/guests'){const guest={id:-1,guest:true,...body};formal.guests.push(guest);return{guest,revision:++state.revision};}
- if(path==='stats/games/formal/events'){const event={...body,seq:formal.events.length+1,at:now};formal.events.push(event);return{event,revision:++state.revision};}
+ if(path==='stats/games/formal/events'){if(options.method==='DELETE')return{removed:formal.events.pop(),revision:++state.revision};const event={...body,seq:formal.events.length+1,at:now};formal.events.push(event);return{event,revision:++state.revision};}
  if(path.endsWith('/events')){let event;if(options.method==='DELETE')return{removed:game.events.pop(),revision:++state.revision};if(body.kind==='point')event={seq:++seq,at:now,kind:'point',line:body.sides?[...body.sides.a,...body.sides.b]:body.line,start:body.sides?(body.sides.offense==='a'?'offense':'defense'):body.start,...(body.sides?{sides:body.sides}:{})};else{const point=game.events.filter(e=>e.kind==='point').at(-1);event={seq:++seq,at:now,kind:body.kind,from:body.from,to:body.to??null,side:point.sides.a.includes(body.from)?'a':'b'};}game.events.push(clone(event));return{event,revision:++state.revision};}
  if(options.method==='PUT'&&path.startsWith('stats/trainings/')){training.drills=body.drills.map(id=>catalog.find(d=>d.id===id));return{training:clone(training),revision:++state.revision};}
  if(options.method==='PUT'){Object.assign(game,body);return{game:clone(game),revision:++state.revision};}
@@ -76,6 +76,19 @@ const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disab
  assert.equal(formal.events.length,2);assert($('#stats-event-log').textContent.includes('队员3'));
  click('#stats-tab-box');assert($('#stats-boxscore').textContent.includes('队员3'));
 
+ click('#stats-tab-record');click('#rec-point');click('#point-confirm');await tick();
+ const missing=formal.events.at(-1).seq;
+ click('#rec-point');click('#point-confirm');await tick();
+ const current=formal.events.at(-1).seq;
+ click('#stats-tab-log');click('[data-opponent-point="'+missing+'"]');await tick();
+ assert($('[data-point-key="'+missing+'"] summary').textContent.includes('对方得分'));
+ assert($('[data-point-key="'+current+'"] summary').textContent.includes('进行中'));
+ click('#stats-tab-record');assert.equal($('#stats-score-b-label').textContent,'对方');
+ assert.equal($('#stats-score-us').textContent,'1');assert.equal($('#stats-score-b').textContent,'1');
+ click('#rec-opponent-goal');await tick();assert.equal(formal.events.at(-1).pointSeq,current);
+ assert.equal($('#stats-score-b').textContent,'2');assert($('#rec-opponent-goal').disabled);
+ click('#rec-point');assert.equal($('#point-offense').getAttribute('aria-pressed'),'true');click('#point-cancel');
+ click('#rec-undo');await tick();assert.equal($('#stats-score-b').textContent,'1');assert(!$('#rec-opponent-goal').disabled);
  click('#stats-game-close');
  click('[data-training-card]');click('#training-drill-add');
  assert($('#drill-picker-dialog').open);assert.equal($('#drill-picker-dialog .stats-players-content'),null,'picker does not inherit roster modal widths');
@@ -84,7 +97,7 @@ const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disab
  click('#training-drills [data-team-drill]');assert($('#training-dialog').open,'opening a Drill preserves the parent training for phone Back');
  click('#training-drill-add');assert.equal($('[data-drill-pick="long"]'),null,'already added Drills are filtered out');click('#drill-picker-close');
  click('#training-tab-games');click('#training-games [data-stats-game]');
- assert($('#stats-guest-open').hidden);assert(!$('[data-stats-chip="-1"]'));
+ assert($('#rec-opponent-goal').hidden);assert($('#stats-guest-open').hidden);assert(!$('[data-stats-chip="-1"]'));
  assert(!$('#stats-game-sub').textContent.includes('外部'));assert(!$('#stats-score-b-box').hidden);assert.equal($('#stats-score-label').textContent,'A 队');assert($('#rec-pass').disabled);
  click('#stats-game-date-edit');assert($('#stats-opponent-field').hidden);assert($('#stats-game-opponent').disabled);$('#stats-new-game-dialog').close();
  click('#rec-point');assert($('#stats-recorder').classList.contains('scrimmage-setting'));assert($('#point-confirm').disabled);

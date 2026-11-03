@@ -538,3 +538,7 @@ body:not(.stats-mode):not(.trainings-mode) #team-notifications{display:none}
 #play-edit-note{color:var(--muted);overflow-wrap:anywhere}
 #play-edit-note:empty{display:none}
 .stats-event-row .play-edit-trigger{flex:none;padding:4px 8px;min-height:38px}
+
+.stats-point-group em.opponent-result{background:#f3e9e2;color:#804c32}
+#rec-opponent-goal{color:#804c32;border-color:#dccac0}
+.stats-undo-row:has(#rec-opponent-goal:not([hidden])){flex-wrap:wrap}

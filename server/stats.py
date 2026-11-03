@@ -28,7 +28,7 @@ MAX_VIDEO_REFS = 20
 MAX_TRAININGS = 200
 MAX_WARMUP = 2000
 MAX_DRILLS = 20
-EVENT_KINDS = {'pass', 'goal', 'turnover', 'defense', 'point'}
+EVENT_KINDS = {'pass', 'goal', 'opponent_goal', 'turnover', 'defense', 'point'}
 GAME_STATUS = {'live', 'finished'}
 POINT_START = {'offense', 'defense'}
 GENDERS = {'male', 'female'}
@@ -152,6 +152,7 @@ class StatsStore:
             db.execute('CREATE INDEX IF NOT EXISTS stats_notifications_player ON stats_notifications(player_id,active,read_at)')
             # Older databases keep their rows; new columns are added in place.
             for statement in ("ALTER TABLE stats_players ADD COLUMN gender TEXT NOT NULL DEFAULT ''",
+                              'ALTER TABLE stats_events ADD COLUMN result_point_seq INTEGER',
                               'ALTER TABLE stats_events ADD COLUMN line TEXT',
                               'ALTER TABLE stats_events ADD COLUMN start TEXT',
                               'ALTER TABLE stats_games ADD COLUMN video TEXT NOT NULL DEFAULT \'\'',
@@ -236,6 +237,8 @@ class StatsStore:
     @staticmethod
     def event(row):
         out = {'seq': row['seq'], 'kind': row['kind'], 'from': row['from_id'], 'to': row['to_id'], 'at': row['created']}
+        if row['kind'] == 'opponent_goal':
+            out['pointSeq'] = row['result_point_seq']
         if row['kind'] == 'point':
             try:
                 out['line'] = json.loads(row['line'] or '[]')
@@ -1048,17 +1051,35 @@ class StatsStore:
                 event['side'] = side
             return {'event':event,'point':point if added else None,'revision':self.revision(db,True)}
 
+    @staticmethod
+    def point_scored(db, game_id, point_seq):
+        # An opponent score may be entered after later points have been played.
+        return db.execute("""
+            SELECT 1 FROM stats_events e WHERE e.game_id=? AND (
+                (e.kind='opponent_goal' AND e.result_point_seq=?) OR
+                (e.kind='goal' AND e.seq>? AND NOT EXISTS (
+                    SELECT 1 FROM stats_events p WHERE p.game_id=e.game_id AND p.kind='point'
+                    AND p.seq>? AND p.seq<e.seq))) LIMIT 1
+            """, (game_id,point_seq,point_seq,point_seq)).fetchone() is not None
+
     def add_event(self, game_id, raw):
         if not isinstance(raw, dict) or raw.get('kind') not in EVENT_KINDS:
             raise StatsError(400, '记录类型无效。')
         kind = raw['kind']
         from_id = to_id = None
         line_json = start = sides_json = side = None
+        result_point = None
         sides = None
         if kind == 'point':
             line, start, sides = point_fields(raw)
             sides_json = json.dumps(sides) if sides else None
             line_json = json.dumps(line)
+        elif kind == 'opponent_goal':
+            if raw.get('from') is not None or raw.get('to') is not None or 'pointSeq' not in raw:
+                raise StatsError(400, '请指定对方得分所属的一分，无需选择队员。')
+            result_point = raw['pointSeq']
+            if result_point is not None and (type(result_point) is not int or not 1 <= result_point <= MAX_EVENTS):
+                raise StatsError(400, '分数编号无效。')
         else:
             from_id = match_player_id(raw.get('from'))
             if kind in ('pass', 'goal'):
@@ -1071,6 +1092,8 @@ class StatsStore:
                 raise StatsError(400, '传盘人和接盘人不能是同一人。')
         with self.transaction() as db:
             game = self.live_game(db, game_id)
+            if kind == 'opponent_goal' and game['training_id'] is not None:
+                raise StatsError(400, '训练赛请使用 A、B 两队的得分记录。')
             if game['training_id'] is not None:
                 training = db.execute('SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (game['training_id'],)).fetchone()
                 if not training:
@@ -1090,14 +1113,27 @@ class StatsStore:
                         raise StatsError(400, '只能记录本分上场队员；传盘人与接盘人必须属于同一队。')
             elif sides is not None:
                 raise StatsError(400, '两队队内阵容仅用于训练赛。')
+            elif kind != 'point':
+                latest = db.execute("SELECT max(seq) FROM stats_events WHERE game_id=? AND kind='point'", (game_id,)).fetchone()[0]
+                target = result_point if kind == 'opponent_goal' else latest
+                if kind == 'opponent_goal':
+                    if target is None and latest is not None:
+                        raise StatsError(409, '本场已有分数阵容，请刷新后选择对应的一分。')
+                    if target is not None and not db.execute(
+                            "SELECT 1 FROM stats_events WHERE game_id=? AND seq=? AND kind='point'",(game_id,target)).fetchone():
+                        raise StatsError(404, '这分记录不存在。')
+                if target is not None and self.point_scored(db,game_id,target):
+                    raise StatsError(409, '这一分已记得分，请先开始新的一分。')
             player_ids = {from_id, to_id} - {None} | (set(line) if kind == 'point' else set())
             self.validate_participants(db, game_id, player_ids)
             last = db.execute('SELECT max(seq) FROM stats_events WHERE game_id=?', (game_id,)).fetchone()[0] or 0
+            if kind == 'opponent_goal' and (type(raw.get('expectedTail')) is not int or raw['expectedTail'] != last):
+                raise StatsError(409, '本场记录已有更新，请刷新后重试。')
             if last >= MAX_EVENTS:
                 raise StatsError(400, f'单场最多记录 {MAX_EVENTS} 条，请新建比赛。')
             stamp = self.now()
-            db.execute('INSERT INTO stats_events(game_id,seq,kind,from_id,to_id,line,start,sides,side,created) VALUES (?,?,?,?,?,?,?,?,?,?)',
-                       (game_id, last + 1, kind, from_id, to_id, line_json, start, sides_json, side, stamp))
+            db.execute('INSERT INTO stats_events(game_id,seq,kind,from_id,to_id,line,start,sides,side,result_point_seq,created) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                       (game_id, last + 1, kind, from_id, to_id, line_json, start, sides_json, side, result_point, stamp))
             db.execute('UPDATE stats_games SET updated=? WHERE id=?', (stamp, game_id))
             row = db.execute('SELECT * FROM stats_events WHERE game_id=? AND seq=?', (game_id, last + 1)).fetchone()
             return {'event': self.event(row), 'revision': self.revision(db, True)}
