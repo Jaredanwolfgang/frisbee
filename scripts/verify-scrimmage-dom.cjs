@@ -12,9 +12,12 @@ const players=Array.from({length:16},(_,i)=>({id:i+1,name:'队员'+(i+1),number:
 const game={id:'practice',trainingId:'training',name:'队内对抗',opponent:'旧版的外部队伍',status:'live',heldOn:'2026-10-29',created:now,events:[],comments:[],video:''};
 const training={id:'training',name:'训练',heldOn:'2026-10-29',status:'completed',attendees:players.map(p=>p.id),drills:[],warmup:'',games:[game],comments:[]};
 const catalog=[{id:'simple',name:'二人钟摆',summary:''},{id:'long',name:'三人四角 Drill 基础版：Handler 接应与竖排排头补位及后续交叉跑动',summary:'观察持盘人，轮流回切。'.repeat(20)}];
-const state={players,games:[],trainings:[training],me:null,revision:1};let seq=0;
+const formal={...game,id:'formal',name:'联赛',trainingId:null,events:[],guests:[]};
+const state={players,games:[formal],trainings:[training],me:null,revision:1};let seq=0;
 const calls=[],toasts=[];
 async function api(path,options){if(!options&&path.includes('/notes'))return{notes:[],total:0,trainingCount:0,nextOffset:null};if(!options)return clone(state);const body=JSON.parse(options.body||'{}');calls.push({path,...options,body});
+ if(path==='stats/games/formal/guests'){const guest={id:-1,guest:true,...body};formal.guests.push(guest);return{guest,revision:++state.revision};}
+ if(path==='stats/games/formal/events'){const event={...body,seq:formal.events.length+1,at:now};formal.events.push(event);return{event,revision:++state.revision};}
  if(path.endsWith('/events')){let event;if(options.method==='DELETE')return{removed:game.events.pop(),revision:++state.revision};if(body.kind==='point')event={seq:++seq,at:now,kind:'point',line:body.sides?[...body.sides.a,...body.sides.b]:body.line,start:body.sides?(body.sides.offense==='a'?'offense':'defense'):body.start,...(body.sides?{sides:body.sides}:{})};else{const point=game.events.filter(e=>e.kind==='point').at(-1);event={seq:++seq,at:now,kind:body.kind,from:body.from,to:body.to??null,side:point.sides.a.includes(body.from)?'a':'b'};}game.events.push(clone(event));return{event,revision:++state.revision};}
  if(options.method==='PUT'&&path.startsWith('stats/trainings/')){training.drills=body.drills.map(id=>catalog.find(d=>d.id===id));return{training:clone(training),revision:++state.revision};}
  if(options.method==='PUT'){Object.assign(game,body);return{game:clone(game),revision:++state.revision};}
@@ -25,6 +28,17 @@ cx.setTimeout=()=>0;cx.clearTimeout=()=>{};vm.createContext(cx);vm.runInContext(
 const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disabled '+s);el.click();};
 (async()=>{
  cx.stats.init({api,toast:t=>toasts.push(t),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:f=>f?.(),getDrills:()=>catalog});await tick();
+ click('[data-stats-game="formal"]');click('#rec-point');click('[data-stats-chip="1"]');
+ click('#stats-guest-open');assert(!$('#stats-guest-form').hidden);
+ $('#stats-guest-name').value='小飞';$('#stats-guest-number').value='';
+ await $('#stats-guest-form').onsubmit({preventDefault(){}});await tick();
+ assert($('#stats-guest-form').hidden);assert.equal($('[data-stats-chip="1"]').getAttribute('aria-pressed'),'true','adding a guest preserves the draft lineup');
+ assert($('[data-stats-chip="-1"]').textContent.includes('外援'));assert(!$('[data-stats-chip="-1"]').textContent.includes('null'));
+ click('[data-stats-chip="-1"]');click('#point-confirm');await tick();assert.deepEqual(formal.events[0].line,[1,-1]);
+ click('[data-stats-chip="1"]');click('[data-stats-chip="-1"]');click('#rec-goal');await tick();
+ click('#stats-tab-box');assert($('#stats-boxscore').textContent.includes('小飞'));assert($('#stats-boxscore').textContent.includes('外援'));
+ click('#stats-tab-log');assert($('#stats-event-log').textContent.includes('外援 小飞'));assert(!$('#team-roster-grid').textContent.includes('小飞'));
+ click('#stats-game-close');
  click('[data-training-card]');click('#training-drill-add');
  assert($('#drill-picker-dialog').open);assert.equal($('#drill-picker-dialog .stats-players-content'),null,'picker does not inherit roster modal widths');
  const longRow=$('[data-drill-pick="long"]').closest('.drill-picker-item');assert.equal(longRow.querySelector('.drill-picker-copy strong').textContent,catalog[1].name);assert(longRow.querySelector('button'),'add stays in its own grid column');
@@ -32,6 +46,7 @@ const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disab
  click('#training-drills [data-team-drill]');assert($('#training-dialog').open,'opening a Drill preserves the parent training for phone Back');
  click('#training-drill-add');assert.equal($('[data-drill-pick="long"]'),null,'already added Drills are filtered out');click('#drill-picker-close');
  click('#training-tab-games');click('#training-games [data-stats-game]');
+ assert($('#stats-guest-open').hidden);assert(!$('[data-stats-chip="-1"]'));
  assert(!$('#stats-game-sub').textContent.includes('外部'));assert(!$('#stats-score-b-box').hidden);assert.equal($('#stats-score-label').textContent,'A 队');assert($('#rec-pass').disabled);
  click('#stats-game-date-edit');assert($('#stats-opponent-field').hidden);assert($('#stats-game-opponent').disabled);$('#stats-new-game-dialog').close();
  click('#rec-point');assert($('#stats-recorder').classList.contains('scrimmage-setting'));assert($('#point-confirm').disabled);

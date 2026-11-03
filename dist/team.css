@@ -508,3 +508,15 @@ body:not(.stats-mode):not(.trainings-mode) #team-notifications{display:none}
  .drill-history-observations p{font-size:16px;line-height:1.8}
  .team-personal-records{--team-record-row:92px}
 }
+
+/* Keep the current point selection while the scorer enters a guest. */
+.stats-game-shell:has(>#stats-guest-form:not([hidden]))>:is(.stats-game-tabs,.stats-game-body){display:none!important}
+#stats-guest-form{box-sizing:border-box;width:100%;max-width:32rem;min-height:0;overflow:auto;margin:0 auto;padding:16px;display:grid;gap:14px}
+#stats-guest-form[hidden]{display:none}
+#stats-guest-form h3,#stats-guest-form p{margin:0}
+#stats-guest-form p{color:var(--muted);font-size:14px}
+.guest-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(6rem,0.6fr);gap:10px}
+.guest-fields label,.guest-fields input{min-width:0;width:100%}
+.guest-fields input{font-size:16px!important;min-height:44px}
+.guest-actions{display:flex;justify-content:flex-end;gap:8px}
+.guest-actions button{min-height:44px}

@@ -65,6 +65,13 @@ def player_id(value):
     return value
 
 
+def match_player_id(value):
+    # Negative IDs identify guests; permanent member IDs are always positive.
+    if type(value) is int and -(2 ** 31) <= value < 0:
+        return value
+    return player_id(value)
+
+
 def video_link(value):
     value = text(value, 500, '录像链接', required=False)
     if value and not value.startswith(('http://', 'https://')):
@@ -98,7 +105,7 @@ def line_ids(raw):
         raise StatsError(400, f'请选择这一分的上场队员（1–{MAX_LINE} 人）。')
     line = []
     for value in values:
-        pid = player_id(value)
+        pid = match_player_id(value)
         if pid in line:
             raise StatsError(400, '上场队员重复。')
         line.append(pid)
@@ -113,6 +120,8 @@ class StatsStore:
             db.execute('CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value INTEGER NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS stats_players (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, number INTEGER NOT NULL, gender TEXT NOT NULL DEFAULT \'\', updated INTEGER NOT NULL)')
             db.execute("CREATE TABLE IF NOT EXISTS stats_games (id TEXT PRIMARY KEY, name TEXT NOT NULL, opponent TEXT NOT NULL DEFAULT '', video TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'live', created INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)")
+            db.execute('CREATE TABLE IF NOT EXISTS stats_game_guests (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT NOT NULL, name TEXT NOT NULL, number INTEGER)')
+            db.execute('CREATE INDEX IF NOT EXISTS stats_guests_game ON stats_game_guests(game_id)')
             db.execute('CREATE TABLE IF NOT EXISTS stats_events (game_id TEXT NOT NULL, seq INTEGER NOT NULL, kind TEXT NOT NULL, from_id INTEGER, to_id INTEGER, line TEXT, start TEXT, created INTEGER NOT NULL, PRIMARY KEY (game_id, seq))')
             db.execute('CREATE TABLE IF NOT EXISTS stats_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT, training_id TEXT, player_id INTEGER NOT NULL, text TEXT NOT NULL, author_name TEXT NOT NULL, author_number INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS stats_trainings (id TEXT PRIMARY KEY, name TEXT NOT NULL, warmup TEXT NOT NULL DEFAULT \'\', attendees TEXT NOT NULL DEFAULT \'[]\', drills TEXT NOT NULL DEFAULT \'[]\', created INTEGER NOT NULL, updated INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)')
@@ -256,10 +265,37 @@ class StatsStore:
         cache = {}
         return [self.comment(db,row,cache) for row in rows]
 
+    @staticmethod
+    def guest(row):
+        return {'id': -row['id'], 'name': row['name'], 'number': row['number'], 'guest': True}
+
+    def add_game_guest(self, game_id, raw):
+        if not isinstance(raw, dict):
+            raise StatsError(400, '请填写临时队员的盘名。')
+        name = text(raw.get('name'), 24, '盘名')
+        number = raw.get('number')
+        if number is not None and (type(number) is not int or not 0 <= number <= 99):
+            raise StatsError(400, '号码可留空，填写时需为 0–99 的整数。')
+        with self.transaction() as db:
+            game = self.live_game(db, game_id)
+            if game['training_id'] is not None:
+                raise StatsError(400, '临时队员只可添加到正式比赛。')
+            existing = db.execute('SELECT * FROM stats_game_guests WHERE game_id=? AND name=? AND number IS ?',
+                                  (game_id, name, number)).fetchone()
+            if existing:
+                return {'guest':self.guest(existing), 'revision':self.revision(db)}
+            if db.execute('SELECT count(*) FROM stats_game_guests WHERE game_id=?', (game_id,)).fetchone()[0] >= MAX_PLAYERS:
+                raise StatsError(400, f'单场最多添加 {MAX_PLAYERS} 位临时队员。')
+            cursor = db.execute('INSERT INTO stats_game_guests(game_id,name,number) VALUES (?,?,?)', (game_id,name,number))
+            added = db.execute('SELECT * FROM stats_game_guests WHERE id=?', (cursor.lastrowid,)).fetchone()
+            db.execute('UPDATE stats_games SET updated=? WHERE id=?', (self.now(),game_id))
+            return {'guest':self.guest(added), 'revision':self.revision(db,True)}
+
     def game(self, db, row, viewer=None):
         events = db.execute('SELECT * FROM stats_events WHERE game_id=? ORDER BY seq', (row['id'],))
         return {'id': row['id'], 'trainingId': row['training_id'], 'name': row['name'], 'opponent': row['opponent'], 'video': row['video'], 'status': row['status'], 'heldOn': row['held_on'], 'videoMeta':self.video_meta(row),
                 'created': row['created'], 'updated': row['updated'], 'events': [self.event(e) for e in events],
+                'guests': [self.guest(r) for r in db.execute('SELECT * FROM stats_game_guests WHERE game_id=? ORDER BY id',(row['id'],))],
                 'comments': self.comments(db, game_id=row['id'], viewer=viewer)}
 
     def training(self, db, row, viewer=None):
@@ -897,11 +933,11 @@ class StatsStore:
                 raise StatsError(400, '请选择这一分由进攻还是防守开。')
             line_json = json.dumps(line)
         else:
-            from_id = player_id(raw.get('from'))
+            from_id = match_player_id(raw.get('from'))
             if kind in ('pass', 'goal'):
-                to_id = player_id(raw.get('to'))
+                to_id = match_player_id(raw.get('to'))
             elif kind == 'turnover':
-                to_id = player_id(raw.get('to')) if raw.get('to') is not None else None
+                to_id = match_player_id(raw.get('to')) if raw.get('to') is not None else None
             elif raw.get('to') is not None:
                 raise StatsError(400, '防守成功只需要记录防守队员。')
             if to_id == from_id:
@@ -929,8 +965,12 @@ class StatsStore:
                 raise StatsError(400, '两队队内阵容仅用于训练赛。')
             player_ids = {from_id, to_id} - {None} | (set(line) if kind == 'point' else set())
             for pid in player_ids:
-                if not db.execute('SELECT 1 FROM stats_players WHERE id=?', (pid,)).fetchone():
-                    raise StatsError(400, '记录中的队员不在名单里，请先刷新名单。')
+                if pid < 0:
+                    participant = db.execute('SELECT 1 FROM stats_game_guests WHERE id=? AND game_id=?', (-pid,game_id)).fetchone()
+                else:
+                    participant = db.execute('SELECT 1 FROM stats_players WHERE id=?', (pid,)).fetchone()
+                if not participant:
+                    raise StatsError(400, '记录中的队员不在本场名单里，请先刷新名单。')
             last = db.execute('SELECT max(seq) FROM stats_events WHERE game_id=?', (game_id,)).fetchone()[0] or 0
             if last >= MAX_EVENTS:
                 raise StatsError(400, f'单场最多记录 {MAX_EVENTS} 条，请新建比赛。')
@@ -994,6 +1034,8 @@ class StatsStore:
                 return self.update_game(game_id, data)
             if rest == [] and method == 'DELETE':
                 return self.delete_game(game_id)
+            if rest == ['guests'] and method == 'POST':
+                return self.add_game_guest(game_id, data)
             if rest == ['events'] and method == 'POST':
                 return self.add_event(game_id, data)
             if rest == ['events'] and method == 'DELETE':

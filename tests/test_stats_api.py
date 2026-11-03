@@ -90,6 +90,43 @@ class StatsAPITest(unittest.TestCase):
         self.assertEqual(self.request('GET', '/api/stats/players')[0], 404)
         self.assertEqual(self.request('GET', '/api/stats?revision=abc', auth=False)[0], 400)
 
+    def test_match_guests_record_events_without_joining_the_team(self):
+        member = self.player('本队控盘手',7)
+        game, other = self.game(), self.game('另一场')
+        base = f'/api/stats/games/{game}'
+        guest_info = {'name':'来助阵的阿凯','number':7}
+        self.assertEqual(self.request('POST',base+'/guests',guest_info,auth=False)[0],401)
+        self.assertEqual(self.request('POST',base+'/guests',guest_info,extra={'Origin':'https://other.test'})[0],403)
+        for invalid in ({'name':' '},{'name':'外援','number':True},{'name':'外援','number':100}):
+            self.assertEqual(self.request('POST',base+'/guests',invalid)[0],400)
+        code, added = self.request('POST',base+'/guests',guest_info)
+        self.assertEqual(code,200,added)
+        guest = added['guest']['id']
+        self.assertLess(guest,0)
+        self.assertEqual(self.request('POST',base+'/guests',guest_info)[1],added,'retry returns same guest and revision')
+        partner = self.request('POST',base+'/guests',{'name':'小安'})[1]['guest']
+        self.assertIsNone(partner['number'])
+        self.assertEqual(self.request('POST',base+'/events',{'kind':'point','line':[member,guest,partner['id']],'start':'offense'})[0],200)
+        self.event(game,'pass',guest,member)
+        self.event(game,'defense',guest,None)
+        self.event(game,'turnover',guest,partner['id'])
+        self.event(game,'goal',member,guest)
+        self.event(other,'goal',member,guest,expect=400)
+        self.assertEqual(self.request('POST',f'/api/stats/games/{other}/events',{'kind':'point','line':[guest],'start':'defense'})[0],400)
+        tid=self.request('POST','/api/stats/trainings',{'name':'队内训练'})[1]['training']['id']
+        scrim=self.request('POST','/api/stats/games',{'name':'队内对抗','trainingId':tid})[1]['game']['id']
+        self.assertEqual(self.request('POST',f'/api/stats/games/{scrim}/guests',guest_info)[0],400)
+        self.assertEqual(self.request('PUT',f'/api/stats/trainings/{tid}',{'attendees':[guest]})[0],400)
+        self.request('POST',base+'/status',{'status':'finished'})
+        self.assertEqual(self.request('POST',base+'/guests',{'name':'迟到'})[0],409)
+        saved = API.STATS_MODULE.StatsStore(self.path).snapshot()
+        self.assertEqual([p['id'] for p in saved['players']],[member])
+        matches={g['id']:g for g in saved['games']}
+        self.assertEqual(matches[other]['guests'],[])
+        self.assertEqual(matches[game]['guests'],[added['guest'],partner])
+        self.assertEqual(matches[game]['events'][-1]['to'],guest)
+        self.assertEqual(matches[game]['events'][0]['line'],[member,guest,partner['id']])
+
     def test_player_roster_validation_and_unique_numbers(self):
         first = self.player('疾风', 7)
         self.assertEqual(self.request('POST', '/api/stats/players', {'name': '芒果', 'number': 7, 'gender': 'female'})[0], 409)
