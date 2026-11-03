@@ -25,6 +25,40 @@ class ScrimmageTest(unittest.TestCase):
     def point(self, game, a, b, offense='a', expect=200):
         return self.event(game, 'point', None, expect=expect, sides={'a':a,'b':b,'offense':offense})
 
+    def test_edit_saved_lineup_preserves_play_and_isolates_points(self):
+        (a,b,c,d,bench), tid, game = self.prepare()
+        original = self.point(game,[a,b],[c,d])['event']
+        goal = self.event(game,'goal',a,b)['event']
+        second = self.point(game,[bench,a],[b,c])['event']
+        later = self.event(game,'defense',bench)['event']
+        path = f'/api/stats/games/{game}/points/{original["seq"]}'
+        payload = {'sides':{'a':[a,b,d],'b':[c],'offense':'b'},'expected':original}
+        self.assertEqual(self.request('PUT',path,payload,auth=False)[0],401)
+        moved = {**payload,'sides':{'a':[c,d],'b':[a,b],'offense':'a'}}
+        self.assertEqual(self.request('PUT',path,moved)[0],409)
+        code, result = self.request('PUT',path,payload)
+        self.assertEqual(code,200,result)
+        saved = result['event']
+        self.assertEqual((saved['seq'],saved['at'],saved['sides'],saved['start']),
+                         (original['seq'],original['at'],payload['sides'],'defense'))
+        self.assertEqual(self.request('PUT',path,payload)[0],409,'stale edit cannot overwrite a newer lineup')
+        events=self.stats.snapshot()['trainings'][0]['games'][0]['events']
+        self.assertEqual(events,[saved,goal,second,later])
+        self.request('POST',f'/api/stats/games/{game}/status',{'status':'finished'})
+        self.assertEqual(self.request('PUT',path,{**payload,'expected':saved})[0],409)
+
+    def test_edit_formal_point_with_guest(self):
+        (a,b,*_),_,_ = self.prepare()
+        game=self.request('POST','/api/stats/games',{'name':'正式赛'})[1]['game']['id']
+        base=f'/api/stats/games/{game}'
+        guest=self.request('POST',base+'/guests',{'name':'外援'})[1]['guest']['id']
+        point=self.event(game,'point',None,line=[a,b],start='offense')['event']
+        path=base+'/points/'+str(point['seq'])
+        updated=self.request('PUT',path,{'line':[a,guest],'start':'offense','expected':point})[1]['event']
+        play=self.event(game,'pass',a,guest)['event']
+        self.assertEqual(self.request('PUT',path,{'line':[a,b],'start':'defense','expected':updated})[0],409)
+        self.assertEqual(self.stats.snapshot()['games'][0]['events'],[updated,play])
+
     def test_both_sides_record_score_undo_and_persist(self):
         (a,b,c,d,bench), tid, game = self.prepare()
         self.event(game,'pass',a,b,expect=409)

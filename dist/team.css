@@ -520,3 +520,12 @@ body:not(.stats-mode):not(.trainings-mode) #team-notifications{display:none}
 .guest-fields input{font-size:16px!important;min-height:44px}
 .guest-actions{display:flex;justify-content:flex-end;gap:8px}
 .guest-actions button{min-height:44px}
+
+.point-log-edit{justify-self:start;min-height:40px;margin:4px 0}
+@media(max-width:600px){
+ .stats-point-bar:has(#rec-edit-point:not([hidden])){display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .stats-point-bar:has(#rec-edit-point:not([hidden])) .stats-point-info{grid-column:1/-1}
+}
+
+#point-error:empty{display:none}
+#point-error{color:#974b31}

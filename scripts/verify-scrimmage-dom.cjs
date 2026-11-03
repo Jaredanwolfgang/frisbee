@@ -16,6 +16,11 @@ const formal={...game,id:'formal',name:'联赛',trainingId:null,events:[],guests
 const state={players,games:[formal],trainings:[training],me:null,revision:1};let seq=0;
 const calls=[],toasts=[];
 async function api(path,options){if(!options&&path.includes('/notes'))return{notes:[],total:0,trainingCount:0,nextOffset:null};if(!options)return clone(state);const body=JSON.parse(options.body||'{}');calls.push({path,...options,body});
+ if(path==='stats/games/formal/points/1'){
+  assert.equal(options.method,'PUT');assert.deepEqual(body.expected,formal.events[0]);
+  Object.assign(formal.events[0],{line:body.line,start:body.start});
+  return{event:clone(formal.events[0]),revision:++state.revision};
+ }
  if(path==='stats/games/formal/guests'){const guest={id:-1,guest:true,...body};formal.guests.push(guest);return{guest,revision:++state.revision};}
  if(path==='stats/games/formal/events'){const event={...body,seq:formal.events.length+1,at:now};formal.events.push(event);return{event,revision:++state.revision};}
  if(path.endsWith('/events')){let event;if(options.method==='DELETE')return{removed:game.events.pop(),revision:++state.revision};if(body.kind==='point')event={seq:++seq,at:now,kind:'point',line:body.sides?[...body.sides.a,...body.sides.b]:body.line,start:body.sides?(body.sides.offense==='a'?'offense':'defense'):body.start,...(body.sides?{sides:body.sides}:{})};else{const point=game.events.filter(e=>e.kind==='point').at(-1);event={seq:++seq,at:now,kind:body.kind,from:body.from,to:body.to??null,side:point.sides.a.includes(body.from)?'a':'b'};}game.events.push(clone(event));return{event,revision:++state.revision};}
@@ -38,6 +43,13 @@ const click=s=>{const el=$(s);assert(el,'missing '+s);assert(!el.disabled,'disab
  click('[data-stats-chip="1"]');click('[data-stats-chip="-1"]');click('#rec-goal');await tick();
  click('#stats-tab-box');assert($('#stats-boxscore').textContent.includes('小飞'));assert($('#stats-boxscore').textContent.includes('外援'));
  click('#stats-tab-log');assert($('#stats-event-log').textContent.includes('外援 小飞'));assert(!$('#team-roster-grid').textContent.includes('小飞'));
+ click('[data-edit-line="1"]');assert.equal($('#point-confirm').textContent,'保存阵容');
+ assert.equal($('[data-stats-chip="-1"]').getAttribute('aria-pressed'),'true');
+ click('[data-stats-chip="2"]');click('#point-confirm');await tick();
+ assert.equal($('#stats-tab-log').getAttribute('aria-selected'),'true');assert.deepEqual(formal.events[0].line,[1,-1,2]);
+ assert.equal(formal.events.length,2);assert.equal(formal.events[1].kind,'goal');
+ click('#stats-tab-record');assert(!$('#rec-edit-point').hidden);click('#rec-edit-point');click('[data-stats-chip="2"]');click('#point-cancel');
+ assert.deepEqual(formal.events[0].line,[1,-1,2],'cancel leaves saved lineup intact');
  click('#stats-game-close');
  click('[data-training-card]');click('#training-drill-add');
  assert($('#drill-picker-dialog').open);assert.equal($('#drill-picker-dialog .stats-players-content'),null,'picker does not inherit roster modal widths');

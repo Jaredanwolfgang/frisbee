@@ -112,6 +112,27 @@ def line_ids(raw):
     return line
 
 
+def point_fields(raw):
+    sides = None
+    if 'sides' in raw:
+        sides = raw['sides']
+        if not isinstance(sides, dict) or set(sides) != {'a','b','offense'} or sides['offense'] not in ('a','b'):
+            raise StatsError(400, '请选择 A、B 两队阵容，以及哪队进攻开。')
+        a = id_values(sides, 'a', 1, 7, 'A 队上场队员')
+        b = id_values(sides, 'b', 1, 7, 'B 队上场队员')
+        if set(a) & set(b):
+            raise StatsError(400, '同一分里，一名队员只能属于一队。')
+        sides = {'a':a, 'b':b, 'offense':sides['offense']}
+        line, start = a+b, 'offense' if sides['offense']=='a' else 'defense'
+        if ('line' in raw and raw['line'] != line) or ('start' in raw and raw['start'] != start):
+            raise StatsError(400, '上场阵容或攻防身份与两队设置不一致。')
+    else:
+        line, start = line_ids(raw), raw.get('start')
+    if not isinstance(start, str) or start not in POINT_START:
+        raise StatsError(400, '请选择这一分由进攻还是防守开。')
+    return line, start, sides
+
+
 class StatsStore:
     def __init__(self, path):
         self.path = str(path)
@@ -906,6 +927,50 @@ class StatsStore:
             raise StatsError(409, '比赛已结束；先点“重新开始”再修改记录。')
         return row
 
+    @staticmethod
+    def validate_participants(db, game_id, player_ids):
+        for pid in player_ids:
+            if pid < 0:
+                participant = db.execute('SELECT 1 FROM stats_game_guests WHERE id=? AND game_id=?', (-pid,game_id)).fetchone()
+            else:
+                participant = db.execute('SELECT 1 FROM stats_players WHERE id=?', (pid,)).fetchone()
+            if not participant:
+                raise StatsError(400, '记录中的队员不在本场名单里，请先刷新名单。')
+
+    def update_point(self, game_id, seq, raw):
+        if not isinstance(raw, dict):
+            raise StatsError(400, '阵容格式无效。')
+        line, start, sides = point_fields(raw)
+        with self.transaction() as db:
+            game = self.live_game(db, game_id)
+            if game['training_id'] and not db.execute(
+                'SELECT 1 FROM stats_trainings WHERE id=? AND deleted=0', (game['training_id'],)
+            ).fetchone():
+                raise StatsError(404, '这次训练已删除。')
+            row = db.execute("SELECT * FROM stats_events WHERE game_id=? AND seq=? AND kind='point'",
+                             (game_id,seq)).fetchone()
+            if not row:
+                raise StatsError(404, '这分阵容已不存在。')
+            if raw.get('expected') != self.event(row):
+                raise StatsError(409, '这分阵容已被修改，请取消并重新打开。')
+            if bool(row['sides']) != bool(sides):
+                raise StatsError(400, '请沿用本分原有的分队方式。')
+            self.validate_participants(db, game_id, line)
+            following = db.execute(
+                'SELECT kind,from_id,to_id,side FROM stats_events WHERE game_id=? AND seq>? ORDER BY seq',
+                (game_id,seq))
+            for event in following:
+                if event['kind'] == 'point':
+                    break
+                allowed = sides[event['side']] if sides and event['side'] in ('a','b') else line
+                if any(pid is not None and pid not in allowed for pid in (event['from_id'],event['to_id'])):
+                    raise StatsError(409, '本分已有传盘、得分或防守记录，相关队员需留在原队的上场阵容中。')
+            db.execute('UPDATE stats_events SET line=?, start=?, sides=? WHERE game_id=? AND seq=?',
+                       (json.dumps(line),start,json.dumps(sides) if sides else None,game_id,seq))
+            db.execute('UPDATE stats_games SET updated=? WHERE id=?',(self.now(),game_id))
+            saved = db.execute('SELECT * FROM stats_events WHERE game_id=? AND seq=?',(game_id,seq)).fetchone()
+            return {'event':self.event(saved),'revision':self.revision(db,True)}
+
     def add_event(self, game_id, raw):
         if not isinstance(raw, dict) or raw.get('kind') not in EVENT_KINDS:
             raise StatsError(400, '记录类型无效。')
@@ -914,23 +979,8 @@ class StatsStore:
         line_json = start = sides_json = side = None
         sides = None
         if kind == 'point':
-            if 'sides' in raw:
-                sides = raw['sides']
-                if not isinstance(sides, dict) or set(sides) != {'a','b','offense'} or sides['offense'] not in ('a','b'):
-                    raise StatsError(400, '请选择 A、B 两队阵容，以及哪队进攻开。')
-                a = id_values(sides, 'a', 1, 7, 'A 队上场队员')
-                b = id_values(sides, 'b', 1, 7, 'B 队上场队员')
-                if set(a) & set(b):
-                    raise StatsError(400, '同一分里，一名队员只能属于一队。')
-                sides = {'a':a, 'b':b, 'offense':sides['offense']}
-                line, start = a+b, 'offense' if sides['offense']=='a' else 'defense'
-                if ('line' in raw and raw['line'] != line) or ('start' in raw and raw['start'] != start):
-                    raise StatsError(400, '上场阵容或攻防身份与两队设置不一致。')
-                sides_json = json.dumps(sides)
-            else:
-                line, start = line_ids(raw), raw.get('start')
-            if start not in POINT_START:
-                raise StatsError(400, '请选择这一分由进攻还是防守开。')
+            line, start, sides = point_fields(raw)
+            sides_json = json.dumps(sides) if sides else None
             line_json = json.dumps(line)
         else:
             from_id = match_player_id(raw.get('from'))
@@ -964,13 +1014,7 @@ class StatsStore:
             elif sides is not None:
                 raise StatsError(400, '两队队内阵容仅用于训练赛。')
             player_ids = {from_id, to_id} - {None} | (set(line) if kind == 'point' else set())
-            for pid in player_ids:
-                if pid < 0:
-                    participant = db.execute('SELECT 1 FROM stats_game_guests WHERE id=? AND game_id=?', (-pid,game_id)).fetchone()
-                else:
-                    participant = db.execute('SELECT 1 FROM stats_players WHERE id=?', (pid,)).fetchone()
-                if not participant:
-                    raise StatsError(400, '记录中的队员不在本场名单里，请先刷新名单。')
+            self.validate_participants(db, game_id, player_ids)
             last = db.execute('SELECT max(seq) FROM stats_events WHERE game_id=?', (game_id,)).fetchone()[0] or 0
             if last >= MAX_EVENTS:
                 raise StatsError(400, f'单场最多记录 {MAX_EVENTS} 条，请新建比赛。')
@@ -1036,6 +1080,8 @@ class StatsStore:
                 return self.delete_game(game_id)
             if rest == ['guests'] and method == 'POST':
                 return self.add_game_guest(game_id, data)
+            if method == 'PUT' and len(rest) == 2 and rest[0] == 'points' and re.fullmatch(r'[1-9][0-9]{0,8}',rest[1]):
+                return self.update_point(game_id,int(rest[1]),data)
             if rest == ['events'] and method == 'POST':
                 return self.add_event(game_id, data)
             if rest == ['events'] and method == 'DELETE':
