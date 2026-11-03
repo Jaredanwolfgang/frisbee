@@ -297,13 +297,31 @@ const StatsUI=(()=>{
   renderAll();
   if(!loaded&&!inflight)refresh();
  }
+ let identityEpoch=0;
+ function setMember(next){
+  if((me?.id||0)!==(next?.id||0)){
+   identityEpoch++;
+   revision=-1;
+   discussionUI?.reset();
+   for(const item of [...data.games,...data.trainings,...data.trainings.flatMap(t=>t.games)]){
+    item.comments=item.comments.filter(c=>!c.privateAudience);
+   }
+   notifications={unread:0,trainings:{}};
+  }
+  me=next;
+ }
+ function signalMemberChange(){
+  try{localStorage.setItem('tiga:member-changed',String(Date.now()));}catch{}
+ }
  async function refresh(force=false){
   if(inflight){await inflight;if(!force)return;}
   if(force)revision=-1;
   inflight=(async()=>{try{
-   const d=await deps.api('stats'+(revision>=0?'?revision='+revision:''));
+   const epoch=identityEpoch;
+   const d=await deps.api('stats'+(revision>=0?'?revision='+revision+'&viewer='+(me?.id||0):''));
+   if(epoch!==identityEpoch)return;
    error='';
-   if('me' in d)me=d.me;notifications=d.notifications||{unread:0,trainings:{}};
+   if('me' in d)setMember(d.me);notifications=d.notifications||{unread:0,trainings:{}};
    if(typeof d.canEdit==='boolean'&&deps.syncCanEdit)deps.syncCanEdit(d.canEdit);
    if(!d.unchanged){data={players:d.players||[],games:d.games||[],trainings:d.trainings||[]};revision=d.revision;}
    loaded=true;renderAll();
@@ -459,7 +477,7 @@ const StatsUI=(()=>{
    if(editingGameId){
     const id=editingGameId;
     const res=await mutate('stats/games/'+id,{method:'PUT',body:JSON.stringify({name,opponent,video,heldOn})},r=>{
-     const g=findGameContainer(id);if(g){Object.assign(g,r.game);}
+     const g=findGameContainer(id);if(g){Object.assign(g,r.game,{comments:g.comments});}
     });
     if(!res)return;
     editingGameId=null;scrimmageTrainingId=null;$('#stats-new-game-dialog').close();
@@ -487,13 +505,13 @@ const StatsUI=(()=>{
    if(!name){$('#stats-login-error').textContent='请输入盘名。';return;}
    try{
     const res=await deps.api('stats/login',{method:'POST',body:JSON.stringify({name,password:$('#stats-login-password').value})});
-    me=res.me;notifications={unread:0,trainings:{}};await refresh(true);$('#stats-login-password').value='';$('#stats-login-dialog').close();renderAll();if(!$('#training-dialog').open&&!$('#stats-game-dialog').open)teamHub?.afterLogin();
+    setMember(res.me);renderAll();signalMemberChange();await refresh(true);$('#stats-login-password').value='';$('#stats-login-dialog').close();renderAll();if(!$('#training-dialog').open&&!$('#stats-game-dialog').open)teamHub?.afterLogin();
     deps.toast('已登录为 #'+me.number+' '+me.name+'，已进入个人看板。');
    }catch(err){$('#stats-login-error').textContent=err.message;}
   };
   $('#stats-logout').onclick=async()=>{
-   try{await deps.api('stats/logout',{method:'POST',body:'{}'});}catch{}
-   me=null;notifications={unread:0,trainings:{}};discussionUI?.reset();renderAll();deps.toast('已退出登录。');
+   try{await deps.api('stats/logout',{method:'POST',body:'{}'});}catch(error){deps.toast(error.message);return;}
+   setMember(null);renderAll();signalMemberChange();await refresh(true);deps.toast('已退出登录。');
   };
   $('#stats-new-game-cancel').onclick=()=>{editingGameId=null;$('#stats-new-game-dialog').close();};
   $('#stats-game-close').onclick=()=>$('#stats-game-dialog').close();
@@ -621,6 +639,9 @@ const StatsUI=(()=>{
    else{if(!data.trainings.some(t=>t.id===message.trainingId))throw new Error('这次训练已被删除。');openTraining(message.trainingId);trainingPane='comments';syncTrainingPane();renderTrainingComments(currentTraining());discussionUI.reveal($('#training-discussion'),message.commentId);}
   }});
   refresh();
+  window.addEventListener('storage',event=>{
+   if(event.key==='tiga:member-changed'){identityEpoch++;setMember(null);renderAll();refresh(true);}
+  });
   timer=setInterval(()=>{if(active()&&!document.hidden&&!busy)refresh();},8000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&active())refresh();});
  }

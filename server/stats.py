@@ -159,7 +159,7 @@ class StatsStore:
                 db.execute('INSERT INTO stats_comments_fixed(id,game_id,training_id,player_id,text,author_name,author_number,created,updated) SELECT id,game_id,training_id,player_id,text,author_name,author_number,created,updated FROM stats_comments')
                 db.execute('DROP TABLE stats_comments')
                 db.execute('ALTER TABLE stats_comments_fixed RENAME TO stats_comments')
-            for column in ["parent_id INTEGER", "reply_to_id INTEGER", "deleted INTEGER NOT NULL DEFAULT 0", "is_discussion INTEGER NOT NULL DEFAULT 0", "video_game_id TEXT", "video_key TEXT", "video_second INTEGER", "video_page INTEGER", "video_refs TEXT NOT NULL DEFAULT '[]'", "mentions TEXT NOT NULL DEFAULT '[]'"]:
+            for column in ["parent_id INTEGER", "reply_to_id INTEGER", "private_audience TEXT", "deleted INTEGER NOT NULL DEFAULT 0", "is_discussion INTEGER NOT NULL DEFAULT 0", "video_game_id TEXT", "video_key TEXT", "video_second INTEGER", "video_page INTEGER", "video_refs TEXT NOT NULL DEFAULT '[]'", "mentions TEXT NOT NULL DEFAULT '[]'"]:
                 try:
                     db.execute('ALTER TABLE stats_comments ADD COLUMN '+column)
                 except sqlite3.OperationalError:
@@ -227,6 +227,7 @@ class StatsStore:
 
     def comment(self, db, row, video_cache=None):
         out = {'id':row['id'], 'parentId':row['parent_id'], 'player':row['player_id'],
+               'privateAudience':json.loads(row['private_audience']) if row['private_audience'] else None,
                'replyTo':None, 'text':'' if row['deleted'] else row['text'], 'deleted':bool(row['deleted']),
                'created':row['created'], 'at':row['updated'],
                'name':row['p_name'] if row['p_name'] is not None else row['author_name'],
@@ -250,19 +251,19 @@ class StatsStore:
                 out['video'] = resolved({'gameId':row['video_game_id'],'key':row['video_key'],'seconds':row['video_second'],'page':row['video_page']})
         return out
 
-    def comments(self, db, game_id=None, training_id=None):
-        rows = db.execute('SELECT c.*, p.name AS p_name, p.number AS p_number, p.avatar_digest AS p_avatar, r.id AS reply_target_id, r.player_id AS reply_player, COALESCE(rp.name,r.author_name) AS reply_name, COALESCE(rp.number,r.author_number) AS reply_number FROM stats_comments c LEFT JOIN stats_players p ON p.id=c.player_id LEFT JOIN stats_comments r ON r.id=COALESCE(c.reply_to_id,c.parent_id) AND r.game_id IS c.game_id AND r.training_id IS c.training_id LEFT JOIN stats_players rp ON rp.id=r.player_id WHERE c.game_id IS ? AND c.training_id IS ? ORDER BY c.created,c.id', (game_id,training_id))
+    def comments(self, db, game_id=None, training_id=None, viewer=None):
+        rows = db.execute('SELECT c.*, p.name AS p_name, p.number AS p_number, p.avatar_digest AS p_avatar, r.id AS reply_target_id, r.player_id AS reply_player, COALESCE(rp.name,r.author_name) AS reply_name, COALESCE(rp.number,r.author_number) AS reply_number FROM stats_comments c LEFT JOIN stats_players p ON p.id=c.player_id LEFT JOIN stats_comments r ON r.id=COALESCE(c.reply_to_id,c.parent_id) AND r.game_id IS c.game_id AND r.training_id IS c.training_id LEFT JOIN stats_players rp ON rp.id=r.player_id WHERE c.game_id IS ? AND c.training_id IS ? AND (c.private_audience IS NULL OR EXISTS (SELECT 1 FROM json_each(c.private_audience) WHERE value=?)) ORDER BY c.created,c.id', (game_id,training_id,viewer))
         cache = {}
         return [self.comment(db,row,cache) for row in rows]
 
-    def game(self, db, row):
+    def game(self, db, row, viewer=None):
         events = db.execute('SELECT * FROM stats_events WHERE game_id=? ORDER BY seq', (row['id'],))
         return {'id': row['id'], 'trainingId': row['training_id'], 'name': row['name'], 'opponent': row['opponent'], 'video': row['video'], 'status': row['status'], 'heldOn': row['held_on'], 'videoMeta':self.video_meta(row),
                 'created': row['created'], 'updated': row['updated'], 'events': [self.event(e) for e in events],
-                'comments': self.comments(db, game_id=row['id'])}
+                'comments': self.comments(db, game_id=row['id'], viewer=viewer)}
 
-    def training(self, db, row):
-        games = [self.game(db, r) for r in db.execute('SELECT * FROM stats_games WHERE training_id=? AND deleted=0 ORDER BY held_on DESC, created DESC, rowid DESC', (row['id'],))]
+    def training(self, db, row, viewer=None):
+        games = [self.game(db, r, viewer) for r in db.execute('SELECT * FROM stats_games WHERE training_id=? AND deleted=0 ORDER BY held_on DESC, created DESC, rowid DESC', (row['id'],))]
         drills = []
         for drill_id in json.loads(row['drills'] or '[]'):
             found = db.execute('SELECT document FROM tactics WHERE id=?', (drill_id,)).fetchone()
@@ -272,9 +273,9 @@ class StatsStore:
         return {'id': row['id'], 'name': row['name'], 'warmup': row['warmup'],
                 'attendees': json.loads(row['attendees'] or '[]'), 'drills': drills, 'heldOn': row['held_on'], 'status': row['status'],
                 'created': row['created'], 'updated': row['updated'],
-                'games': games, 'comments': self.comments(db, training_id=row['id'])}
+                'games': games, 'comments': self.comments(db, training_id=row['id'], viewer=viewer)}
 
-    def snapshot(self, known_revision=None):
+    def snapshot(self, known_revision=None, viewer=None):
         db = self.connect()
         try:
             db.execute('BEGIN')
@@ -282,8 +283,8 @@ class StatsStore:
             if known_revision == revision:
                 return {'unchanged': True, 'revision': revision}
             players = [self.player(r) for r in db.execute('SELECT * FROM stats_players ORDER BY number, id')]
-            games = [self.game(db, r) for r in db.execute('SELECT * FROM stats_games WHERE deleted=0 AND training_id IS NULL ORDER BY held_on DESC, created DESC, rowid DESC')]
-            trainings = [self.training(db, r) for r in db.execute('SELECT * FROM stats_trainings WHERE deleted=0 ORDER BY created DESC, rowid DESC')]
+            games = [self.game(db, r, viewer) for r in db.execute('SELECT * FROM stats_games WHERE deleted=0 AND training_id IS NULL ORDER BY held_on DESC, created DESC, rowid DESC')]
+            trainings = [self.training(db, r, viewer) for r in db.execute('SELECT * FROM stats_trainings WHERE deleted=0 ORDER BY created DESC, rowid DESC')]
             return {'players': players, 'games': games, 'trainings': trainings, 'revision': revision}
         finally:
             db.commit()
@@ -461,10 +462,13 @@ class StatsStore:
                 raise StatsError(404, '这次训练已删除。')
             author = db.execute('SELECT * FROM stats_players WHERE id=?',(player_id,)).fetchone()
             if not author: raise StatsError(401, '请重新登录队员身份。')
+            if 'expectedPlayer' in raw and raw['expectedPlayer'] != player_id:
+                raise StatsError(409, '队员身份已切换，请刷新后重新发送。')
             row = None
             if comment_id is not None:
                 row = db.execute('SELECT * FROM stats_comments WHERE id=? AND game_id IS ? AND training_id IS ?',(comment_id,game_id,training_id)).fetchone()
-                if not row: raise StatsError(404, '这条评论不存在。')
+                if not row or (row['private_audience'] and player_id not in json.loads(row['private_audience'])):
+                    raise StatsError(404, '这条评论不存在。')
                 if row['player_id'] != player_id: raise StatsError(403, '只能修改自己的评论。')
             if raw.get('restore') is True and row is None:
                 raise StatsError(400, '请选择要恢复的评论。')
@@ -476,10 +480,12 @@ class StatsStore:
                 parent = raw.get('parentId') if row is None else row['parent_id']
                 reply_to = (row['reply_to_id'] or row['parent_id']) if row else parent
                 reply_author = None
+                parent_audience = None
                 if reply_to is not None:
                     if type(reply_to) is not int or not 1 <= reply_to <= 2**63-1: raise StatsError(400, '回复目标无效。')
                     target = db.execute('SELECT * FROM stats_comments WHERE id=? AND game_id IS ? AND training_id IS ?',(reply_to,game_id,training_id)).fetchone()
-                    if not target or (target['deleted'] and row is None):
+                    parent_audience = json.loads(target['private_audience']) if target and target['private_audience'] else None
+                    if not target or (parent_audience and player_id not in parent_audience) or (target['deleted'] and row is None):
                         raise StatsError(400, '请选择同一讨论区中尚未删除的评论回复。')
                     parent = target['parent_id'] or target['id']
                     root = db.execute('SELECT parent_id FROM stats_comments WHERE id=? AND game_id IS ? AND training_id IS ?',(parent,game_id,training_id)).fetchone()
@@ -551,6 +557,28 @@ class StatsStore:
                     previous_end=end
                 anchors=sorted([*refs,*clean_mentions],key=lambda r:r['start'])
                 if any(a['end']>b['start'] for a,b in zip(anchors,anchors[1:])): raise StatsError(400,'时间节点和队友提及不能重叠。')
+                mentioned = {m['player'] for m in clean_mentions}
+                private = raw.get('private', False)
+                if type(private) is not bool:
+                    raise StatsError(400, '评论可见范围无效。')
+                # An audience is fixed at publication. Replies inherit their target's
+                # audience and may narrow it, but can never expose an ancestor.
+                if row is not None:
+                    audience = json.loads(row['private_audience']) if row['private_audience'] else None
+                    if 'private' in raw and private != bool(audience):
+                        raise StatsError(409, '已发送评论的可见范围不能更改。')
+                elif private:
+                    if not mentioned - {player_id}:
+                        raise StatsError(400, '请先从 @ 列表选择私密评论的收件队友。')
+                    audience = sorted(mentioned | {player_id})
+                else:
+                    audience = parent_audience
+                if parent_audience and not mentioned.issubset(parent_audience):
+                    raise StatsError(400, '只能提及这条私密评论的参与队友。')
+                if audience and not mentioned.issubset(audience):
+                    raise StatsError(400, '编辑评论不能扩大原有的私密范围。')
+                if row is not None and audience and audience != parent_audience and set(audience) != mentioned | {player_id}:
+                    raise StatsError(400, '这条私密评论的可见名单已固定，请保留对这些队友的 @。')
                 stamp = self.now()
                 if row is None:
                     count = db.execute('SELECT count(*) FROM stats_comments WHERE game_id IS ? AND training_id IS ?',(game_id,training_id)).fetchone()[0]
@@ -560,14 +588,17 @@ class StatsStore:
                 else:
                     if row['deleted']: raise StatsError(409, '请先恢复这条评论再修改。')
                     db.execute('UPDATE stats_comments SET text=?,updated=?,video_game_id=?,video_key=?,video_second=?,video_page=?,video_refs=? WHERE id=?',(body,stamp,vg,vk,second,page,json.dumps(refs),comment_id))
-                db.execute('UPDATE stats_comments SET mentions=? WHERE id=?',(json.dumps(clean_mentions),comment_id))
+                db.execute('UPDATE stats_comments SET mentions=?,private_audience=? WHERE id=?',
+                           (json.dumps(clean_mentions),json.dumps(audience) if audience else None,comment_id))
                 if row is None: db.execute('UPDATE stats_comments SET reply_to_id=? WHERE id=?',(reply_to,comment_id))
                 recipients = {m['player'] for m in clean_mentions}
                 # Editing a legacy reply must not create a retroactive unread alert.
                 if reply_author is not None and (row is None or row['reply_to_id'] is not None): recipients.add(reply_author)
+                if audience:
+                    recipients.intersection_update(audience)
                 self.sync_mentions(db,comment_id,player_id,recipients,stamp)
             db.execute('UPDATE '+table+' SET updated=? WHERE id=?',(self.now(),context_id))
-            return {'comments':self.comments(db,game_id,training_id), 'commentId':comment_id, 'revision':self.revision(db,True)}
+            return {'comments':self.comments(db,game_id,training_id,viewer=player_id), 'commentId':comment_id, 'revision':self.revision(db,True)}
 
     @staticmethod
     def sync_mentions(db, comment_id, author_id, recipients, stamp):
@@ -583,7 +614,7 @@ class StatsStore:
 
     @staticmethod
     def notification_query():
-        return ' FROM stats_notifications n JOIN stats_comments c ON c.id=n.comment_id LEFT JOIN stats_games g ON g.id=c.game_id LEFT JOIN stats_trainings t ON t.id=COALESCE(c.training_id,g.training_id) WHERE n.player_id=? AND n.active=1 AND c.deleted=0 AND ((c.training_id IS NOT NULL AND t.deleted=0) OR (g.id IS NOT NULL AND g.deleted=0 AND (g.training_id IS NULL OR t.deleted=0)))'
+        return ' FROM stats_notifications n JOIN stats_comments c ON c.id=n.comment_id LEFT JOIN stats_games g ON g.id=c.game_id LEFT JOIN stats_trainings t ON t.id=COALESCE(c.training_id,g.training_id) WHERE n.player_id=? AND n.active=1 AND c.deleted=0 AND (c.private_audience IS NULL OR EXISTS (SELECT 1 FROM json_each(c.private_audience) WHERE value=n.player_id)) AND ((c.training_id IS NOT NULL AND t.deleted=0) OR (g.id IS NOT NULL AND g.deleted=0 AND (g.training_id IS NULL OR t.deleted=0)))'
 
     def notification_summary(self, player_id):
         if player_id is None: return {'unread':0,'trainings':{},'trainingComments':{},'games':{}}

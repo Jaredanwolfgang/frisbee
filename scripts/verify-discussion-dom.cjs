@@ -70,10 +70,13 @@ async function verifyStartup(){
  const g={id:'fixture-game',name:'训练赛',status:'finished',created:stamp,heldOn:'2026-10-28',events:[],comments:clone(data.comments),video:video.video,videoMeta:video.videoMeta};
  const t={id:'fixture-training',name:'训练',status:'completed',created:stamp,heldOn:'2026-10-28',games:[g],comments:clone(data.comments),warmup:'热身',attendees:[1],drills:[]};
  const state={players:[{id:1,number:1,name:'测试队员',gender:'male',avatar:'',loginReady:true}],games:[],trainings:[t],me:{id:1,name:'测试队员',number:1},revision:1};
- const errors=[];let poll;let inboxRows=[];
+ const errors=[];let poll;let inboxRows=[];let signedOut=false;
  const cx={document:doc,window:win,URLSearchParams,Intl,Date,console,setInterval:fn=>{poll=fn;return 0;},parseFloat,getComputedStyle:()=>({columnGap:'12px'}),MobileUI:{isPhone:()=>false},bindTap:(el,fn)=>el.onclick=fn};
  cx.setTimeout=()=>0;cx.clearTimeout=()=>{};vm.createContext(cx);vm.runInContext(fs.readFileSync('dist/lite-markdown.js','utf8')+'\n'+fs.readFileSync('dist/markdown-editor.js','utf8')+'\n'+['bili-video.js','discussion-text.js','discussion.js','drill-journal.js','team-metrics.js','team-hub.js','team-messages.js','stats.js'].map(name=>fs.readFileSync('dist/'+name,'utf8')).join('\n')+'\nglobalThis.stats=StatsUI;',cx);
- cx.stats.init({api:async(path,options)=>{if(path.startsWith('stats/notifications?'))return{messages:clone(inboxRows),summary:clone(state.notifications),nextOffset:null};if(path==='stats/notifications/read'){const body=JSON.parse(options.body);inboxRows.forEach(m=>{if(body.all||m.id===body.id||m.gameId===body.gameId||(!m.gameId&&m.trainingId===body.trainingId))m.unread=false;});const summary={unread:0,trainings:{},games:{},trainingComments:{}};for(const m of inboxRows.filter(m=>m.unread)){summary.unread++;if(m.trainingId)summary.trainings[m.trainingId]=(summary.trainings[m.trainingId]||0)+1;if(m.gameId)summary.games[m.gameId]=(summary.games[m.gameId]||0)+1;else if(m.trainingId)summary.trainingComments[m.trainingId]=(summary.trainingComments[m.trainingId]||0)+1;}state.notifications=summary;return{summary:clone(summary)};}return clone(state);},toast:e=>errors.push(e),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:fn=>fn?.(),getDrills:()=>[]});
+ cx.stats.init({api:async(path,options)=>{
+  if(path==='stats/logout'){signedOut=true;return{me:null};}
+  if(signedOut)throw new Error('offline after logout');
+  if(path.startsWith('stats/notifications?'))return{messages:clone(inboxRows),summary:clone(state.notifications),nextOffset:null};if(path==='stats/notifications/read'){const body=JSON.parse(options.body);inboxRows.forEach(m=>{if(body.all||m.id===body.id||m.gameId===body.gameId||(!m.gameId&&m.trainingId===body.trainingId))m.unread=false;});const summary={unread:0,trainings:{},games:{},trainingComments:{}};for(const m of inboxRows.filter(m=>m.unread)){summary.unread++;if(m.trainingId)summary.trainings[m.trainingId]=(summary.trainings[m.trainingId]||0)+1;if(m.gameId)summary.games[m.gameId]=(summary.games[m.gameId]||0)+1;else if(m.trainingId)summary.trainingComments[m.trainingId]=(summary.trainingComments[m.trainingId]||0)+1;}state.notifications=summary;return{summary:clone(summary)};}return clone(state);},toast:e=>errors.push(e),canEdit:()=>true,toggleEdit(){},openTeam(){},requestEdit:fn=>fn?.(),getDrills:()=>[]});
  await new Promise(setImmediate);
  assert.equal(doc.querySelector('#stats-meta').textContent.includes('测试'),false);
  assert.equal(doc.querySelector('#trainings-list [data-training-card]')?.textContent.includes('训练'),true,'stats must initialize against real HTML IDs');
@@ -113,7 +116,7 @@ async function verifyStartup(){
  // Inbox deep links land in either a formal match or the right training scrimmage.
  const author={player:2,name:'队友',number:2,created:stamp,at:stamp,parentId:null,deleted:false};
  const formal={...g,id:'formal-match',name:'正式比赛',trainingId:null,comments:[{...author,id:901,text:'@测试队员 正式比赛复盘',mentions:[{player:1,name:'测试队员',start:0,end:5}]}]};
- const scrim={...g,id:'training-match',name:'训练对抗',trainingId:'training-links',comments:[{...author,id:902,text:'@测试队员 训练赛复盘',mentions:[{player:1,name:'测试队员',start:0,end:5}]}]};
+ const scrim={...g,id:'training-match',name:'训练对抗',trainingId:'training-links',comments:[{...author,id:902,privateAudience:[1,2],text:'@测试队员 训练赛复盘',mentions:[{player:1,name:'测试队员',start:0,end:5}]}]};
  state.games=[formal];state.trainings=[{...t,id:'training-links',games:[scrim],comments:[]}];state.players[1].name='队友';state.notifications={unread:2,trainings:{'training-links':1},games:{'formal-match':1,'training-match':1},trainingComments:{}};state.revision++;
  inboxRows=[{id:501,trainingId:null,gameId:formal.id,gameName:formal.name,trainingName:null,commentId:901,name:'队友',text:formal.comments[0].text,heldOn:'2026-10-28',unread:true},{id:502,trainingId:'training-links',gameId:scrim.id,gameName:scrim.name,trainingName:'训练',commentId:902,name:'队友',text:scrim.comments[0].text,heldOn:'2026-10-28',unread:true}];
  poll();await new Promise(setImmediate);assert(doc.querySelector('[data-team-tab=games]').classList.contains('has-alert'));assert(doc.querySelector('[data-team-tab=trainings]').classList.contains('has-alert'));
@@ -126,6 +129,11 @@ async function verifyStartup(){
  assert(doc.querySelector('#training-dialog').open);assert.equal(doc.querySelector('#training-body').dataset.trainingView,'games');assert(doc.querySelector('#stats-game-dialog').open);assert(doc.querySelector('#game-discussion [data-message="902"]'));assert.equal(doc.querySelector('#stats-game-close').getAttribute('aria-label'),'返回训练赛');
  const gameInput=doc.querySelector('#game-discussion [data-d="text"]');gameInput.value='＠队';gameInput.selectionStart=gameInput.selectionEnd=2;gameInput.oninput();assert(!doc.querySelector('#game-discussion [data-d="mention-picker"]').hidden,'full-width @ also works in training scrimmage discussion');
  doc.querySelector('#stats-game-close').click();assert(doc.querySelector('#training-dialog').open);assert(!doc.querySelector('#training-tab-games').classList.contains('has-unread'));assert(!doc.querySelector('#training-tab-comments').classList.contains('has-unread'),'scrimmage mention is not incorrectly shown as a training-comment alert');doc.querySelector('#training-close').click();assert(doc.querySelector('#team-notifications-dialog').open);
+ assert(doc.querySelector('#game-discussion .discussion-private'),'authorized member sees the privacy badge');
+ doc.querySelector('#team-password-form').reset=()=>{}; // linkedom omits the native form method.
+ doc.querySelector('#stats-logout').click();await new Promise(setImmediate);
+ assert(signedOut);assert.equal(errors.pop(),'已退出登录。');
+ assert(!doc.body.textContent.includes('@测试队员 训练赛复盘'),'logout clears private messages from closed dialogs and inbox even if the next fetch fails');
  assert.equal(errors.length,0,errors.join('\n'));
  console.log('PASS: actual StatsUI/TeamHub startup, formal/scrimmage mention deep links and independent read dots, five-row dashboard viewports with scroll preservation, player cleanup and backfilled attendance.');
 }

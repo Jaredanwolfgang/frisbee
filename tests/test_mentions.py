@@ -22,6 +22,73 @@ class MentionTest(unittest.TestCase):
     def body(self,text='请 @乙 补充',start=2,end=4,pid=None):
         return {'text':text,'mentions':[{'player':pid or self.b,'start':start,'end':end}],'videoRefs':[]}
 
+    def test_private_discussions_across_all_three_contexts(self):
+        self.setup_mentions()
+        third = self.player('丙', 3)
+        outsider = self.login('丙')
+        formal = self.request('POST', '/api/stats/games', {'name':'正式赛'})[1]['game']['id']
+        scrim = self.request('POST', '/api/stats/games', {'name':'对抗', 'trainingId':self.t})[1]['game']['id']
+        for path in (self.base, '/api/stats/games/'+formal+'/discussion', '/api/stats/games/'+scrim+'/discussion'):
+            with self.subTest(path=path):
+                public_id = self.member('POST',path,{'text':'公开讨论'},cookie=outsider)[1]['commentId']
+                raw = {**self.body(), 'private':True, 'parentId':public_id}
+                code, result = self.member('POST',path,raw)
+                self.assertEqual(code,200,result)
+                cid = result['commentId']
+                self.assertEqual(result['comments'][-1]['privateAudience'],sorted([self.a,self.b]))
+                code, reply = self.member('POST',path,{'text':'只有参与人可以读到的回复','parentId':cid},cookie=self.cb)
+                self.assertEqual(code,200,reply)
+                self.assertEqual(reply['comments'][-1]['privateAudience'], sorted([self.a,self.b]))
+                self.assertEqual(self.member('POST',path,{'text':'猜编号','parentId':cid},cookie=outsider)[0],400)
+                self.assertEqual(self.member('PUT',path+'/'+str(cid),{'text':'猜编号'},cookie=outsider)[0],404)
+                self.assertEqual(self.member('POST',path,{**self.body('@丙',0,2,third),'parentId':cid},cookie=self.cb)[0],400)
+                self.assertEqual(self.member('POST',path,{'private':True,'text':'@乙'},cookie=self.ca)[0],400)
+                self.assertEqual(self.member('PUT',path+'/'+str(cid),{**self.body(),'private':False})[0],409)
+                self.assertEqual(self.member('PUT',path+'/'+str(cid),{'text':'移除提及','mentions':[]})[0],400)
+                self.assertEqual(self.member('POST',path,{**raw,'expectedPlayer':self.a},cookie=self.cb)[0],409)
+
+                other_result = self.member('POST',path,{'text':'公开跟进'},cookie=outsider)[1]
+                self.assertNotIn(cid,[c['id'] for c in other_result['comments']])
+        def all_comments(snapshot):
+            containers = snapshot['games'] + snapshot['trainings']
+            return [c for item in containers + [g for t in snapshot['trainings'] for g in t['games']] for c in item['comments']]
+        mine = self.member('GET','/api/stats')[1]
+        for cookie in (self.ca,self.cb):
+            visible = all_comments(self.member('GET','/api/stats',cookie=cookie)[1])
+            self.assertEqual(len([c for c in visible if c['privateAudience']]),6)
+        # No data revision changed, but a recipient's cached payload must be replaced on logout/switch.
+        stale = '/api/stats?revision='+str(mine['revision'])+'&viewer='+str(self.a)
+        for outsider_snapshot in (self.request('GET',stale,auth=False)[1],self.request('GET',stale)[1],
+                                  self.member('GET',stale,cookie=outsider)[1]):
+            visible = all_comments(outsider_snapshot)
+            self.assertEqual(len(visible),6)
+            self.assertFalse(any(c['privateAudience'] for c in visible))
+        self.assertEqual(self.stats.notifications(third)['messages'],[])
+        self.assertEqual(self.stats.notification_summary(third)['unread'],0)
+        self.assertEqual(len(self.stats.notifications(self.b)['messages']),3)
+        self.assertEqual(len(self.stats.notifications(self.a)['messages']),3)
+        reopened = fixture.API.STATS_MODULE.StatsStore(self.path)
+        self.assertEqual(len(all_comments(reopened.snapshot())),6)
+        self.assertEqual(len(all_comments(reopened.snapshot(viewer=self.b))),12)
+
+    def test_private_root_and_narrower_reply_audience(self):
+        self.setup_mentions()
+        third = self.player('丙',3)
+        root = self.member('POST',self.base,{
+            'text':'@乙 @丙', 'private':True,
+            'mentions':[{'player':self.b,'start':0,'end':2},{'player':third,'start':3,'end':5}]
+        })[1]['commentId']
+        limited = self.member('POST',self.base,{**self.body(),'private':True,'parentId':root})[1]['commentId']
+        self.assertEqual(self.stats.snapshot()['trainings'][0]['comments'],[])
+        c_rows = self.stats.snapshot(viewer=third)['trainings'][0]['comments']
+        self.assertEqual([c['id'] for c in c_rows],[root])
+        self.assertEqual([m['commentId'] for m in self.stats.notifications(third)['messages']],[root])
+        self.assertEqual(self.member('DELETE',self.base+'/'+str(limited))[0],200)
+        self.assertEqual(self.member('PUT',self.base+'/'+str(limited),{'restore':True})[0],200)
+        self.assertEqual(len(self.stats.snapshot(viewer=self.b)['trainings'][0]['comments']),2)
+        self.assertEqual(len(self.stats.snapshot(viewer=third)['trainings'][0]['comments']),1)
+        self.assertEqual(self.stats.snapshot()['trainings'][0]['comments'],[])
+
     def test_notification_private_persistent_and_mark_read_without_revision_change(self):
         self.setup_mentions()
         result=self.member('POST',self.base,self.body());self.assertEqual(result[0],200,result)
@@ -35,7 +102,7 @@ class MentionTest(unittest.TestCase):
         self.assertEqual(self.stats.notification_summary(self.b)['unread'],1,'cannot mark another member messages read')
         result=self.member('POST','/api/stats/notifications/read',{'trainingId':self.t},cookie=self.cb)
         self.assertEqual(result[1]['summary']['unread'],0)
-        snap=self.member('GET','/api/stats?revision='+str(revision),cookie=self.cb)[1]
+        snap=self.member('GET',f'/api/stats?revision={revision}&viewer={self.b}',cookie=self.cb)[1]
         self.assertTrue(snap['unchanged']);self.assertEqual(snap['notifications']['unread'],0)
         self.assertEqual(fixture.API.STATS_MODULE.StatsStore(self.path).notifications(self.b)['messages'][0]['unread'],False)
         cid=message['commentId']

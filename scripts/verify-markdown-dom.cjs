@@ -14,11 +14,18 @@ discussion=cx.modules.TeamDiscussion.init({getMe:()=>({id:1}),getPlayers:()=>[{i
  assert(q('.md-format-panel').classList.contains('is-inline'),'format controls occupy their own layout area');
  assert.equal(q('[data-d="submit"]').parentElement,q('.discussion-submit'),'send remains independent from secondary tools');
  input.value='🥏 @队';input.setSelectionRange(input.value.length,input.value.length);input.oninput();q('[data-d="mention-options"]').onclick({target:q('[data-mention-person="2"]')});
+ const privacy=q('[data-d="privacy"]');
+ assert(!q('[data-d="visibility"]').hidden);
+ assert.equal(privacy.getAttribute('aria-pressed'),'false','mentioning a teammate does not automatically make a comment private');
+ privacy.onclick();assert.equal(privacy.getAttribute('aria-pressed'),'true');
+ assert(q('[data-d="audience"]').textContent.includes('队友'));
+ discussion.render(host,'trainings',entry,true);assert.equal(privacy.getAttribute('aria-pressed'),'true','polling preserves the chosen scope');
  q('[data-d="attach"]').onclick();q('[data-d="time"]').value='0:05';q('[data-d="insert-time"]').onclick();
  input.setSelectionRange(0,input.value.length);q('.md-format-toggle').onclick();q('.md-format-panel').onclick({target:q('[data-md="bold"]')});
  assert(input.value.startsWith('**'));assert(q('.discussion-draft-mention'),'bold formatting preserves mention highlighting');
  input.setSelectionRange(0,input.value.length);q('.md-format-toggle').onclick();q('.md-format-panel').onclick({target:q('[data-md="ordered"]')});
  await q('[data-d="form"]').onsubmit({preventDefault(){}});
+ assert.equal(sent.private,true);assert(q('[data-d="visibility"]').hidden,'next new draft starts public with no mentions');
  assert(sent.text.startsWith('1. **'));assert.equal(sent.mentions.length,1);assert.equal(sent.videoRefs.length,1);
  const chars=Array.from(sent.text);assert.equal(chars.slice(sent.mentions[0].start,sent.mentions[0].end).join(''),'@队友');assert.equal(chars.slice(sent.videoRefs[0].start,sent.videoRefs[0].end).join(''),'0:05');
  assert(q('.discussion-copy ol strong .discussion-mention'));assert(q('.discussion-copy ol strong .discussion-timestamp'));

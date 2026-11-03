@@ -456,7 +456,11 @@ def make_handler(store, edit_key, cookie_path='/frisbee/', secure=True, public_o
                 if known and not re.fullmatch(r'[0-9]{1,16}', known):
                     raise APIError(400, '同步版本无效。')
                 pid = self.player_identity()
-                return self.send(200, {**stats_store.snapshot(int(known) if known else None), 'canEdit': self.authorized(), 'me': stats_store.player_brief(pid) if pid else None,'notifications':stats_store.notification_summary(pid)})
+                # The viewer hint only scopes conditional polling. The signed member
+                # cookie is the sole authority for reading private discussions.
+                viewer_hint = parse_qs(urlparse(self.path).query).get('viewer', ['0'])[0]
+                same_viewer = viewer_hint == str(pid or 0)
+                return self.send(200, {**stats_store.snapshot(int(known) if known and same_viewer else None, viewer=pid), 'canEdit': self.authorized(), 'me': stats_store.player_brief(pid) if pid else None,'notifications':stats_store.notification_summary(pid)})
             segments = [unquote(s) for s in path[len('/api/stats/'):].split('/') if s]
             if segments == ['login'] and self.command == 'POST':
                 return self.stats_login()

@@ -78,3 +78,10 @@ html.keyboard-open .discussion-composer .discussion-context:not([hidden])~.discu
  .discussion-composer textarea{max-height:70px;overflow-y:auto!important}
  .discussion-composer .discussion-context:not([hidden])~.discussion-compose-row textarea{max-height:46px}
 }
+
+.discussion-visibility{display:flex;align-items:center;gap:8px;flex:none;min-width:0}
+.discussion-visibility button{flex:none;min-height:32px;border:1px solid #dcd2e3;background:white;color:#644776;border-radius:6px;padding:4px 8px;font:inherit;font-size:13px;touch-action:manipulation}
+.discussion-visibility button[aria-pressed=true],.discussion-private{background:#f1eaf5;color:#674778}
+.discussion-visibility button[aria-pressed=true]::before{content:'✓ '}
+.discussion-visibility small{min-width:0;max-height:3em;overflow:auto;overflow-wrap:anywhere;color:#64536e}
+.discussion-private{padding:0 6px;border-radius:4px}
