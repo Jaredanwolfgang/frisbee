@@ -322,8 +322,12 @@ function currentMode(){return kindFilter==='rules'?'rules':kindFilter==='stats'?
 function switchMode(mode){closeMenus();const was=currentMode();if(was!==mode)modeQueries[was]=search;if(was==='tactics')lastTacticKind=kindFilter;kindFilter=mode==='rules'?'rules':mode==='stats'?'stats':mode==='trainings'?'trainings':lastTacticKind;search=modeQueries[mode]||'';$('#search').value=search;if(mode==='stats')StatsUI.navigate('dashboard',false);if(mode==='rules')window.history.replaceState(window.history.state,'','#rules');else if(mode==='stats')window.history.replaceState(window.history.state,'','#team');else if(mode==='trainings')window.history.replaceState(window.history.state,'','#trainings');else window.history.replaceState(window.history.state,'',location.pathname+location.search);render();if(was!==mode)window.scrollTo(0,0);}
 function closeWorkspaceMenu(){$('#workspace-menu').hidden=true;$('#workspace-toggle').setAttribute('aria-expanded','false');}
 function openWorkspaceMenu(focus='current'){$('#workspace-menu').hidden=false;$('#workspace-toggle').setAttribute('aria-expanded','true');const options=$$('[data-mode]');(focus==='last'?options[options.length-1]:focus==='first'?options[0]:options.find(b=>b.getAttribute('aria-checked')==='true')||options[0]).focus({preventScroll:true});}
-bindTap($('#workspace-toggle'),event=>{event.preventDefault();const open=$('#workspace-menu').hidden;closeMenus();if(open)openWorkspaceMenu();});
-$$('[data-mode]').forEach(b=>bindTap(b,()=>{switchMode(b.dataset.mode);$('#workspace-toggle').focus({preventScroll:true});}));
+function workspaceAction(label,action){
+ try{action();}
+ catch(error){window.frisbeeReportIssue?.(error?.message||String(error),label);console.error(label,error);}
+}
+bindTap($('#workspace-toggle'),event=>workspaceAction('打开工作区菜单',()=>{event.preventDefault();const open=$('#workspace-menu').hidden;closeMenus();if(open)openWorkspaceMenu();}));
+$$('[data-mode]').forEach(b=>bindTap(b,()=>workspaceAction('切换工作区',()=>{switchMode(b.dataset.mode);$('#workspace-toggle').focus({preventScroll:true});})));
 $('#workspace-switcher').addEventListener('keydown',event=>{
  const open=!$('#workspace-menu').hidden,fromToggle=event.target===$('#workspace-toggle'),options=$$('[data-mode]');
  if(fromToggle&&['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();closeMenus();openWorkspaceMenu(event.key==='ArrowUp'?'last':'current');return;}
@@ -408,6 +412,6 @@ creationUI=initFrisbeeAI({requestEdit,toast,prepareCreation:()=>{setCreateKind(k
 StatsUI.init({api,toast,requestEdit,canEdit:()=>canEdit,toggleEdit:()=>$('#access-btn').click(),openTeam:()=>switchMode('stats'),openDrill:id=>openTactic(id),onUnauthorized:()=>{canEdit=false;permissions();},syncCanEdit:v=>{if(canEdit!==v){canEdit=v;permissions();}},getDrills:()=>state.tactics.filter(t=>Roster.kind(t)==='drill')});
 if(location.hash==='#rules'||location.hash.startsWith('#rule='))showRulesLink();else if(location.hash==='#stats'||location.hash==='#trainings'||location.hash==='#team'||location.hash.startsWith('#team/')){const hash=location.hash;kindFilter='stats';StatsUI.navigate(hash==='#trainings'?'trainings':hash.split('/')[1]||'dashboard',false);}
 window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
-restoreLibraryCache();render();syncStatus();loadLibrary();
+restoreLibraryCache();render();syncStatus();window.frisbeeMarkReady?.();loadLibrary();
 setInterval(()=>{if(!document.hidden&&!saving&&!dirty)loadLibrary({quiet:true});},20000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!saving&&!dirty)loadLibrary({quiet:true});});
