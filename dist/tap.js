@@ -11,3 +11,12 @@ function bindTap(button,action){
 }
 
 function watchMedia(query,listener){const media=typeof query==='string'?window.matchMedia(query):query;if(media.addEventListener)media.addEventListener('change',listener);else if(media.addListener)media.addListener(listener);return media;}
+
+// Some iOS browser wrappers replace history's instance methods without preserving
+// their receiver. Call the native prototype with the actual History object.
+function browserHistory(method,...args){
+ const native=window.History?.prototype?.[method];
+ const target=window.history;
+ const fn=typeof native==='function'?native:target[method];
+ return fn.apply(target,args);
+}

@@ -19,3 +19,23 @@ ui.enter('dialog:create',()=>true);ui.leave('dialog:create');ui.enter('dialog:ed
 ui.enter('dialog:discard',()=>true);moves=[];ui.leave('dialog:discard');ui.leave('dialog:editor');flush();assert.deepEqual(moves,[-2],'closing a confirmation and its parent uses one history move');
 const length=entries.length;phone=false;ui.enter('desktop-dialog',()=>true);assert.equal(entries.length,length,'desktop dialogs do not add phone navigation');
 console.log('PASS: shared-link return, edit-to-view Back, child reader Back, creation transitions, batched close and desktop isolation.');
+
+// Simulate the iOS wrapper reported by the user: the instance-level methods
+// lose the native History receiver, while prototype methods still require it.
+{
+ const calls=[],actual={state:{keep:true}};
+ const prototype={};
+ for(const name of ['replaceState','pushState','go']){
+  prototype[name]=function(...args){assert.equal(this,actual,'native History method must keep its receiver');calls.push([name,...args]);};
+  actual[name]=()=>{throw new TypeError('Can only call History.'+name+' on instances of History');};
+ }
+ const ctx={window:{history:actual,History:{prototype}},performance:{now:()=>0},Math};
+ vm.createContext(ctx);
+ vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../dist/tap.js'),'utf8'),ctx);
+ ctx.browserHistory('replaceState',actual.state,'','#team');
+ ctx.browserHistory('pushState',actual.state,'','#rules');
+ ctx.browserHistory('go',-1);
+ assert.deepEqual(calls.map(c=>c[0]),['replaceState','pushState','go']);
+ assert.equal(calls[0][3],'#team');
+}
+console.log('PASS: workspace navigation and mobile Back keep the native History receiver when an iOS instance wrapper is broken.');
